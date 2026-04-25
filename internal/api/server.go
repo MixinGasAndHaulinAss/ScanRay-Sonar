@@ -4,11 +4,14 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 
@@ -139,22 +142,59 @@ func (s *Server) handleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 
 // serveSPA serves the embedded web/dist filesystem. SPA-style: any
 // unknown path falls back to index.html so client-side routing works.
+//
+// We deliberately do NOT use http.FileServer here because it
+// "canonicalizes" requests for /index.html into a 301 to ./ and treats
+// directory paths the same way, which produces redirect loops when the
+// router below it (chi) is also routing /. Reading the asset and
+// streaming it via http.ServeContent skips that behavior entirely.
 func (s *Server) serveSPA(w http.ResponseWriter, r *http.Request) {
 	if s.webFS == nil {
 		writeErr(w, http.StatusNotFound, "not_found", "no embedded web build")
 		return
 	}
-	clean := strings.TrimPrefix(r.URL.Path, "/")
-	if clean == "" {
-		clean = "index.html"
+
+	name := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
+	if name == "" || name == "." {
+		name = "index.html"
 	}
-	if _, err := fs.Stat(s.webFS, clean); err != nil {
-		// SPA fallback to index.html for unknown paths.
-		clean = "index.html"
+
+	data, info, err := readAsset(s.webFS, name)
+	if err != nil {
+		// SPA fallback: anything we can't resolve becomes index.html so
+		// the React Router takes over on the client.
+		data, info, err = readAsset(s.webFS, "index.html")
+		if err != nil {
+			writeErr(w, http.StatusNotFound, "not_found", "no index.html in embedded build")
+			return
+		}
+		name = "index.html"
 	}
-	r2 := r.Clone(r.Context())
-	r2.URL.Path = "/" + clean
-	http.FileServer(http.FS(s.webFS)).ServeHTTP(w, r2)
+
+	http.ServeContent(w, r, name, info.ModTime(), bytes.NewReader(data))
+}
+
+// readAsset opens a file in the embedded FS and returns its bytes plus
+// FileInfo. Directories are treated as not-found so the SPA fallback
+// path can take over.
+func readAsset(efs fs.FS, name string) ([]byte, fs.FileInfo, error) {
+	f, err := efs.Open(name)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, nil, err
+	}
+	if info.IsDir() {
+		return nil, nil, fs.ErrNotExist
+	}
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return nil, nil, err
+	}
+	return data, info, nil
 }
 
 // ListenAndServe starts the HTTP server and blocks until ctx is done.

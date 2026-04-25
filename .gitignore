@@ -31,6 +31,13 @@ Thumbs.db
 *.pem
 *.key
 *.crt
+# Track the placeholder for the optional corporate CA bundle so the
+# Dockerfiles always have something to COPY. Operators on hosts behind
+# TLS-inspecting proxies populate it locally via
+# `scripts/inject-host-ca.sh`, which also marks the path
+# --skip-worktree so the populated content cannot be accidentally
+# committed.
+!docker/local-ca.crt
 secrets/
 master.key
 

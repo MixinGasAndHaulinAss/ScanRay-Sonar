@@ -133,12 +133,14 @@ SONAR_DB_HOST=127.0.0.1 SONAR_NATS_URL=nats://127.0.0.1:4222 \
   go run ./cmd/sonar-api
 ```
 
-Open <http://127.0.0.1:8080> and sign in as the bootstrap admin (the script printed the password).
+Open <http://127.0.0.1:18080> and sign in as the bootstrap admin (the script printed the password).
+
+> The API is published on the host as `127.0.0.1:18080` (default; tweak via `SONAR_API_PORT` in `.env`). Inside the container it still listens on `0.0.0.0:8080`. Port 18080 was chosen because port 8080 is already taken on the `dev` host by an unrelated service.
 
 ### 3. UI hot-reload (optional, parallel terminal)
 
 ```bash
-cd web && npm run dev   # http://127.0.0.1:5173 with /api proxy to :8080
+cd web && npm run dev   # http://127.0.0.1:5173 with /api proxy to :18080
 ```
 
 ### Run tests
@@ -157,18 +159,19 @@ The deployment target is the `dev` host VM, managed via the **currituck-tendril*
 
 1. Clone the repo to `/opt/scanraysonar/`.
 2. Run `bash scripts/dev-bootstrap.sh` (or copy `.env.example` → `.env` and fill in real secrets).
-3. Add two ingress entries to the host's existing `cloudflared` config:
+3. **If the host is behind a TLS-inspecting corporate proxy** (e.g. Currituck's Tripwire SASE), run `bash scripts/inject-host-ca.sh` once. This bakes the host's trusted CA bundle into `docker/local-ca.crt` so `npm ci` and `go mod download` can validate TLS inside the build containers. The script also marks the file `--skip-worktree`, so populated CA content can never accidentally be committed upstream.
+4. Add two ingress entries to the host's existing `cloudflared` config:
    ```yaml
    ingress:
      - hostname: sonar.<domain>
-       service: http://127.0.0.1:8080
+       service: http://127.0.0.1:18080
      - hostname: ingest.<domain>
-       service: http://127.0.0.1:8080
+       service: http://127.0.0.1:18080
        originRequest:
          noTLSVerify: true
      # ...existing catch-all 404
    ```
-4. In Cloudflare Zero Trust, add an **Access policy** for `sonar.<domain>` (e.g. `email-domain in {currituckcountync.gov}`). Leave `ingest.<domain>` open — agents authenticate via signed JWT, not via Access.
+5. In Cloudflare Zero Trust, add an **Access policy** for `sonar.<domain>` (e.g. `email-domain in {currituckcountync.gov}`). Leave `ingest.<domain>` open — agents authenticate via signed JWT, not via Access.
 
 ### Recurring deploy
 

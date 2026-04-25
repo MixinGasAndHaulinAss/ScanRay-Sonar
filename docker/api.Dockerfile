@@ -2,6 +2,14 @@
 
 # ---- Stage 1: build the React UI -------------------------------------------
 FROM node:20-alpine AS web
+# Optional: inject a corporate root CA for hosts behind TLS inspection.
+# `docker/local-ca.crt` ships as an empty placeholder; populate it via
+# `scripts/inject-host-ca.sh` on hosts where outbound HTTPS is intercepted.
+COPY docker/local-ca.crt /tmp/local-ca.crt
+RUN if grep -q "BEGIN CERTIFICATE" /tmp/local-ca.crt 2>/dev/null; then \
+      cat /tmp/local-ca.crt >> /etc/ssl/certs/ca-certificates.crt; \
+    fi && rm /tmp/local-ca.crt
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 WORKDIR /src/web
 COPY web/package*.json ./
 RUN npm ci --no-audit --no-fund
@@ -10,7 +18,10 @@ RUN npm run build
 
 # ---- Stage 2: build the Go binary with the UI baked in ---------------------
 FROM golang:1.23-alpine AS gobuild
-RUN apk add --no-cache git ca-certificates
+COPY docker/local-ca.crt /tmp/local-ca.crt
+RUN if grep -q "BEGIN CERTIFICATE" /tmp/local-ca.crt 2>/dev/null; then \
+      cat /tmp/local-ca.crt >> /etc/ssl/certs/ca-certificates.crt; \
+    fi && rm /tmp/local-ca.crt
 WORKDIR /src
 COPY go.mod go.sum* ./
 RUN go mod download

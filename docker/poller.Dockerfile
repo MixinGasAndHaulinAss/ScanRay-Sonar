@@ -1,6 +1,12 @@
 # syntax=docker/dockerfile:1.7
 FROM golang:1.23-alpine AS gobuild
-RUN apk add --no-cache git ca-certificates
+# Optional: inject a corporate root CA for hosts behind TLS inspection.
+# `docker/local-ca.crt` ships as an empty placeholder; populate it via
+# `scripts/inject-host-ca.sh` on hosts where outbound HTTPS is intercepted.
+COPY docker/local-ca.crt /tmp/local-ca.crt
+RUN if grep -q "BEGIN CERTIFICATE" /tmp/local-ca.crt 2>/dev/null; then \
+      cat /tmp/local-ca.crt >> /etc/ssl/certs/ca-certificates.crt; \
+    fi && rm /tmp/local-ca.crt
 WORKDIR /src
 COPY go.mod go.sum* ./
 RUN go mod download

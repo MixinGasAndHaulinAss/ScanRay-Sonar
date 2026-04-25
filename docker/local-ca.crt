@@ -1,0 +1,11 @@
+# Optional corporate root CA bundle. Empty in the upstream repo.
+#
+# Hosts behind a TLS-inspecting proxy (e.g. a SASE / firewall MITM) must
+# populate this file with the proxy's root CA in PEM format before
+# building images, otherwise `npm ci` and `go mod download` will fail
+# with "certificate verify failed". Use:
+#
+#   scripts/inject-host-ca.sh
+#
+# to copy the host's trusted CA bundle here. Do not commit a populated
+# version of this file.

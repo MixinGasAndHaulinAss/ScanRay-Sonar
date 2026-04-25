@@ -1,10 +1,15 @@
 # =============================================================================
 # ScanRay Sonar — Docker Compose stack
 #
-# IMPORTANT: every public-facing service binds to 127.0.0.1 only. The host
-# `dev` VM exposes them via Cloudflare Tunnel (cloudflared on the host,
-# NOT in this stack). Do not change the bindings without updating the
-# host CF tunnel config and the threat model.
+# Port policy:
+#   * sonar-api binds 127.0.0.1:${SONAR_API_PORT:-18080}. The host
+#     `dev` VM exposes it via Cloudflare Tunnel (cloudflared on the host,
+#     NOT in this stack). 18080 is the default because port 8080 is
+#     already taken on dev by an unrelated service.
+#   * sonar-postgres and sonar-nats do NOT publish to the host. They are
+#     reachable only on the internal `scanraysonar_default` docker
+#     network. This avoids host port collisions and shrinks the attack
+#     surface.
 # =============================================================================
 
 name: scanraysonar
@@ -21,8 +26,8 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - sonar-pgdata:/var/lib/postgresql/data
-    ports:
-      - "127.0.0.1:5432:5432"
+    expose:
+      - "5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${SONAR_DB_USER:-sonar} -d ${SONAR_DB_NAME:-sonar}"]
       interval: 10s
@@ -41,15 +46,20 @@ services:
       - "8222"
     volumes:
       - sonar-natsdata:/data
-    ports:
-      - "127.0.0.1:4222:4222"
-      - "127.0.0.1:8222:8222"
+    expose:
+      - "4222"
+      - "8222"
 
   sonar-api:
     image: ghcr.io/nclgisa/scanray-sonar-api:${SONAR_VERSION:-latest}
     build:
       context: .
       dockerfile: docker/api.Dockerfile
+      # Use the host network during build so corporate proxies / DNS
+      # work the same way they do for the host. Combined with the
+      # optional CA injection in docker/local-ca.crt, this lets the
+      # build succeed on hosts behind TLS-inspecting firewalls.
+      network: host
       args:
         VERSION: ${SONAR_VERSION:-dev}
     container_name: sonar-api
@@ -65,7 +75,7 @@ services:
       SONAR_DB_HOST: sonar-postgres
       SONAR_NATS_URL: nats://sonar-nats:4222
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${SONAR_API_PORT:-18080}:8080"
     # No container-level healthcheck: distroless has no shell/curl. The
     # /api/v1/healthz endpoint is exposed for upstream (Cloudflare /
     # external monitoring) probes.
@@ -75,6 +85,7 @@ services:
     build:
       context: .
       dockerfile: docker/poller.Dockerfile
+      network: host
       args:
         VERSION: ${SONAR_VERSION:-dev}
     container_name: sonar-poller
