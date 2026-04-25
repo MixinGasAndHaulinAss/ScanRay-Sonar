@@ -137,7 +137,7 @@ func enumerateStoppedAutoServices(s *Snapshot) []ServiceRow {
 			Name:        name,
 			DisplayName: cfg.DisplayName,
 			StartType:   "auto",
-			Status:      strings.ToLower(svcStateName(status.State)),
+			Status:      strings.ToLower(svcStateName(uint32(status.State))),
 		})
 	}
 	return out
