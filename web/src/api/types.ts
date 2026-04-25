@@ -207,6 +207,123 @@ export interface Appliance {
   lastPolledAt?: string | null;
   lastError?: string | null;
   createdAt: string;
+
+  // Headline telemetry from the most recent SNMP poll. All nullable
+  // until the poller's first cycle for a freshly-added appliance.
+  sysName?: string | null;
+  uptimeSeconds?: number | null;
+  cpuPct?: number | null;
+  memUsedBytes?: number | null;
+  memTotalBytes?: number | null;
+  ifUpCount?: number | null;
+  ifTotalCount?: number | null;
+}
+
+export interface ApplianceDetail extends Appliance {
+  sysDescr?: string | null;
+  lastSnapshotAt?: string | null;
+  lastSnapshot?: ApplianceSnapshot | null;
+}
+
+// ApplianceSnapshot mirrors internal/snmp/snapshot.go.
+export interface ApplianceSnapshot {
+  schemaVersion: number;
+  capturedAt: string;
+  collectMs: number;
+  system: ApplianceSystem;
+  chassis: ApplianceChassis;
+  interfaces: ApplianceInterface[];
+  entities?: ApplianceEntity[];
+  lldp?: ApplianceLLDP[];
+  collectionWarnings?: string[];
+}
+export interface ApplianceSystem {
+  description: string;
+  name: string;
+  contact?: string;
+  location?: string;
+  objectId?: string;
+  uptimeTicks: number;
+  uptimeSeconds: number;
+}
+export interface ApplianceChassis {
+  cpuPct?: number | null;
+  memUsedBytes?: number | null;
+  memTotalBytes?: number | null;
+  tempC?: number | null;
+}
+export interface ApplianceInterface {
+  ifIndex: number;
+  name: string;
+  descr: string;
+  alias?: string;
+  type: number;
+  mtu?: number;
+  speedBps?: number;
+  mac?: string;
+  adminUp: boolean;
+  operUp: boolean;
+  lastChangeSeconds?: number;
+  inOctets: number;
+  outOctets: number;
+  inUcast?: number;
+  outUcast?: number;
+  inErrors?: number;
+  outErrors?: number;
+  inDiscards?: number;
+  outDiscards?: number;
+  inBps?: number | null;
+  outBps?: number | null;
+}
+export interface ApplianceEntity {
+  index: number;
+  class: number;
+  description: string;
+  name?: string;
+  hardwareRev?: string;
+  firmwareRev?: string;
+  softwareRev?: string;
+  serial?: string;
+  modelName?: string;
+}
+export interface ApplianceLLDP {
+  localIfIndex: number;
+  localPort?: string;
+  remoteSysName?: string;
+  remoteSysDescr?: string;
+  remotePortId?: string;
+  remotePortDescr?: string;
+  remoteChassisId?: string;
+}
+
+export interface ApplianceMetricSample {
+  time: string;
+  cpuPct?: number | null;
+  memUsedBytes?: number | null;
+  memTotalBytes?: number | null;
+}
+export interface ApplianceMetricSeries {
+  applianceId: string;
+  range: string;
+  capturedAtTo: string;
+  samples: ApplianceMetricSample[];
+}
+
+export interface ApplianceIfaceSample {
+  time: string;
+  inBps?: number | null;
+  outBps?: number | null;
+  inErrors?: number | null;
+  outErrors?: number | null;
+  inDiscards?: number | null;
+  outDiscards?: number | null;
+}
+export interface ApplianceIfaceSeries {
+  applianceId: string;
+  ifIndex: number;
+  range: string;
+  capturedAtTo: string;
+  samples: ApplianceIfaceSample[];
 }
 
 export interface EnrollmentToken {

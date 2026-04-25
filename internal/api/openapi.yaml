@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.4.25.7"
+  version: "2026.4.26.0"
   license:
     name: MIT
 servers:
@@ -174,6 +174,59 @@ components:
         lastPolledAt: { type: string, format: date-time, nullable: true }
         lastError: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
+        # Headline telemetry from the most recent poll. All nullable until
+        # the poller's first cycle for a freshly-added appliance.
+        sysName: { type: string, nullable: true }
+        uptimeSeconds: { type: integer, format: int64, nullable: true }
+        cpuPct: { type: number, format: float, nullable: true }
+        memUsedBytes: { type: integer, format: int64, nullable: true }
+        memTotalBytes: { type: integer, format: int64, nullable: true }
+        ifUpCount: { type: integer, nullable: true }
+        ifTotalCount: { type: integer, nullable: true }
+
+    ApplianceMetricSample:
+      type: object
+      required: [time]
+      properties:
+        time: { type: string, format: date-time }
+        cpuPct: { type: number, format: float, nullable: true }
+        memUsedBytes: { type: integer, format: int64, nullable: true }
+        memTotalBytes: { type: integer, format: int64, nullable: true }
+
+    ApplianceMetricSeries:
+      type: object
+      required: [applianceId, range, capturedAtTo, samples]
+      properties:
+        applianceId: { type: string, format: uuid }
+        range: { type: string }
+        capturedAtTo: { type: string, format: date-time }
+        samples:
+          type: array
+          items: { $ref: "#/components/schemas/ApplianceMetricSample" }
+
+    ApplianceIfaceSample:
+      type: object
+      required: [time]
+      properties:
+        time: { type: string, format: date-time }
+        inBps: { type: integer, format: int64, nullable: true }
+        outBps: { type: integer, format: int64, nullable: true }
+        inErrors: { type: integer, format: int64, nullable: true }
+        outErrors: { type: integer, format: int64, nullable: true }
+        inDiscards: { type: integer, format: int64, nullable: true }
+        outDiscards: { type: integer, format: int64, nullable: true }
+
+    ApplianceIfaceSeries:
+      type: object
+      required: [applianceId, ifIndex, range, capturedAtTo, samples]
+      properties:
+        applianceId: { type: string, format: uuid }
+        ifIndex: { type: integer }
+        range: { type: string }
+        capturedAtTo: { type: string, format: date-time }
+        samples:
+          type: array
+          items: { $ref: "#/components/schemas/ApplianceIfaceSample" }
 
     CreateApplianceRequest:
       type: object
@@ -486,6 +539,33 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
 
   /appliances/{id}:
+    get:
+      summary: Get a single appliance with its latest SNMP snapshot
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Appliance
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Appliance"
+                  - type: object
+                    properties:
+                      sysDescr: { type: string, nullable: true }
+                      lastSnapshotAt: { type: string, format: date-time, nullable: true }
+                      lastSnapshot:
+                        type: object
+                        description: |
+                          Verbatim SNMP snapshot the poller stored. Contains
+                          system, chassis, interfaces[], entities[] and lldp[]
+                          arrays — see internal/snmp/snapshot.go for the full
+                          schema.
+        "404": { $ref: "#/components/responses/NotFound" }
     delete:
       summary: Remove an appliance (siteadmin+)
       parameters:
@@ -496,6 +576,46 @@ paths:
       responses:
         "204": { description: Deleted }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /appliances/{id}/metrics:
+    get:
+      summary: Time-series chassis CPU/memory samples for sparklines
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: range
+          schema: { type: string, default: "24h", description: "Go duration; '<N>d' shorthand for days; max 30d" }
+      responses:
+        "200":
+          description: Series
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApplianceMetricSeries" }
+
+  /appliances/{id}/interfaces/{ifIndex}/metrics:
+    get:
+      summary: Time-series per-port bps + error/discard deltas
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: ifIndex
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: range
+          schema: { type: string, default: "24h" }
+      responses:
+        "200":
+          description: Series
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApplianceIfaceSeries" }
 
   /agents/{id}:
     get:

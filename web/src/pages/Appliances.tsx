@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import type { Appliance, Site } from "../api/types";
+import { formatBytes, formatDuration, formatPct, formatRelative } from "../lib/format";
 
 type Vendor = Appliance["vendor"];
 type SNMPVersion = Appliance["snmpVersion"];
@@ -101,8 +103,10 @@ export default function Appliances() {
               <th className="px-4 py-2">Site</th>
               <th className="px-4 py-2">Vendor</th>
               <th className="px-4 py-2">Mgmt IP</th>
-              <th className="px-4 py-2">SNMP</th>
-              <th className="px-4 py-2">Poll</th>
+              <th className="px-4 py-2">CPU</th>
+              <th className="px-4 py-2">Memory</th>
+              <th className="px-4 py-2">Ports</th>
+              <th className="px-4 py-2">Uptime</th>
               <th className="px-4 py-2">Last polled</th>
               <th className="px-4 py-2 text-right">Actions</th>
             </tr>
@@ -110,41 +114,86 @@ export default function Appliances() {
           <tbody>
             {appliances.isLoading && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-slate-500">
+                <td colSpan={10} className="px-4 py-6 text-center text-slate-500">
                   Loading…
                 </td>
               </tr>
             )}
             {appliances.data?.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-slate-500">
+                <td colSpan={10} className="px-4 py-6 text-center text-slate-500">
                   No appliances yet. Add switches, APs, or routers — supports SNMP v1, v2c, and v3.
                 </td>
               </tr>
             )}
-            {appliances.data?.map((a) => (
-              <tr key={a.id} className="border-t border-ink-800 hover:bg-ink-800/30">
-                <td className="px-4 py-2">{a.name}</td>
-                <td className="px-4 py-2 text-slate-400">{siteName(a.siteId)}</td>
-                <td className="px-4 py-2 text-slate-400">{a.vendor}</td>
-                <td className="px-4 py-2 font-mono text-slate-300">{a.mgmtIp}</td>
-                <td className="px-4 py-2 text-slate-400">{a.snmpVersion}</td>
-                <td className="px-4 py-2 text-slate-400">{a.pollIntervalSeconds}s</td>
-                <td className="px-4 py-2 text-slate-500">
-                  {a.lastPolledAt ? new Date(a.lastPolledAt).toLocaleString() : "never"}
-                </td>
-                <td className="px-4 py-2 text-right">
-                  <button
-                    onClick={() => {
-                      if (confirm(`Delete appliance "${a.name}"?`)) del.mutate(a.id);
-                    }}
-                    className="rounded-md border border-ink-700 px-2 py-1 text-xs text-red-300 hover:bg-red-900/30"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {appliances.data?.map((a) => {
+              const memPct =
+                a.memTotalBytes && a.memUsedBytes
+                  ? (a.memUsedBytes / a.memTotalBytes) * 100
+                  : null;
+              return (
+                <tr key={a.id} className="border-t border-ink-800 hover:bg-ink-800/30">
+                  <td className="px-4 py-2">
+                    <Link
+                      to={`/appliances/${a.id}`}
+                      className="text-emerald-300 hover:underline"
+                    >
+                      {a.name}
+                    </Link>
+                    {a.lastError && (
+                      <span
+                        className="ml-2 rounded bg-red-900/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-red-200"
+                        title={a.lastError}
+                      >
+                        error
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-slate-400">{siteName(a.siteId)}</td>
+                  <td className="px-4 py-2 text-slate-400">{a.vendor}</td>
+                  <td className="px-4 py-2 font-mono text-slate-300">{a.mgmtIp}</td>
+                  <td className="px-4 py-2 text-slate-300">{formatPct(a.cpuPct)}</td>
+                  <td className="px-4 py-2 text-slate-300">
+                    {a.memUsedBytes != null && a.memTotalBytes != null ? (
+                      <>
+                        {formatBytes(a.memUsedBytes)} / {formatBytes(a.memTotalBytes)}
+                        {memPct != null && (
+                          <span className="ml-1 text-slate-500">
+                            ({memPct.toFixed(0)}%)
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-slate-300">
+                    {a.ifTotalCount != null ? (
+                      <>
+                        <span className="text-emerald-300">{a.ifUpCount ?? 0}</span>
+                        <span className="text-slate-500"> / {a.ifTotalCount}</span>
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-slate-400">
+                    {formatDuration(a.uptimeSeconds)}
+                  </td>
+                  <td className="px-4 py-2 text-slate-500">{formatRelative(a.lastPolledAt)}</td>
+                  <td className="px-4 py-2 text-right">
+                    <button
+                      onClick={() => {
+                        if (confirm(`Delete appliance "${a.name}"?`)) del.mutate(a.id);
+                      }}
+                      className="rounded-md border border-ink-700 px-2 py-1 text-xs text-red-300 hover:bg-red-900/30"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -4,7 +4,7 @@ import { api, tokens } from "../api/client";
 import type { Site, User, VersionInfo } from "../api/types";
 import clsx from "clsx";
 
-const APP_VERSION = "2026.4.25.8";
+const APP_VERSION = "2026.4.26.0";
 
 const navItems = [
   { to: "/", label: "Dashboard" },

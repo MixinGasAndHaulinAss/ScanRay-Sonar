@@ -147,6 +147,9 @@ func (s *Server) Routes() http.Handler {
 
 			r.Get("/appliances", s.handleListAppliances)
 			r.With(requireRole(auth.RoleSiteAdmin)).Post("/appliances", s.handleCreateAppliance)
+			r.Get("/appliances/{id}", s.handleGetAppliance)
+			r.Get("/appliances/{id}/metrics", s.handleApplianceMetrics)
+			r.Get("/appliances/{id}/interfaces/{ifIndex}/metrics", s.handleApplianceIfaceMetrics)
 			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/appliances/{id}", s.handleDeleteAppliance)
 		})
 	})

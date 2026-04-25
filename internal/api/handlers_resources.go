@@ -390,7 +390,9 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListAppliances(w http.ResponseWriter, r *http.Request) {
 	siteID := r.URL.Query().Get("siteId")
 	q := `SELECT id, site_id, name, vendor, model, serial, host(mgmt_ip), snmp_version,
-	             poll_interval_s, is_active, tags, last_polled_at, last_error, created_at
+	             poll_interval_s, is_active, tags, last_polled_at, last_error, created_at,
+	             sys_name, uptime_seconds, cpu_pct, mem_used_bytes, mem_total_bytes,
+	             if_up_count, if_total_count
 	      FROM appliances`
 	args := []any{}
 	if siteID != "" {
@@ -416,8 +418,14 @@ func (s *Server) handleListAppliances(w http.ResponseWriter, r *http.Request) {
 			tags                             []string
 			lastPolled                       *time.Time
 			created                          time.Time
+			sysName                          *string
+			uptimeS                          *int64
+			cpuPct                           *float64
+			memUsed, memTotal                *int64
+			ifUp, ifTotal                    *int
 		)
-		if err := rows.Scan(&id, &sid, &name, &vendor, &model, &serial, &ip, &snmpv, &pollSec, &active, &tags, &lastPolled, &lastErr, &created); err != nil {
+		if err := rows.Scan(&id, &sid, &name, &vendor, &model, &serial, &ip, &snmpv, &pollSec, &active, &tags, &lastPolled, &lastErr, &created,
+			&sysName, &uptimeS, &cpuPct, &memUsed, &memTotal, &ifUp, &ifTotal); err != nil {
 			writeErr(w, http.StatusInternalServerError, "server_error", "scan failed")
 			return
 		}
@@ -436,6 +444,13 @@ func (s *Server) handleListAppliances(w http.ResponseWriter, r *http.Request) {
 			"lastPolledAt":        lastPolled,
 			"lastError":           lastErr,
 			"createdAt":           created,
+			"sysName":             sysName,
+			"uptimeSeconds":       uptimeS,
+			"cpuPct":              cpuPct,
+			"memUsedBytes":        memUsed,
+			"memTotalBytes":       memTotal,
+			"ifUpCount":           ifUp,
+			"ifTotalCount":        ifTotal,
 		})
 	}
 	writeJSON(w, http.StatusOK, out)

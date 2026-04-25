@@ -9,8 +9,11 @@ RUN if grep -q "BEGIN CERTIFICATE" /tmp/local-ca.crt 2>/dev/null; then \
     fi && rm /tmp/local-ca.crt
 WORKDIR /src
 COPY go.mod go.sum* ./
-RUN go mod download
 COPY . .
+# `go mod tidy` regenerates go.sum from current go.mod + sources, so a
+# fresh dependency added during dev (without a local Go toolchain on the
+# author's box) is fully resolved at build time.
+RUN go mod tidy
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_TIME=unknown

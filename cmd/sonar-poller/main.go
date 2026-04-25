@@ -1,9 +1,11 @@
-// Command sonar-poller polls network appliances over SNMP v1/v2c/v3,
-// LLDP, and vendor APIs (Meraki, etc.), publishing observations to NATS
-// for the API to fan out to the UI and persist into TimescaleDB.
+// Command sonar-poller polls network appliances over SNMP v1/v2c/v3
+// (LLDP topology and vendor APIs land in later phases) and persists
+// snapshots + time-series samples directly to Postgres/TimescaleDB,
+// where the API surfaces them to the UI.
 //
-// Phase 1: skeleton only — verifies environment + connectivity, then
-// idles. Real collection lands in Phase 3.
+// Phase 3a: SNMP polling is live. NATS is still wired in for
+// future fan-out of poll events but the Phase 3a write path is
+// purely DB-backed.
 package main
 
 import (
@@ -17,8 +19,10 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"github.com/NCLGISA/ScanRay-Sonar/internal/config"
+	scrypto "github.com/NCLGISA/ScanRay-Sonar/internal/crypto"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/db"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/logging"
+	"github.com/NCLGISA/ScanRay-Sonar/internal/poller"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/version"
 )
 
@@ -45,13 +49,21 @@ func run() error {
 	}
 	defer pool.Close()
 
+	sealer, err := scrypto.NewSealer(cfg.MasterKeyB64)
+	if err != nil {
+		return err
+	}
+
+	// NATS is optional in Phase 3a — the poller writes directly to
+	// Postgres. Connection failure is logged and we proceed; later
+	// phases that publish events will need to handle a nil conn.
 	nc, err := nats.Connect(cfg.NATSURL,
 		nats.Name("sonar-poller"),
 		nats.MaxReconnects(-1),
 		nats.ReconnectWait(2*time.Second),
 	)
 	if err != nil {
-		log.Warn("NATS unavailable; will retry on next cycle", "err", err)
+		log.Warn("NATS unavailable; continuing without event publishing", "err", err)
 	}
 	defer func() {
 		if nc != nil {
@@ -59,21 +71,14 @@ func run() error {
 		}
 	}()
 
-	log.Info("ScanRay Sonar Poller starting (Phase 1 skeleton)",
+	log.Info("ScanRay Sonar Poller starting (Phase 3a: SNMP polling)",
 		"version", version.Get().Version,
 		"nats", cfg.NATSURL,
 	)
 
-	ticker := time.NewTicker(60 * time.Second)
-	defer ticker.Stop()
+	sched := poller.New(pool, sealer, log)
+	sched.Run(ctx)
 
-	for {
-		select {
-		case <-ctx.Done():
-			log.Info("shutdown")
-			return nil
-		case <-ticker.C:
-			log.Debug("poll tick (no work registered yet)")
-		}
-	}
+	log.Info("shutdown")
+	return nil
 }

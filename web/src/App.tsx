@@ -6,6 +6,7 @@ import Sites from "./pages/Sites";
 import Agents from "./pages/Agents";
 import AgentDetailPage from "./pages/AgentDetail";
 import Appliances from "./pages/Appliances";
+import ApplianceDetailPage from "./pages/ApplianceDetail";
 import Users from "./pages/Users";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -58,6 +59,16 @@ export default function App() {
         element={
           <RequireAuth>
             <Appliances />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/appliances/:id"
+        element={
+          <RequireAuth>
+            <ErrorBoundary label="Appliance detail crashed">
+              <ApplianceDetailPage />
+            </ErrorBoundary>
           </RequireAuth>
         }
       />
