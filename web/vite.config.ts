@@ -9,7 +9,9 @@ import react from "@vitejs/plugin-react";
 // different host/port (e.g. inside docker on the dev VM). Default
 // matches the docker-compose published port (6969).
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), "");
+  // Pass "" so Vite resolves the env directory relative to the config file.
+  // Avoids a hard dependency on @types/node just to use process.cwd().
+  const env = loadEnv(mode, "", "");
   const apiURL = env.SONAR_DEV_API_URL || "http://127.0.0.1:6969";
   const wsURL = apiURL.replace(/^http/, "ws");
   return {
