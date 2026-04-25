@@ -133,14 +133,14 @@ SONAR_DB_HOST=127.0.0.1 SONAR_NATS_URL=nats://127.0.0.1:4222 \
   go run ./cmd/sonar-api
 ```
 
-Open <http://127.0.0.1:18080> and sign in as the bootstrap admin (the script printed the password).
+Open <http://localhost:6969> (or `http://<dev-host>:6969` from anywhere on the LAN) and sign in as the bootstrap admin (the script printed the password).
 
-> The API is published on the host as `127.0.0.1:18080` (default; tweak via `SONAR_API_PORT` in `.env`). Inside the container it still listens on `0.0.0.0:8080`. Port 18080 was chosen because port 8080 is already taken on the `dev` host by an unrelated service.
+> The API is published on the host as `${SONAR_API_BIND}:${SONAR_API_PORT}` — defaults `0.0.0.0:6969`. Inside the container it still listens on `0.0.0.0:8080`. Port 8080 is intentionally avoided because it's taken on the `dev` host by an unrelated service. To restrict the UI to the host (cloudflared-only), set `SONAR_API_BIND=127.0.0.1` in `.env` and recreate the container.
 
 ### 3. UI hot-reload (optional, parallel terminal)
 
 ```bash
-cd web && npm run dev   # http://127.0.0.1:5173 with /api proxy to :18080
+cd web && npm run dev   # http://127.0.0.1:5173 with /api proxy to :6969
 ```
 
 ### Run tests
@@ -164,9 +164,9 @@ The deployment target is the `dev` host VM, managed via the **currituck-tendril*
    ```yaml
    ingress:
      - hostname: sonar.<domain>
-       service: http://127.0.0.1:18080
+       service: http://127.0.0.1:6969
      - hostname: ingest.<domain>
-       service: http://127.0.0.1:18080
+       service: http://127.0.0.1:6969
        originRequest:
          noTLSVerify: true
      # ...existing catch-all 404
