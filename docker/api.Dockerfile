@@ -20,7 +20,7 @@ RUN npm run build
 # These binaries get embedded into the API binary in the next stage so
 # /api/v1/probe/download/{os}/{arch} can serve them without a separate
 # release artifact pipeline.
-FROM golang:1.23-alpine AS probebuild
+FROM golang:1.24-alpine AS probebuild
 COPY docker/local-ca.crt /tmp/local-ca.crt
 RUN if grep -q "BEGIN CERTIFICATE" /tmp/local-ca.crt 2>/dev/null; then \
       cat /tmp/local-ca.crt >> /etc/ssl/certs/ca-certificates.crt; \
@@ -50,7 +50,7 @@ RUN set -eux; \
       -o /probe/windows/amd64/sonar-probe.exe ./cmd/sonar-probe
 
 # ---- Stage 3: build the Go binary with the UI + probes baked in -----------
-FROM golang:1.23-alpine AS gobuild
+FROM golang:1.24-alpine AS gobuild
 COPY docker/local-ca.crt /tmp/local-ca.crt
 RUN if grep -q "BEGIN CERTIFICATE" /tmp/local-ca.crt 2>/dev/null; then \
       cat /tmp/local-ca.crt >> /etc/ssl/certs/ca-certificates.crt; \

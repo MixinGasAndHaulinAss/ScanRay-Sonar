@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM golang:1.23-alpine AS gobuild
+FROM golang:1.24-alpine AS gobuild
 # Optional: inject a corporate root CA for hosts behind TLS inspection.
 # `docker/local-ca.crt` ships as an empty placeholder; populate it via
 # `scripts/inject-host-ca.sh` on hosts where outbound HTTPS is intercepted.
