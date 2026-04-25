@@ -187,6 +187,17 @@ func CollectSnapshot(ctx context.Context, hostname string) Snapshot {
 	s := Snapshot{
 		SchemaVersion: 2, // v2 adds Conversations
 		CapturedAt:    start.UTC().Format(time.RFC3339Nano),
+		// Pre-allocate every collection-typed field so JSON always
+		// emits `[]` instead of `null` even when a collector is a
+		// no-op for this OS (e.g. host.Users() is "not implemented"
+		// on Windows). The UI depends on these being arrays.
+		Disks:         []Disk{},
+		NICs:          []NIC{},
+		TopByCPU:      []ProcessRow{},
+		TopByMem:      []ProcessRow{},
+		Listeners:     []Listener{},
+		Conversations: []Conversation{},
+		LoggedInUsers: []SessionRow{},
 	}
 
 	if hi, err := host.InfoWithContext(ctx); err == nil {

@@ -160,21 +160,21 @@ export default function AgentDetailPage() {
           <Charts cpu={cpuSeries} mem={memSeries} loading={metrics.isLoading} />
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <DisksTable disks={snap.disks} />
-            <NicsTable nics={snap.nics} />
+            <DisksTable disks={snap.disks ?? []} />
+            <NicsTable nics={snap.nics ?? []} />
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <ProcessTable title="Top processes by CPU" rows={snap.topByCpu} sortBy="cpu" />
-            <ProcessTable title="Top processes by memory" rows={snap.topByMem} sortBy="mem" />
+            <ProcessTable title="Top processes by CPU" rows={snap.topByCpu ?? []} sortBy="cpu" />
+            <ProcessTable title="Top processes by memory" rows={snap.topByMem ?? []} sortBy="mem" />
           </div>
 
-          <ListenersTable listeners={snap.listeners} />
+          <ListenersTable listeners={snap.listeners ?? []} />
 
           <ConversationsTable conversations={snap.conversations ?? []} />
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <SessionsTable sessions={snap.loggedInUsers} />
+            <SessionsTable sessions={snap.loggedInUsers ?? []} />
             {snap.stoppedAutoServices && snap.stoppedAutoServices.length > 0 && (
               <ServicesTable services={snap.stoppedAutoServices} />
             )}

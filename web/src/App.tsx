@@ -8,6 +8,7 @@ import AgentDetailPage from "./pages/AgentDetail";
 import Appliances from "./pages/Appliances";
 import Users from "./pages/Users";
 import Layout from "./components/Layout";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   if (!tokens.get()) return <Navigate to="/login" replace />;
@@ -46,7 +47,9 @@ export default function App() {
         path="/agents/:id"
         element={
           <RequireAuth>
-            <AgentDetailPage />
+            <ErrorBoundary label="Agent detail crashed">
+              <AgentDetailPage />
+            </ErrorBoundary>
           </RequireAuth>
         }
       />
