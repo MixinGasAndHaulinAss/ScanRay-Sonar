@@ -309,8 +309,16 @@ func join(parts []string, sep string) string {
 
 func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	siteID := r.URL.Query().Get("siteId")
+	// host(primary_ip) returns the address as text, or NULL — perfect
+	// for scanning into *string. We deliberately do NOT pull
+	// last_metrics here (it's 10–50 KB per row); the detail endpoint
+	// covers anyone who needs the full payload.
 	q := `SELECT id, site_id, hostname, fingerprint, os, os_version, agent_version,
-	             enrolled_at, last_seen_at, is_active, tags, created_at
+	             enrolled_at, last_seen_at, is_active, tags, created_at,
+	             cpu_pct, mem_used_bytes, mem_total_bytes,
+	             root_disk_used_bytes, root_disk_total_bytes,
+	             uptime_seconds, pending_reboot, host(primary_ip),
+	             last_metrics_at
 	      FROM agents`
 	args := []any{}
 	if siteID != "" {
@@ -335,24 +343,45 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 			active                       bool
 			tags                         []string
 			created                      time.Time
+			cpuPct                       *float64
+			memUsed, memTotal            *int64
+			rootUsed, rootTotal          *int64
+			uptimeS                      *int64
+			pendingReboot                bool
+			primaryIP                    *string
+			lastMetricsAt                *time.Time
 		)
-		if err := rows.Scan(&id, &sid, &host, &fp, &os, &osver, &av, &enrolled, &last, &active, &tags, &created); err != nil {
+		if err := rows.Scan(&id, &sid, &host, &fp, &os, &osver, &av,
+			&enrolled, &last, &active, &tags, &created,
+			&cpuPct, &memUsed, &memTotal,
+			&rootUsed, &rootTotal,
+			&uptimeS, &pendingReboot, &primaryIP,
+			&lastMetricsAt); err != nil {
 			writeErr(w, http.StatusInternalServerError, "server_error", "scan failed")
 			return
 		}
 		out = append(out, map[string]any{
-			"id":           id,
-			"siteId":       sid,
-			"hostname":     host,
-			"fingerprint":  fp,
-			"os":           os,
-			"osVersion":    osver,
-			"agentVersion": av,
-			"enrolledAt":   enrolled,
-			"lastSeenAt":   last,
-			"isActive":     active,
-			"tags":         tags,
-			"createdAt":    created,
+			"id":                 id,
+			"siteId":             sid,
+			"hostname":           host,
+			"fingerprint":        fp,
+			"os":                 os,
+			"osVersion":          osver,
+			"agentVersion":       av,
+			"enrolledAt":         enrolled,
+			"lastSeenAt":         last,
+			"isActive":           active,
+			"tags":               tags,
+			"createdAt":          created,
+			"cpuPct":             cpuPct,
+			"memUsedBytes":       memUsed,
+			"memTotalBytes":      memTotal,
+			"rootDiskUsedBytes":  rootUsed,
+			"rootDiskTotalBytes": rootTotal,
+			"uptimeSeconds":      uptimeS,
+			"pendingReboot":      pendingReboot,
+			"primaryIp":          primaryIP,
+			"lastMetricsAt":      lastMetricsAt,
 		})
 	}
 	writeJSON(w, http.StatusOK, out)

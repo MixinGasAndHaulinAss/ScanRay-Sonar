@@ -4,6 +4,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Sites from "./pages/Sites";
 import Agents from "./pages/Agents";
+import AgentDetailPage from "./pages/AgentDetail";
 import Appliances from "./pages/Appliances";
 import Users from "./pages/Users";
 import Layout from "./components/Layout";
@@ -38,6 +39,14 @@ export default function App() {
         element={
           <RequireAuth>
             <Agents />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/agents/:id"
+        element={
+          <RequireAuth>
+            <AgentDetailPage />
           </RequireAuth>
         }
       />

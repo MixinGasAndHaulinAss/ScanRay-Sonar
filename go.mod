@@ -12,6 +12,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/nats-io/nats.go v1.37.0
 	github.com/pquerna/otp v1.4.0
+	github.com/shirou/gopsutil/v4 v4.24.10
 	golang.org/x/crypto v0.27.0
 	golang.org/x/sys v0.25.0
 )

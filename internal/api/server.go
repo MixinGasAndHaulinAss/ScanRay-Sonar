@@ -133,6 +133,11 @@ func (s *Server) Routes() http.Handler {
 			r.With(requireRole(auth.RoleSuperAdmin)).Patch("/users/{id}", s.handleUpdateUser)
 
 			r.Get("/agents", s.handleListAgents)
+			// chi matches static segments before wildcards, so the
+			// enrollment-tokens routes below win over /agents/{id}
+			// even though both look like "/agents/<something>".
+			r.Get("/agents/{id}", s.handleGetAgent)
+			r.Get("/agents/{id}/metrics", s.handleAgentMetrics)
 			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/agents/{id}", s.handleDeleteAgent)
 			r.With(requireRole(auth.RoleSiteAdmin)).Get("/agents/enrollment-tokens", s.handleListEnrollmentTokens)
 			r.With(requireRole(auth.RoleSiteAdmin)).Post("/agents/enrollment-tokens", s.handleCreateEnrollmentToken)

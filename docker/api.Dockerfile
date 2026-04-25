@@ -27,8 +27,12 @@ RUN if grep -q "BEGIN CERTIFICATE" /tmp/local-ca.crt 2>/dev/null; then \
     fi && rm /tmp/local-ca.crt
 WORKDIR /src
 COPY go.mod go.sum* ./
-RUN go mod download
 COPY . .
+# `go mod tidy` regenerates go.sum from current go.mod + sources, so a
+# fresh dependency (added during dev without a local Go toolchain) is
+# fully resolved at build time without us having to hand-maintain
+# go.sum on Windows.
+RUN go mod tidy
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_TIME=unknown
@@ -53,8 +57,8 @@ RUN if grep -q "BEGIN CERTIFICATE" /tmp/local-ca.crt 2>/dev/null; then \
     fi && rm /tmp/local-ca.crt
 WORKDIR /src
 COPY go.mod go.sum* ./
-RUN go mod download
 COPY . .
+RUN go mod tidy
 # Copy the freshly-built UI in so go:embed picks it up.
 COPY --from=web /src/web/dist ./web/dist
 # Drop the cross-compiled probe binaries into the embed directory so the

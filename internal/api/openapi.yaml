@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.4.25.4"
+  version: "2026.4.25.5"
   license:
     name: MIT
 servers:
@@ -498,6 +498,27 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
   /agents/{id}:
+    get:
+      summary: Get a single agent with its latest snapshot
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Agent
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Agent"
+                  - type: object
+                    properties:
+                      lastMetrics:
+                        type: object
+                        description: Verbatim last snapshot the probe sent (Snapshot v1)
+        "404": { $ref: "#/components/responses/NotFound" }
     delete:
       summary: Remove an agent (siteadmin+)
       parameters:
@@ -508,6 +529,39 @@ paths:
       responses:
         "204": { description: Deleted }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{id}/metrics:
+    get:
+      summary: Time-series metric samples for sparklines
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: range
+          schema: { type: string, default: "24h", description: "Go duration; '<N>d' shorthand for days; max 30d" }
+      responses:
+        "200":
+          description: Samples
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agentId: { type: string, format: uuid }
+                  range:   { type: string }
+                  samples:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        time:               { type: string, format: date-time }
+                        cpuPct:             { type: number, nullable: true }
+                        memUsedBytes:       { type: integer, nullable: true }
+                        memTotalBytes:      { type: integer, nullable: true }
+                        rootDiskUsedBytes:  { type: integer, nullable: true }
+                        rootDiskTotalBytes: { type: integer, nullable: true }
 
   /agents/enrollment-tokens:
     get:

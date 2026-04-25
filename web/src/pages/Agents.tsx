@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import type { Agent, EnrollmentToken, NewEnrollmentToken, Site } from "../api/types";
+import { formatBytes, formatPct, formatRelative, pctBarColor } from "../lib/format";
 
 interface TokenForm {
   siteId: string;
@@ -166,7 +168,10 @@ export default function Agents() {
                 <th className="px-4 py-2">Hostname</th>
                 <th className="px-4 py-2">Site</th>
                 <th className="px-4 py-2">OS</th>
-                <th className="px-4 py-2">Version</th>
+                <th className="px-4 py-2">CPU</th>
+                <th className="px-4 py-2">Memory</th>
+                <th className="px-4 py-2">Disk</th>
+                <th className="px-4 py-2">IP</th>
                 <th className="px-4 py-2">Last seen</th>
                 <th className="px-4 py-2">Status</th>
                 <th className="px-4 py-2 text-right">Actions</th>
@@ -175,14 +180,14 @@ export default function Agents() {
             <tbody>
               {agents.isLoading && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-slate-500">
+                  <td colSpan={10} className="px-4 py-6 text-center text-slate-500">
                     Loading…
                   </td>
                 </tr>
               )}
               {agents.data?.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-slate-500">
+                  <td colSpan={10} className="px-4 py-6 text-center text-slate-500">
                     No agents enrolled yet. Click <strong>Add agent</strong> for an install
                     one-liner.
                   </td>
@@ -191,16 +196,65 @@ export default function Agents() {
               {agents.data?.map((a) => {
                 const online =
                   a.lastSeenAt && Date.now() - new Date(a.lastSeenAt).getTime() < 5 * 60_000;
+                const memPct =
+                  a.memUsedBytes != null && a.memTotalBytes && a.memTotalBytes > 0
+                    ? (Number(a.memUsedBytes) / Number(a.memTotalBytes)) * 100
+                    : null;
+                const diskPct =
+                  a.rootDiskUsedBytes != null &&
+                  a.rootDiskTotalBytes &&
+                  a.rootDiskTotalBytes > 0
+                    ? (Number(a.rootDiskUsedBytes) / Number(a.rootDiskTotalBytes)) * 100
+                    : null;
                 return (
                   <tr key={a.id} className="border-t border-ink-800 hover:bg-ink-800/30">
-                    <td className="px-4 py-2">{a.hostname}</td>
+                    <td className="px-4 py-2">
+                      <Link
+                        to={`/agents/${a.id}`}
+                        className="font-medium text-sonar-300 hover:underline"
+                      >
+                        {a.hostname}
+                      </Link>
+                      {a.pendingReboot && (
+                        <span
+                          title="Reboot pending"
+                          className="ml-2 rounded bg-amber-900/50 px-1.5 py-0.5 text-[10px] text-amber-300"
+                        >
+                          reboot
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-slate-400">{siteName(a.siteId)}</td>
                     <td className="px-4 py-2 text-slate-400">
-                      {a.os} {a.osVersion}
+                      <div>
+                        {a.os} {a.osVersion}
+                      </div>
+                      <div className="text-[10px] text-slate-600">
+                        v{a.agentVersion || "?"}
+                      </div>
                     </td>
-                    <td className="px-4 py-2 text-slate-400">{a.agentVersion || "—"}</td>
-                    <td className="px-4 py-2 text-slate-500">
-                      {a.lastSeenAt ? new Date(a.lastSeenAt).toLocaleString() : "never"}
+                    <td className="px-4 py-2">
+                      <MetricCell pct={a.cpuPct ?? null} />
+                    </td>
+                    <td className="px-4 py-2">
+                      <MetricCell
+                        pct={memPct}
+                        sub={a.memTotalBytes ? formatBytes(Number(a.memTotalBytes)) : ""}
+                      />
+                    </td>
+                    <td className="px-4 py-2">
+                      <MetricCell
+                        pct={diskPct}
+                        sub={
+                          a.rootDiskTotalBytes ? formatBytes(Number(a.rootDiskTotalBytes)) : ""
+                        }
+                      />
+                    </td>
+                    <td className="px-4 py-2 font-mono text-xs text-slate-400">
+                      {a.primaryIp || "—"}
+                    </td>
+                    <td className="px-4 py-2 text-xs text-slate-500" title={a.lastSeenAt ?? ""}>
+                      {formatRelative(a.lastSeenAt)}
                     </td>
                     <td className="px-4 py-2">
                       <span
@@ -378,6 +432,25 @@ export default function Agents() {
           </form>
         </div>
       )}
+    </div>
+  );
+}
+
+// MetricCell renders a small "% + bar + sub" trio used by the agent
+// list. Pulled out of the table body to keep that map() readable.
+function MetricCell({ pct, sub }: { pct: number | null; sub?: string }) {
+  if (pct == null) return <span className="text-xs text-slate-600">—</span>;
+  const clamped = Math.min(100, Math.max(0, pct));
+  return (
+    <div className="min-w-[80px] space-y-1">
+      <div className="text-xs tabular-nums text-slate-200">{formatPct(pct)}</div>
+      <div className="h-1 w-20 overflow-hidden rounded bg-ink-800">
+        <div
+          className={"h-full " + pctBarColor(clamped)}
+          style={{ width: `${clamped}%` }}
+        />
+      </div>
+      {sub && <div className="text-[10px] text-slate-600">{sub}</div>}
     </div>
   );
 }

@@ -391,7 +391,13 @@ func (s *Server) ingestWSURL(r *http.Request) string {
 }
 
 // handleAgentWS authenticates the JWT in ?token=, marks the agent
-// last-seen, then hands off to the hub for the keep-alive loop.
+// last-seen, then runs an inline read loop that demuxes inbound frames
+// by `type` and dispatches each kind to the appropriate ingest path.
+//
+// We deliberately do NOT use the generic Hub.Serve here — that hub is
+// a fan-out/keepalive scaffold; agent ingest needs typed handling per
+// frame (metrics today, command-response and event streams later) so
+// it owns the read loop directly.
 func (s *Server) handleAgentWS(w http.ResponseWriter, r *http.Request) {
 	tok := r.URL.Query().Get("token")
 	if tok == "" {
@@ -414,9 +420,10 @@ func (s *Server) handleAgentWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hbCtx, cancel := context.WithCancel(r.Context())
+	defer cancel()
 	go s.runAgentHeartbeatTouch(hbCtx, agentID)
-	s.agentHub.Serve(w, r, "agent")
-	cancel()
+
+	s.runAgentIngestLoop(r.Context(), w, r, agentID)
 }
 
 // runAgentHeartbeatTouch periodically updates last_seen_at while the
