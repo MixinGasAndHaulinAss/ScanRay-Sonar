@@ -276,28 +276,49 @@ func CollectInterfaces(_ context.Context, c *Client) ([]Interface, error) {
 }
 
 // classifyInterfaceKind buckets a row into a small operator-friendly
-// taxonomy. We lead with ifType (the IANA enum is authoritative for
-// loopback/tunnel/LAG/SVI) and only fall back to name prefix when
-// ifType says "ethernetCsmacd" — Cisco IOS-XE marks SVIs and BDIs as
-// propVirtual but reports port-channels and physical Ethernets both
-// as 6, so the name prefix is the only way to tell them apart.
+// taxonomy. We lead with name prefix (more authoritative on Cisco than
+// ifType, which marks SVIs, BDIs, AND stack interconnects all as
+// propVirtual=53) and fall back to ifType when the name doesn't match
+// any known prefix.
+//
+// Buckets: physical | vlan | loopback | tunnel | lag | mgmt | stack | other
+//   - "physical" is what an operator means by "a port"
+//   - "stack" is a Cisco StackWise interconnect (internal to the chassis)
+//   - "mgmt" is a dedicated management/service port (e.g. Gi0/0, Ma0/0)
+//   - "other" includes Null0 and Bluetooth (real ifType but not a port)
 func classifyInterfaceKind(ifType int32, name, descr string) string {
-	switch ifType {
-	case 24: // softwareLoopback
-		return "loopback"
-	case 131, 150: // tunnel, mplsTunnel
-		return "tunnel"
-	case 53, 135, 136: // propVirtual, l2vlan, l3ipvlan
-		return "vlan"
-	case 161: // ieee8023adLag
-		return "lag"
-	case 1: // other
-		return "other"
-	}
-	// ifType == 6 (ethernetCsmacd) lands here. On Cisco IOS-XE the
-	// short name prefix is the most reliable hint.
 	n := strings.ToLower(name)
 	d := strings.ToLower(descr)
+
+	// Name-prefix overrides — checked first because Cisco's ifType
+	// values are too coarse to distinguish e.g. StackPort (propVirtual,
+	// reports 160 Gbps) from a user VLAN SVI (also propVirtual).
+	switch {
+	case strings.HasPrefix(n, "stack") || strings.HasPrefix(d, "stackport") || strings.HasPrefix(d, "stacksub"):
+		return "stack"
+	case strings.HasPrefix(n, "bl") && strings.Contains(d, "bluetooth"):
+		return "other"
+	case strings.HasPrefix(n, "nu") || strings.HasPrefix(d, "null"):
+		return "other"
+	case strings.HasPrefix(n, "ap") && strings.HasPrefix(d, "appgigabit"):
+		// AppGigabitEthernet — internal port for hosting containerized apps,
+		// not a faceplate port.
+		return "other"
+	}
+
+	switch ifType {
+	case 24:
+		return "loopback"
+	case 131, 150:
+		return "tunnel"
+	case 53, 135, 136:
+		return "vlan"
+	case 161:
+		return "lag"
+	case 1:
+		return "other"
+	}
+
 	switch {
 	case strings.HasPrefix(n, "vl") || strings.HasPrefix(d, "vlan"):
 		return "vlan"
@@ -307,32 +328,43 @@ func classifyInterfaceKind(ifType int32, name, descr string) string {
 		return "tunnel"
 	case strings.HasPrefix(n, "po") || strings.HasPrefix(d, "port-channel"):
 		return "lag"
-	case strings.HasPrefix(n, "nu") || strings.HasPrefix(d, "null"):
-		return "other"
 	case strings.HasPrefix(n, "bd") || strings.HasPrefix(d, "bdi"):
 		return "vlan"
 	case strings.HasPrefix(n, "ma") || strings.HasPrefix(d, "management"):
 		return "mgmt"
+	// Cisco "GigabitEthernet0/0" is the dedicated mgmt port on stackable
+	// IOS-XE platforms (it lives in slot 0/0, separate from the dataplane
+	// slots that start at 1/0/x).
+	case strings.HasPrefix(n, "gi0/0") || strings.HasPrefix(d, "gigabitethernet0/0"):
+		return "mgmt"
 	}
-	// Anything else with ifType=6 is a real Ethernet port.
+
 	return "physical"
 }
 
 // looksLikeUplink applies the cheap, locally-knowable heuristics:
-// high speed (>= 10 Gbps on a typical access switch is almost always
-// an uplink), an alias the operator labelled "uplink"/"trunk", or a
-// LAG (port-channels are virtually always inter-switch on access
-// gear). LLDP-based cross-referencing is layered on at persist time
-// in the scheduler since it needs the LLDP table from the same poll.
+//   - high speed (>= 10 Gbps) AND operationally up — an unplugged 10G SFP+
+//     slot still reports 10G ifSpeed, so without the operUp gate we'd
+//     count every empty cage as an uplink
+//   - an alias the operator labelled "uplink"/"trunk"/"to-…"
+//   - a LAG (port-channels are virtually always inter-switch on access gear)
+//
+// Skip kinds that aren't real ports (loopback/tunnel/stack/other) so the
+// bluetooth radio and StackPort don't masquerade as uplinks. LLDP-based
+// cross-referencing is layered on at persist time by markUplinksFromLLDP.
 func looksLikeUplink(i Interface) bool {
-	if i.SpeedBps >= 10_000_000_000 {
+	switch i.Kind {
+	case "loopback", "tunnel", "stack", "other":
+		return false
+	}
+	if i.Kind == "lag" {
 		return true
 	}
 	a := strings.ToLower(i.Alias)
 	if strings.Contains(a, "uplink") || strings.Contains(a, "trunk") || strings.Contains(a, "to-") || strings.Contains(a, "to_") {
 		return true
 	}
-	if classifyInterfaceKind(i.Type, i.Name, i.Descr) == "lag" {
+	if i.SpeedBps >= 10_000_000_000 && i.OperUp {
 		return true
 	}
 	return false

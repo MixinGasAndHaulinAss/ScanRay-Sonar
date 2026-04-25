@@ -275,7 +275,7 @@ export interface ApplianceInterface {
    * everything else is logical (VLAN SVIs, loopbacks, tunnels, LAGs, etc.)
    * and is hidden by default in operator views.
    */
-  kind?: "physical" | "vlan" | "loopback" | "tunnel" | "lag" | "mgmt" | "other";
+  kind?: "physical" | "vlan" | "loopback" | "tunnel" | "lag" | "mgmt" | "stack" | "other";
   /** Heuristic flag for inter-switch uplink ports — pinned to the top of tables and badged. */
   isUplink?: boolean;
   mtu?: number;

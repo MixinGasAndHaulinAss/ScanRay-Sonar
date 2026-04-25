@@ -610,6 +610,7 @@ function KindBadge({ kind }: { kind?: ApplianceInterface["kind"] }) {
     tunnel: "bg-violet-900/40 text-violet-200",
     lag: "bg-amber-900/40 text-amber-200",
     mgmt: "bg-emerald-900/40 text-emerald-200",
+    stack: "bg-cyan-900/40 text-cyan-200",
     other: "bg-slate-800 text-slate-500",
   };
   const cls = styles[k] ?? styles.other;
