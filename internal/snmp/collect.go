@@ -268,7 +268,7 @@ func CollectInterfaces(_ context.Context, c *Client) ([]Interface, error) {
 			r.Name = r.Descr
 		}
 		r.Kind = classifyInterfaceKind(r.Type, r.Name, r.Descr)
-		r.IsUplink = looksLikeUplink(r)
+		r.IsUplink = looksLikeUplink(*r)
 		out = append(out, *r)
 	}
 	sortByIfIndex(out)
