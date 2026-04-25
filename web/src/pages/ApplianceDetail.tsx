@@ -154,8 +154,22 @@ export default function ApplianceDetailPage() {
             cpuPct={a.cpuPct ?? snap.chassis.cpuPct ?? null}
             memPct={memPct}
             uptime={a.uptimeSeconds ?? snap.system.uptimeSeconds}
-            ifUp={a.ifUpCount ?? null}
-            ifTotal={a.ifTotalCount ?? snap.interfaces.length}
+            physUp={
+              a.physUpCount ??
+              snap.interfaces.filter((i) => i.kind === "physical" && i.operUp).length
+            }
+            physTotal={
+              a.physTotalCount ??
+              snap.interfaces.filter((i) => i.kind === "physical").length
+            }
+            logicalCount={
+              snap.interfaces.length -
+              (a.physTotalCount ??
+                snap.interfaces.filter((i) => i.kind === "physical").length)
+            }
+            uplinkCount={
+              a.uplinkCount ?? snap.interfaces.filter((i) => i.isUplink).length
+            }
             memTotal={Number(a.memTotalBytes ?? snap.chassis.memTotalBytes ?? 0)}
           />
 
@@ -193,14 +207,24 @@ interface StatCardsProps {
   cpuPct: number | null;
   memPct: number | null;
   uptime: number;
-  ifUp: number | null;
-  ifTotal: number;
+  physUp: number;
+  physTotal: number;
+  logicalCount: number;
+  uplinkCount: number;
   memTotal: number;
 }
 
 function StatCards(p: StatCardsProps) {
-  const portsPct =
-    p.ifTotal > 0 && p.ifUp != null ? (p.ifUp / p.ifTotal) * 100 : null;
+  // Physical ports are the only count that should drive the "X / Y up" UX —
+  // an access switch's ifTable is dominated by SVIs, port-channels, and
+  // loopbacks, so the raw number lies about how many cables you can plug in.
+  const portsPct = p.physTotal > 0 ? (p.physUp / p.physTotal) * 100 : null;
+  const sub =
+    p.physTotal === 0
+      ? "no physical ports"
+      : p.uplinkCount > 0
+        ? `${p.uplinkCount} uplink${p.uplinkCount === 1 ? "" : "s"} · ${p.logicalCount} logical`
+        : `${p.logicalCount} logical interfaces`;
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
       <Stat
@@ -216,10 +240,10 @@ function StatCards(p: StatCardsProps) {
         sub={p.memTotal ? `${formatBytes(p.memTotal)} total` : "—"}
       />
       <Stat
-        label="Ports up"
-        value={p.ifUp == null ? "—" : `${p.ifUp} / ${p.ifTotal}`}
+        label="Physical ports"
+        value={p.physTotal === 0 ? "—" : `${p.physUp} / ${p.physTotal}`}
         bar={portsPct ?? 0}
-        sub={p.ifTotal === 0 ? "no interfaces" : "operational"}
+        sub={sub}
       />
       <Stat
         label="Uptime"
@@ -306,6 +330,8 @@ function ChartCard({
 
 // ---- Interfaces table (the headline view for a switch) ------------------
 
+type KindFilter = "physical" | "uplinks" | "all" | "logical";
+
 function InterfacesTable({
   applianceId,
   interfaces,
@@ -315,12 +341,44 @@ function InterfacesTable({
 }) {
   const [filter, setFilter] = useState("");
   const [hideDown, setHideDown] = useState(false);
+  // Default to "physical" because that's what an operator means when they
+  // say "ports". Uplinks are always pinned to the top regardless of this
+  // filter (so they're visible even when the operator narrows to physical).
+  const [kindFilter, setKindFilter] = useState<KindFilter>("physical");
   const [sortBy, setSortBy] = useState<"index" | "name" | "in" | "out">("index");
   const [expanded, setExpanded] = useState<number | null>(null);
+
+  const counts = useMemo(() => {
+    let phys = 0;
+    let logical = 0;
+    let uplinks = 0;
+    for (const ifc of interfaces) {
+      if (ifc.kind === "physical") phys++;
+      else logical++;
+      if (ifc.isUplink) uplinks++;
+    }
+    return { phys, logical, uplinks, total: interfaces.length };
+  }, [interfaces]);
 
   const rows = useMemo(() => {
     let r = interfaces.filter((ifc) => {
       if (hideDown && !ifc.operUp) return false;
+      switch (kindFilter) {
+        case "physical":
+          // Show physical ports, but never hide an uplink — port-channels
+          // and 10G ports are usually classified non-physical and they're
+          // exactly what an operator looking at "ports" wants to see.
+          if (ifc.kind !== "physical" && !ifc.isUplink) return false;
+          break;
+        case "uplinks":
+          if (!ifc.isUplink) return false;
+          break;
+        case "logical":
+          if (ifc.kind === "physical") return false;
+          break;
+        case "all":
+          break;
+      }
       if (!filter) return true;
       const f = filter.toLowerCase();
       return (
@@ -343,8 +401,11 @@ function InterfacesTable({
       default:
         r.sort((a, b) => a.ifIndex - b.ifIndex);
     }
+    // Uplinks always pin to the top so the most operationally important
+    // ports stay above the fold no matter how the user sorts/filters.
+    r.sort((a, b) => Number(b.isUplink ?? false) - Number(a.isUplink ?? false));
     return r;
-  }, [interfaces, filter, hideDown, sortBy]);
+  }, [interfaces, filter, hideDown, kindFilter, sortBy]);
 
   return (
     <div className="rounded-xl border border-ink-800 bg-ink-900">
@@ -352,7 +413,7 @@ function InterfacesTable({
         <div className="text-sm font-semibold">
           Interfaces{" "}
           <span className="font-normal text-slate-500">
-            ({interfaces.length} total)
+            ({counts.phys} physical · {counts.logical} logical · {counts.uplinks} uplinks)
           </span>
         </div>
         <input
@@ -361,6 +422,17 @@ function InterfacesTable({
           placeholder="filter by name / descr / alias…"
           className="ml-auto w-64 rounded-md border border-ink-700 bg-ink-950 px-2 py-1 text-xs"
         />
+        <select
+          value={kindFilter}
+          onChange={(e) => setKindFilter(e.target.value as KindFilter)}
+          className="rounded-md border border-ink-700 bg-ink-950 px-2 py-1 text-xs"
+          title="Limit to physical ports (the default), uplinks only, all, or only logical (SVIs/loopbacks/etc.)"
+        >
+          <option value="physical">show: physical + uplinks</option>
+          <option value="uplinks">show: uplinks only</option>
+          <option value="logical">show: logical only</option>
+          <option value="all">show: all ({counts.total})</option>
+        </select>
         <label className="flex items-center gap-1 text-xs text-slate-400">
           <input
             type="checkbox"
@@ -386,9 +458,11 @@ function InterfacesTable({
             <tr>
               <th className="px-3 py-2">#</th>
               <th className="px-3 py-2">Name</th>
+              <th className="px-3 py-2">Kind</th>
               <th className="px-3 py-2">Description / alias</th>
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2 text-right">Speed</th>
+              <th className="px-3 py-2 text-right">Last change</th>
               <th className="px-3 py-2 text-right">In</th>
               <th className="px-3 py-2 text-right">Out</th>
               <th className="px-3 py-2 text-right">Errors</th>
@@ -399,7 +473,7 @@ function InterfacesTable({
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={12} className="px-3 py-6 text-center text-slate-500">
                   No interfaces match.
                 </td>
               </tr>
@@ -435,11 +509,37 @@ function Row({
 }) {
   const errors = (ifc.inErrors ?? 0) + (ifc.outErrors ?? 0);
   const discards = (ifc.inDiscards ?? 0) + (ifc.outDiscards ?? 0);
+  // Uplinks get a distinct row tint + a left-edge accent bar so they
+  // stand out even in a long table.
+  const rowClass = ifc.isUplink
+    ? "border-t border-ink-800 bg-amber-950/10 hover:bg-amber-950/20"
+    : "border-t border-ink-800 hover:bg-ink-800/30";
   return (
     <>
-      <tr className="border-t border-ink-800 hover:bg-ink-800/30">
-        <td className="px-3 py-2 text-slate-500">{ifc.ifIndex}</td>
-        <td className="px-3 py-2 font-mono text-slate-200">{ifc.name}</td>
+      <tr className={rowClass}>
+        <td className="px-3 py-2 text-slate-500">
+          {ifc.isUplink && (
+            <span
+              className="mr-1 inline-block h-3 w-1 rounded-sm bg-amber-400 align-middle"
+              title="Uplink"
+            />
+          )}
+          {ifc.ifIndex}
+        </td>
+        <td className="px-3 py-2 font-mono text-slate-200">
+          {ifc.name}
+          {ifc.isUplink && (
+            <span
+              className="ml-1.5 rounded bg-amber-500/20 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200"
+              title="Heuristic: high speed, alias contains uplink/trunk, port-channel, or LLDP neighbor present"
+            >
+              uplink
+            </span>
+          )}
+        </td>
+        <td className="px-3 py-2">
+          <KindBadge kind={ifc.kind} />
+        </td>
         <td className="px-3 py-2 text-slate-400">
           <div>{ifc.descr || "—"}</div>
           {ifc.alias && (
@@ -451,6 +551,22 @@ function Row({
         </td>
         <td className="px-3 py-2 text-right text-slate-400">
           {ifc.speedBps ? formatBitRate(ifc.speedBps) : "—"}
+        </td>
+        <td
+          className="px-3 py-2 text-right text-slate-400"
+          title={
+            ifc.lastChangeSeconds != null
+              ? `${ifc.operUp ? "Up" : "Down"} for ${formatDuration(ifc.lastChangeSeconds)} (since last ifLastChange)`
+              : "Device did not report ifLastChange for this port"
+          }
+        >
+          {ifc.lastChangeSeconds == null ? (
+            <span className="text-slate-600">—</span>
+          ) : (
+            <span className={ifc.operUp ? "text-emerald-300/80" : "text-red-300/80"}>
+              {formatDuration(ifc.lastChangeSeconds)}
+            </span>
+          )}
         </td>
         <td className="px-3 py-2 text-right text-emerald-300">
           {ifc.inBps == null ? "—" : formatBitRate(Number(ifc.inBps))}
@@ -476,12 +592,31 @@ function Row({
       </tr>
       {expanded && (
         <tr className="bg-ink-950/50">
-          <td colSpan={10} className="px-3 py-3">
+          <td colSpan={12} className="px-3 py-3">
             <IfaceSparkline applianceId={applianceId} ifIndex={ifc.ifIndex} />
           </td>
         </tr>
       )}
     </>
+  );
+}
+
+function KindBadge({ kind }: { kind?: ApplianceInterface["kind"] }) {
+  const k = kind ?? "other";
+  const styles: Record<string, string> = {
+    physical: "bg-slate-800 text-slate-300",
+    vlan: "bg-indigo-900/40 text-indigo-200",
+    loopback: "bg-slate-800 text-slate-400",
+    tunnel: "bg-violet-900/40 text-violet-200",
+    lag: "bg-amber-900/40 text-amber-200",
+    mgmt: "bg-emerald-900/40 text-emerald-200",
+    other: "bg-slate-800 text-slate-500",
+  };
+  const cls = styles[k] ?? styles.other;
+  return (
+    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}>
+      {k}
+    </span>
   );
 }
 

@@ -64,6 +64,19 @@ type Interface struct {
 	Descr        string `json:"descr"`       // ifDescr (long)
 	Alias        string `json:"alias,omitempty"` // ifAlias (operator's port description)
 	Type         int32  `json:"type"`        // ifType enum (6=ethernet, 53=propVirtual, …)
+
+	// Kind is our human-readable classification derived from ifType +
+	// name prefix. One of: "physical", "vlan", "loopback", "tunnel",
+	// "lag", "mgmt", "other". Lets the UI hide logical interfaces by
+	// default and give an accurate "physical port count" for a switch.
+	Kind string `json:"kind,omitempty"`
+
+	// IsUplink is a heuristic flag: true when this looks like an
+	// inter-switch trunk (high speed relative to access ports, alias
+	// contains "uplink"/"trunk", or LLDP shows a switch on the other
+	// end). The poller sets it from a combination of speed + alias;
+	// LLDP cross-referencing is layered on at persist time.
+	IsUplink bool `json:"isUplink,omitempty"`
 	MTU          int32  `json:"mtu,omitempty"`
 	SpeedBps     uint64 `json:"speedBps,omitempty"` // ifHighSpeed × 1e6
 	MAC          string `json:"mac,omitempty"`      // ifPhysAddress

@@ -392,7 +392,8 @@ func (s *Server) handleListAppliances(w http.ResponseWriter, r *http.Request) {
 	q := `SELECT id, site_id, name, vendor, model, serial, host(mgmt_ip), snmp_version,
 	             poll_interval_s, is_active, tags, last_polled_at, last_error, created_at,
 	             sys_name, uptime_seconds, cpu_pct, mem_used_bytes, mem_total_bytes,
-	             if_up_count, if_total_count
+	             if_up_count, if_total_count,
+	             phys_total_count, phys_up_count, uplink_count
 	      FROM appliances`
 	args := []any{}
 	if siteID != "" {
@@ -423,9 +424,11 @@ func (s *Server) handleListAppliances(w http.ResponseWriter, r *http.Request) {
 			cpuPct                           *float64
 			memUsed, memTotal                *int64
 			ifUp, ifTotal                    *int
+			physTotal, physUp, uplinks       *int
 		)
 		if err := rows.Scan(&id, &sid, &name, &vendor, &model, &serial, &ip, &snmpv, &pollSec, &active, &tags, &lastPolled, &lastErr, &created,
-			&sysName, &uptimeS, &cpuPct, &memUsed, &memTotal, &ifUp, &ifTotal); err != nil {
+			&sysName, &uptimeS, &cpuPct, &memUsed, &memTotal, &ifUp, &ifTotal,
+			&physTotal, &physUp, &uplinks); err != nil {
 			writeErr(w, http.StatusInternalServerError, "server_error", "scan failed")
 			return
 		}
@@ -451,6 +454,9 @@ func (s *Server) handleListAppliances(w http.ResponseWriter, r *http.Request) {
 			"memTotalBytes":       memTotal,
 			"ifUpCount":           ifUp,
 			"ifTotalCount":        ifTotal,
+			"physTotalCount":     physTotal,
+			"physUpCount":        physUp,
+			"uplinkCount":        uplinks,
 		})
 	}
 	writeJSON(w, http.StatusOK, out)

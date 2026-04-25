@@ -53,8 +53,35 @@ func CollectAll(ctx context.Context, c *Client) Snapshot {
 		s.LLDP = neighbors
 	}
 
+	// Layer LLDP info onto interface IsUplink: any port with an LLDP
+	// neighbor whose remote sysDescr smells like a switch/router is an
+	// uplink even if speed/alias didn't catch it.
+	markUplinksFromLLDP(s.Interfaces, s.LLDP)
+
 	s.CollectMs = time.Since(start).Milliseconds()
 	return s
+}
+
+// markUplinksFromLLDP flips IsUplink=true for any local ifIndex that
+// appears as the local end of an LLDP neighbor row. This is a strong
+// signal: LLDP neighbors on a network appliance are almost exclusively
+// other network appliances (you don't run lldpd on user laptops by
+// default).
+func markUplinksFromLLDP(ifs []Interface, lldp []LLDP) {
+	if len(lldp) == 0 || len(ifs) == 0 {
+		return
+	}
+	hasNeighbor := make(map[int32]bool, len(lldp))
+	for _, n := range lldp {
+		if n.LocalIfIndex != 0 {
+			hasNeighbor[n.LocalIfIndex] = true
+		}
+	}
+	for i := range ifs {
+		if hasNeighbor[ifs[i].Index] {
+			ifs[i].IsUplink = true
+		}
+	}
 }
 
 // ---------------------------------------------------------------------
@@ -240,11 +267,75 @@ func CollectInterfaces(_ context.Context, c *Client) ([]Interface, error) {
 		if r.Name == "" {
 			r.Name = r.Descr
 		}
+		r.Kind = classifyInterfaceKind(r.Type, r.Name, r.Descr)
+		r.IsUplink = looksLikeUplink(r)
 		out = append(out, *r)
 	}
-	// Sort by ifIndex for determinism.
 	sortByIfIndex(out)
 	return out, nil
+}
+
+// classifyInterfaceKind buckets a row into a small operator-friendly
+// taxonomy. We lead with ifType (the IANA enum is authoritative for
+// loopback/tunnel/LAG/SVI) and only fall back to name prefix when
+// ifType says "ethernetCsmacd" — Cisco IOS-XE marks SVIs and BDIs as
+// propVirtual but reports port-channels and physical Ethernets both
+// as 6, so the name prefix is the only way to tell them apart.
+func classifyInterfaceKind(ifType int32, name, descr string) string {
+	switch ifType {
+	case 24: // softwareLoopback
+		return "loopback"
+	case 131, 150: // tunnel, mplsTunnel
+		return "tunnel"
+	case 53, 135, 136: // propVirtual, l2vlan, l3ipvlan
+		return "vlan"
+	case 161: // ieee8023adLag
+		return "lag"
+	case 1: // other
+		return "other"
+	}
+	// ifType == 6 (ethernetCsmacd) lands here. On Cisco IOS-XE the
+	// short name prefix is the most reliable hint.
+	n := strings.ToLower(name)
+	d := strings.ToLower(descr)
+	switch {
+	case strings.HasPrefix(n, "vl") || strings.HasPrefix(d, "vlan"):
+		return "vlan"
+	case strings.HasPrefix(n, "lo") || strings.HasPrefix(d, "loopback"):
+		return "loopback"
+	case strings.HasPrefix(n, "tu") || strings.HasPrefix(d, "tunnel"):
+		return "tunnel"
+	case strings.HasPrefix(n, "po") || strings.HasPrefix(d, "port-channel"):
+		return "lag"
+	case strings.HasPrefix(n, "nu") || strings.HasPrefix(d, "null"):
+		return "other"
+	case strings.HasPrefix(n, "bd") || strings.HasPrefix(d, "bdi"):
+		return "vlan"
+	case strings.HasPrefix(n, "ma") || strings.HasPrefix(d, "management"):
+		return "mgmt"
+	}
+	// Anything else with ifType=6 is a real Ethernet port.
+	return "physical"
+}
+
+// looksLikeUplink applies the cheap, locally-knowable heuristics:
+// high speed (>= 10 Gbps on a typical access switch is almost always
+// an uplink), an alias the operator labelled "uplink"/"trunk", or a
+// LAG (port-channels are virtually always inter-switch on access
+// gear). LLDP-based cross-referencing is layered on at persist time
+// in the scheduler since it needs the LLDP table from the same poll.
+func looksLikeUplink(i Interface) bool {
+	if i.SpeedBps >= 10_000_000_000 {
+		return true
+	}
+	a := strings.ToLower(i.Alias)
+	if strings.Contains(a, "uplink") || strings.Contains(a, "trunk") || strings.Contains(a, "to-") || strings.Contains(a, "to_") {
+		return true
+	}
+	if classifyInterfaceKind(i.Type, i.Name, i.Descr) == "lag" {
+		return true
+	}
+	return false
 }
 
 // ---------------------------------------------------------------------

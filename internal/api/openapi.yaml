@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.4.26.0"
+  version: "2026.4.27.0"
   license:
     name: MIT
 servers:
@@ -183,6 +183,16 @@ components:
         memTotalBytes: { type: integer, format: int64, nullable: true }
         ifUpCount: { type: integer, nullable: true }
         ifTotalCount: { type: integer, nullable: true }
+        # Physical-only counts: total ifTable can include SVIs, port-channels,
+        # loopbacks etc. that aren't really "ports" to an operator. The poller
+        # classifies each interface (kind="physical"|"vlan"|"loopback"|"lag"|...) and
+        # rolls up the physical counts here so list views can show "24 physical
+        # (22 up)" instead of "113".
+        physTotalCount: { type: integer, nullable: true }
+        physUpCount: { type: integer, nullable: true }
+        # Heuristic count of inter-switch uplinks (high-speed ports, port-channels,
+        # ports with LLDP-discovered switch neighbors, or operator-tagged "uplink").
+        uplinkCount: { type: integer, nullable: true }
 
     ApplianceMetricSample:
       type: object

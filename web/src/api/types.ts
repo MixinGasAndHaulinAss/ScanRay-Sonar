@@ -217,6 +217,18 @@ export interface Appliance {
   memTotalBytes?: number | null;
   ifUpCount?: number | null;
   ifTotalCount?: number | null;
+
+  /**
+   * Counts derived from the per-interface `kind` classification: how
+   * many real (RJ45/SFP/etc.) ports the appliance has, and how many of
+   * those are operationally up. These differ from `ifTotalCount` /
+   * `ifUpCount`, which include SVIs, port-channels, loopbacks, etc.
+   * Prefer these in any operator-facing "X ports" UI.
+   */
+  physTotalCount?: number | null;
+  physUpCount?: number | null;
+  /** Heuristic count of inter-switch uplink ports. */
+  uplinkCount?: number | null;
 }
 
 export interface ApplianceDetail extends Appliance {
@@ -258,6 +270,14 @@ export interface ApplianceInterface {
   descr: string;
   alias?: string;
   type: number;
+  /**
+   * Server-side classification: "physical" is a real RJ45/SFP-cage port,
+   * everything else is logical (VLAN SVIs, loopbacks, tunnels, LAGs, etc.)
+   * and is hidden by default in operator views.
+   */
+  kind?: "physical" | "vlan" | "loopback" | "tunnel" | "lag" | "mgmt" | "other";
+  /** Heuristic flag for inter-switch uplink ports — pinned to the top of tables and badged. */
+  isUplink?: boolean;
   mtu?: number;
   speedBps?: number;
   mac?: string;

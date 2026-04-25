@@ -105,7 +105,10 @@ export default function Appliances() {
               <th className="px-4 py-2">Mgmt IP</th>
               <th className="px-4 py-2">CPU</th>
               <th className="px-4 py-2">Memory</th>
-              <th className="px-4 py-2">Ports</th>
+              <th className="px-4 py-2" title="Physical ports up / total. Logical interfaces (VLANs, port-channels, etc.) excluded.">
+                Ports
+              </th>
+              <th className="px-4 py-2">Uplinks</th>
               <th className="px-4 py-2">Uptime</th>
               <th className="px-4 py-2">Last polled</th>
               <th className="px-4 py-2 text-right">Actions</th>
@@ -114,14 +117,14 @@ export default function Appliances() {
           <tbody>
             {appliances.isLoading && (
               <tr>
-                <td colSpan={10} className="px-4 py-6 text-center text-slate-500">
+                <td colSpan={11} className="px-4 py-6 text-center text-slate-500">
                   Loading…
                 </td>
               </tr>
             )}
             {appliances.data?.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-4 py-6 text-center text-slate-500">
+                <td colSpan={11} className="px-4 py-6 text-center text-slate-500">
                   No appliances yet. Add switches, APs, or routers — supports SNMP v1, v2c, and v3.
                 </td>
               </tr>
@@ -167,14 +170,35 @@ export default function Appliances() {
                       "—"
                     )}
                   </td>
-                  <td className="px-4 py-2 text-slate-300">
-                    {a.ifTotalCount != null ? (
+                  <td
+                    className="px-4 py-2 text-slate-300"
+                    title={
+                      a.ifTotalCount != null
+                        ? `Total ifTable rows: ${a.ifUpCount ?? 0} of ${a.ifTotalCount} up (includes VLANs, port-channels, loopbacks)`
+                        : undefined
+                    }
+                  >
+                    {a.physTotalCount != null ? (
+                      <>
+                        <span className="text-emerald-300">{a.physUpCount ?? 0}</span>
+                        <span className="text-slate-500"> / {a.physTotalCount}</span>
+                      </>
+                    ) : a.ifTotalCount != null ? (
                       <>
                         <span className="text-emerald-300">{a.ifUpCount ?? 0}</span>
                         <span className="text-slate-500"> / {a.ifTotalCount}</span>
                       </>
                     ) : (
                       "—"
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-slate-300">
+                    {a.uplinkCount != null && a.uplinkCount > 0 ? (
+                      <span className="rounded bg-amber-900/40 px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-amber-200">
+                        {a.uplinkCount}
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">—</span>
                     )}
                   </td>
                   <td className="px-4 py-2 text-slate-400">

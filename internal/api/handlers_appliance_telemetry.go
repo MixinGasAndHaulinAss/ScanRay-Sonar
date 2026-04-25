@@ -45,6 +45,9 @@ type applianceDetailView struct {
 	MemTotalBytes       *int64          `json:"memTotalBytes,omitempty"`
 	IfUpCount           *int            `json:"ifUpCount,omitempty"`
 	IfTotalCount        *int            `json:"ifTotalCount,omitempty"`
+	PhysTotalCount      *int            `json:"physTotalCount,omitempty"`
+	PhysUpCount         *int            `json:"physUpCount,omitempty"`
+	UplinkCount         *int            `json:"uplinkCount,omitempty"`
 	LastSnapshotAt      *time.Time      `json:"lastSnapshotAt,omitempty"`
 	LastSnapshot        json.RawMessage `json:"lastSnapshot,omitempty"`
 }
@@ -61,6 +64,7 @@ func (s *Server) handleGetAppliance(w http.ResponseWriter, r *http.Request) {
 		       poll_interval_s, is_active, tags, last_polled_at, last_error, created_at,
 		       sys_descr, sys_name, uptime_seconds, cpu_pct,
 		       mem_used_bytes, mem_total_bytes, if_up_count, if_total_count,
+		       phys_total_count, phys_up_count, uplink_count,
 		       last_snapshot_at, last_snapshot
 		  FROM appliances
 		 WHERE id = $1
@@ -74,6 +78,7 @@ func (s *Server) handleGetAppliance(w http.ResponseWriter, r *http.Request) {
 		&v.PollIntervalSeconds, &v.IsActive, &v.Tags, &v.LastPolledAt, &v.LastError, &v.CreatedAt,
 		&v.SysDescr, &v.SysName, &v.UptimeSeconds, &v.CPUPct,
 		&v.MemUsedBytes, &v.MemTotalBytes, &v.IfUpCount, &v.IfTotalCount,
+		&v.PhysTotalCount, &v.PhysUpCount, &v.UplinkCount,
 		&v.LastSnapshotAt, &lastSnap,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {

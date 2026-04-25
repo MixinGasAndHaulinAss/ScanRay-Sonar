@@ -337,10 +337,24 @@ func (s *Scheduler) persist(ctx context.Context, id uuid.UUID, snap snmp.Snapsho
 		return fmt.Errorf("marshal snapshot: %w", err)
 	}
 
-	upCount := 0
+	var (
+		upCount        int
+		physTotalCount int
+		physUpCount    int
+		uplinkCount    int
+	)
 	for _, ifc := range snap.Interfaces {
 		if ifc.OperUp {
 			upCount++
+		}
+		if ifc.Kind == "physical" {
+			physTotalCount++
+			if ifc.OperUp {
+				physUpCount++
+			}
+		}
+		if ifc.IsUplink {
+			uplinkCount++
 		}
 	}
 
@@ -362,6 +376,9 @@ func (s *Scheduler) persist(ctx context.Context, id uuid.UUID, snap snmp.Snapsho
 		       mem_total_bytes   = $9,
 		       if_up_count       = $10,
 		       if_total_count    = $11,
+		       phys_total_count  = $12,
+		       phys_up_count     = $13,
+		       uplink_count      = $14,
 		       last_polled_at    = $3,
 		       last_error        = NULL
 		 WHERE id = $1
@@ -377,6 +394,9 @@ func (s *Scheduler) persist(ctx context.Context, id uuid.UUID, snap snmp.Snapsho
 		uint64Ptr(snap.Chassis.MemTotalBytes),
 		upCount,
 		len(snap.Interfaces),
+		physTotalCount,
+		physUpCount,
+		uplinkCount,
 	)
 	if err != nil {
 		return fmt.Errorf("update appliances: %w", err)
