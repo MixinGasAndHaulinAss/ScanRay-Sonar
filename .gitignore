@@ -24,6 +24,10 @@ node_modules/
 .DS_Store
 Thumbs.db
 
+# Local scratch — temp files used by tooling (e.g. multi-line git
+# commit messages staged from the agent).
+.git-commit-msg.tmp
+
 # Environment / secrets — never commit
 .env
 .env.local
