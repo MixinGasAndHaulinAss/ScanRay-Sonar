@@ -52,6 +52,28 @@ export interface Appliance {
   createdAt: string;
 }
 
+export interface EnrollmentToken {
+  id: string;
+  siteId: string;
+  label: string;
+  maxUses: number;
+  usedCount: number;
+  expiresAt: string;
+  revokedAt?: string | null;
+  createdAt: string;
+  isValid: boolean;
+}
+
+export interface NewEnrollmentToken {
+  id: string;
+  siteId: string;
+  label: string;
+  token: string;
+  expiresAt: string;
+  maxUses: number;
+  installCmd: string;
+}
+
 export interface VersionInfo {
   version: string;
   commit: string;

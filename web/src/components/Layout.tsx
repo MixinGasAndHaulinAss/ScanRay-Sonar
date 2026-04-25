@@ -4,13 +4,14 @@ import { api, tokens } from "../api/client";
 import type { Site, User, VersionInfo } from "../api/types";
 import clsx from "clsx";
 
-const APP_VERSION = "2026.4.24.1";
+const APP_VERSION = "2026.4.25.1";
 
 const navItems = [
   { to: "/", label: "Dashboard" },
   { to: "/sites", label: "Sites" },
   { to: "/agents", label: "Agents" },
   { to: "/appliances", label: "Appliances" },
+  { to: "/users", label: "Users", role: "superadmin" as const },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -33,23 +34,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <span className="text-xs text-slate-500">v{ver?.version ?? APP_VERSION}</span>
         </div>
         <nav className="flex flex-1 items-center gap-1">
-          {navItems.map((n) => (
-            <NavLink
-              key={n.to}
-              to={n.to}
-              end={n.to === "/"}
-              className={({ isActive }) =>
-                clsx(
-                  "rounded-md px-3 py-1.5 text-sm transition-colors",
-                  isActive
-                    ? "bg-ink-800 text-white"
-                    : "text-slate-400 hover:bg-ink-800/60 hover:text-slate-100",
-                )
-              }
-            >
-              {n.label}
-            </NavLink>
-          ))}
+          {navItems
+            .filter((n) => !n.role || me?.role === n.role)
+            .map((n) => (
+              <NavLink
+                key={n.to}
+                to={n.to}
+                end={n.to === "/"}
+                className={({ isActive }) =>
+                  clsx(
+                    "rounded-md px-3 py-1.5 text-sm transition-colors",
+                    isActive
+                      ? "bg-ink-800 text-white"
+                      : "text-slate-400 hover:bg-ink-800/60 hover:text-slate-100",
+                  )
+                }
+              >
+                {n.label}
+              </NavLink>
+            ))}
         </nav>
         <div className="flex items-center gap-3">
           <select

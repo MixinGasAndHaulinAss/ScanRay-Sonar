@@ -23,24 +23,27 @@ import (
 
 	"github.com/NCLGISA/ScanRay-Sonar/internal/auth"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/config"
+	scrypto "github.com/NCLGISA/ScanRay-Sonar/internal/crypto"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/db"
 )
 
 // Server is the long-lived HTTP/WS service. Construct once via New and
 // then call ListenAndServe.
 type Server struct {
-	cfg   *config.Config
-	log   *slog.Logger
-	pool  *pgxpool.Pool
-	store *db.Store
-	iss   *auth.Issuer
-	nats  *nats.Conn
+	cfg    *config.Config
+	log    *slog.Logger
+	pool   *pgxpool.Pool
+	store  *db.Store
+	iss    *auth.Issuer
+	sealer *scrypto.Sealer
+	nats   *nats.Conn
 
 	agentHub *Hub
 	uiHub    *Hub
 
 	openAPISpec []byte
 	webFS       fs.FS
+	probeFS     fs.FS
 }
 
 // Deps bundles the dependencies a Server needs. Tests wire these up
@@ -51,9 +54,14 @@ type Deps struct {
 	Pool        *pgxpool.Pool
 	Store       *db.Store
 	Issuer      *auth.Issuer
+	Sealer      *scrypto.Sealer
 	NATS        *nats.Conn
 	OpenAPISpec []byte
 	WebFS       fs.FS
+	// ProbeFS holds cross-compiled probe binaries laid out as
+	// "linux/amd64/sonar-probe", "linux/arm64/sonar-probe", etc. May be nil
+	// in dev builds; the /probe/download endpoint returns 404 when so.
+	ProbeFS fs.FS
 }
 
 func New(d Deps) *Server {
@@ -63,11 +71,13 @@ func New(d Deps) *Server {
 		pool:        d.Pool,
 		store:       d.Store,
 		iss:         d.Issuer,
+		sealer:      d.Sealer,
 		nats:        d.NATS,
 		agentHub:    NewHub(d.Logger.With(slog.String("hub", "agent"))),
 		uiHub:       NewHub(d.Logger.With(slog.String("hub", "ui"))),
 		openAPISpec: d.OpenAPISpec,
 		webFS:       d.WebFS,
+		probeFS:     d.ProbeFS,
 	}
 }
 
@@ -101,6 +111,14 @@ func (s *Server) Routes() http.Handler {
 		r.Post("/auth/login", s.handleLogin)
 		r.Post("/auth/refresh", s.handleRefresh)
 
+		// Probe enrollment is unauthenticated at the bearer-token layer —
+		// the request body carries the single-use enrollment token issued
+		// by an operator. Probe binary download is also unauthenticated
+		// because the install one-liner runs before any JWT exists.
+		r.Post("/agents/enroll", s.handleAgentEnroll)
+		r.Get("/probe/download/{os}/{arch}", s.handleProbeDownload)
+		r.Get("/probe/install.sh", s.handleProbeInstallScript)
+
 		// Authenticated.
 		r.Group(func(r chi.Router) {
 			r.Use(s.authRequired)
@@ -111,17 +129,26 @@ func (s *Server) Routes() http.Handler {
 
 			r.With(requireRole(auth.RoleSuperAdmin)).Get("/users", s.handleListUsers)
 			r.With(requireRole(auth.RoleSuperAdmin)).Post("/users", s.handleCreateUser)
+			r.With(requireRole(auth.RoleSuperAdmin)).Patch("/users/{id}", s.handleUpdateUser)
 
 			r.Get("/agents", s.handleListAgents)
+			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/agents/{id}", s.handleDeleteAgent)
+			r.With(requireRole(auth.RoleSiteAdmin)).Get("/agents/enrollment-tokens", s.handleListEnrollmentTokens)
+			r.With(requireRole(auth.RoleSiteAdmin)).Post("/agents/enrollment-tokens", s.handleCreateEnrollmentToken)
+			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/agents/enrollment-tokens/{id}", s.handleRevokeEnrollmentToken)
+
 			r.Get("/appliances", s.handleListAppliances)
+			r.With(requireRole(auth.RoleSiteAdmin)).Post("/appliances", s.handleCreateAppliance)
+			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/appliances/{id}", s.handleDeleteAppliance)
 		})
 	})
 
-	// Agent ingest websocket. Authentication for this is handled
-	// in-protocol once Phase 2 lands.
-	r.HandleFunc("/agent/ws", func(w http.ResponseWriter, req *http.Request) {
-		s.agentHub.Serve(w, req, "agent")
-	})
+	// Agent ingest websocket. Authentication is in-protocol via a
+	// ?token=<agent-jwt> query parameter (browsers and CLI clients
+	// alike can attach query strings, while Authorization headers
+	// require a custom client because most websocket libraries don't
+	// expose them on Upgrade).
+	r.HandleFunc("/agent/ws", s.handleAgentWS)
 
 	// UI live-updates websocket (authenticated).
 	r.With(s.authRequired).HandleFunc("/ws", func(w http.ResponseWriter, req *http.Request) {

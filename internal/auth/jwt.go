@@ -19,7 +19,16 @@ type TokenKind string
 const (
 	KindAccess  TokenKind = "access"
 	KindRefresh TokenKind = "refresh"
+	// KindAgent identifies a long-lived JWT held by a sonar-probe.
+	// Subject = agent UUID; Role is empty. Issued at enrollment time.
+	KindAgent TokenKind = "agent"
 )
+
+// AgentTTL is the lifetime of an agent JWT. Probes refresh it
+// proactively (today: rotate at start of every reconnect window) so a
+// long TTL is fine — losing one means a single re-enroll, not a
+// gradual fleet outage.
+const AgentTTL = 30 * 24 * time.Hour
 
 // Claims is the Sonar-specific JWT body. We deliberately keep this
 // small — heavy data (full role list, site memberships) is loaded from
@@ -57,8 +66,12 @@ func NewIssuer(secretB64 string, accessTTL, refreshTTL time.Duration) (*Issuer, 
 func (i *Issuer) Issue(userID uuid.UUID, role string, kind TokenKind) (string, time.Time, error) {
 	now := time.Now().UTC()
 	ttl := i.accessTTL
-	if kind == KindRefresh {
+	switch kind {
+	case KindRefresh:
 		ttl = i.refreshTTL
+	case KindAgent:
+		ttl = AgentTTL
+	default:
 	}
 	exp := now.Add(ttl)
 	claims := Claims{

@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard";
 import Sites from "./pages/Sites";
 import Agents from "./pages/Agents";
 import Appliances from "./pages/Appliances";
+import Users from "./pages/Users";
 import Layout from "./components/Layout";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -45,6 +46,14 @@ export default function App() {
         element={
           <RequireAuth>
             <Appliances />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/users"
+        element={
+          <RequireAuth>
+            <Users />
           </RequireAuth>
         }
       />

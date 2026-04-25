@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.4.24.1"
+  version: "2026.4.25.1"
   license:
     name: MIT
 servers:
@@ -107,6 +107,14 @@ components:
         password: { type: string, format: password, minLength: 12 }
         role: { type: string, enum: [superadmin, siteadmin, tech, readonly] }
 
+    UpdateUserRequest:
+      type: object
+      properties:
+        displayName: { type: string }
+        role: { type: string, enum: [superadmin, siteadmin, tech, readonly] }
+        isActive: { type: boolean }
+        password: { type: string, format: password, minLength: 12 }
+
     Site:
       type: object
       required: [id, slug, name, timezone, createdAt]
@@ -166,6 +174,87 @@ components:
         lastPolledAt: { type: string, format: date-time, nullable: true }
         lastError: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
+
+    CreateApplianceRequest:
+      type: object
+      required: [siteId, name, mgmtIp]
+      properties:
+        siteId: { type: string, format: uuid }
+        name: { type: string }
+        vendor: { type: string, enum: [meraki, cisco, aruba, ubiquiti, mikrotik, generic], default: generic }
+        model: { type: string }
+        serial: { type: string }
+        mgmtIp: { type: string, format: ipv4 }
+        snmpVersion: { type: string, enum: [v1, v2c, v3], default: v2c }
+        community: { type: string, format: password, description: "Required for v1/v2c" }
+        v3User: { type: string, description: "Required for v3" }
+        v3AuthProto: { type: string, enum: [SHA, SHA256, SHA512, MD5] }
+        v3AuthPass: { type: string, format: password }
+        v3PrivProto: { type: string, enum: ["", AES, AES256, DES] }
+        v3PrivPass: { type: string, format: password }
+        pollIntervalSeconds: { type: integer, minimum: 15, maximum: 3600, default: 60 }
+        tags:
+          type: array
+          items: { type: string }
+
+    EnrollmentToken:
+      type: object
+      required: [id, siteId, label, maxUses, usedCount, expiresAt, createdAt, isValid]
+      properties:
+        id: { type: string, format: uuid }
+        siteId: { type: string, format: uuid }
+        label: { type: string }
+        maxUses: { type: integer }
+        usedCount: { type: integer }
+        expiresAt: { type: string, format: date-time }
+        revokedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        isValid: { type: boolean }
+
+    NewEnrollmentToken:
+      type: object
+      required: [id, siteId, label, token, expiresAt, maxUses, installCmd]
+      properties:
+        id: { type: string, format: uuid }
+        siteId: { type: string, format: uuid }
+        label: { type: string }
+        token:
+          type: string
+          description: "Plaintext bearer token. Returned once at creation; never persisted."
+        expiresAt: { type: string, format: date-time }
+        maxUses: { type: integer }
+        installCmd:
+          type: string
+          description: "Pre-formatted curl|sudo bash one-liner the operator pastes on the target host."
+
+    CreateEnrollmentTokenRequest:
+      type: object
+      required: [siteId]
+      properties:
+        siteId: { type: string, format: uuid }
+        label: { type: string }
+        ttlHours: { type: integer, minimum: 1, maximum: 720, default: 24 }
+        maxUses: { type: integer, minimum: 1, maximum: 100, default: 1 }
+
+    AgentEnrollRequest:
+      type: object
+      required: [token, hostname, fingerprint]
+      properties:
+        token: { type: string, description: "Plaintext enrollment token issued by /agents/enrollment-tokens" }
+        hostname: { type: string }
+        fingerprint: { type: string }
+        os: { type: string, default: linux }
+        osVersion: { type: string }
+        agentVersion: { type: string }
+
+    AgentEnrollResponse:
+      type: object
+      required: [agentId, siteId, jwt, ingestWs]
+      properties:
+        agentId: { type: string, format: uuid }
+        siteId: { type: string, format: uuid }
+        jwt: { type: string, description: "Long-lived agent JWT used for /agent/ws connections." }
+        ingestWs: { type: string, description: "wss:// URL the agent should connect to." }
 
   # ---- Reusable responses ----------------------------------------------
   responses:
@@ -332,6 +421,28 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/Agent" }
 
+  /users/{id}:
+    patch:
+      summary: Update a user (superadmin)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateUserRequest" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
   /appliances:
     get:
       summary: List appliances (filter by site)
@@ -347,3 +458,133 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/Appliance" }
+    post:
+      summary: Create a new appliance (siteadmin+)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateApplianceRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Appliance" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /appliances/{id}:
+    delete:
+      summary: Remove an appliance (siteadmin+)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{id}:
+    delete:
+      summary: Remove an agent (siteadmin+)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/enrollment-tokens:
+    get:
+      summary: List outstanding enrollment tokens (siteadmin+)
+      responses:
+        "200":
+          description: Tokens
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/EnrollmentToken" }
+    post:
+      summary: Issue a new enrollment token (siteadmin+)
+      description: |
+        Returns a plaintext token in the response — capture it
+        immediately, the API only stores its sha256 hash.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateEnrollmentTokenRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NewEnrollmentToken" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /agents/enrollment-tokens/{id}:
+    delete:
+      summary: Revoke an enrollment token (siteadmin+)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: Revoked }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/enroll:
+    post:
+      summary: Enroll an agent using a one-time token (unauthenticated)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentEnrollRequest" }
+      responses:
+        "201":
+          description: Enrolled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentEnrollResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /probe/install.sh:
+    get:
+      summary: Probe install one-liner (bash; unauthenticated)
+      security: []
+      responses:
+        "200":
+          description: install script
+          content:
+            text/x-shellscript:
+              schema: { type: string }
+
+  /probe/download/{os}/{arch}:
+    get:
+      summary: Download a probe binary (unauthenticated)
+      security: []
+      parameters:
+        - in: path
+          name: os
+          required: true
+          schema: { type: string, enum: [linux] }
+        - in: path
+          name: arch
+          required: true
+          schema: { type: string, enum: [amd64, arm64] }
+      responses:
+        "200":
+          description: binary
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }

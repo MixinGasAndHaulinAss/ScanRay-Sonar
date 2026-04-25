@@ -6,6 +6,9 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+
 	"github.com/NCLGISA/ScanRay-Sonar/internal/auth"
 )
 
@@ -175,6 +178,131 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, o)
+}
+
+type updateUserReq struct {
+	DisplayName *string `json:"displayName,omitempty"`
+	Role        *string `json:"role,omitempty"`
+	IsActive    *bool   `json:"isActive,omitempty"`
+	Password    *string `json:"password,omitempty"`
+}
+
+func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "id must be a UUID")
+		return
+	}
+	var req updateUserReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		return
+	}
+
+	// Build the SET clause dynamically so PATCH is truly partial — fields
+	// not present in the request body are left untouched.
+	sets := []string{}
+	args := []any{}
+	add := func(col string, val any) {
+		args = append(args, val)
+		sets = append(sets, col+" = $"+itoa(len(args)))
+	}
+	if req.DisplayName != nil {
+		if *req.DisplayName == "" {
+			writeErr(w, http.StatusBadRequest, "bad_request", "displayName cannot be empty")
+			return
+		}
+		add("display_name", *req.DisplayName)
+	}
+	if req.Role != nil {
+		if !auth.Role(*req.Role).Valid() {
+			writeErr(w, http.StatusBadRequest, "bad_request", "invalid role")
+			return
+		}
+		add("role", *req.Role)
+	}
+	if req.IsActive != nil {
+		add("is_active", *req.IsActive)
+	}
+	if req.Password != nil {
+		if len(*req.Password) < 12 {
+			writeErr(w, http.StatusBadRequest, "bad_request", "password must be at least 12 characters")
+			return
+		}
+		hash, err := auth.HashPassword(*req.Password)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "server_error", "hash failed")
+			return
+		}
+		add("password_hash", hash)
+	}
+	if len(sets) == 0 {
+		writeErr(w, http.StatusBadRequest, "bad_request", "no fields to update")
+		return
+	}
+
+	args = append(args, id)
+	q := "UPDATE users SET " + join(sets, ", ") + " WHERE id = $" + itoa(len(args)) +
+		" RETURNING id, email, display_name, role, totp_enrolled, is_active, last_login_at, created_at"
+
+	type out struct {
+		ID           string     `json:"id"`
+		Email        string     `json:"email"`
+		DisplayName  string     `json:"displayName"`
+		Role         string     `json:"role"`
+		TOTPEnrolled bool       `json:"totpEnrolled"`
+		IsActive     bool       `json:"isActive"`
+		LastLoginAt  *time.Time `json:"lastLoginAt,omitempty"`
+		CreatedAt    time.Time  `json:"createdAt"`
+	}
+	var o out
+	if err := s.pool.QueryRow(r.Context(), q, args...).Scan(
+		&o.ID, &o.Email, &o.DisplayName, &o.Role, &o.TOTPEnrolled, &o.IsActive, &o.LastLoginAt, &o.CreatedAt,
+	); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "update failed")
+		return
+	}
+	uid := userIDFromCtx(r.Context())
+	s.store.Audit(r.Context(), "user", "user.update", &uid, clientIP(r),
+		map[string]any{"target_user_id": o.ID})
+	writeJSON(w, http.StatusOK, o)
+}
+
+// itoa / join are tiny stdlib-free helpers used only by the dynamic
+// PATCH builder above. Inlining keeps the hot path allocation-free
+// without dragging in fmt for a handful of integer-to-string calls.
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	var b [20]byte
+	pos := len(b)
+	for n > 0 {
+		pos--
+		b[pos] = byte('0' + n%10)
+		n /= 10
+	}
+	return string(b[pos:])
+}
+
+func join(parts []string, sep string) string {
+	switch len(parts) {
+	case 0:
+		return ""
+	case 1:
+		return parts[0]
+	}
+	n := len(sep) * (len(parts) - 1)
+	for _, p := range parts {
+		n += len(p)
+	}
+	out := make([]byte, 0, n)
+	out = append(out, parts[0]...)
+	for _, p := range parts[1:] {
+		out = append(out, sep...)
+		out = append(out, p...)
+	}
+	return string(out)
 }
 
 // ---- Agents / Appliances (read-only stubs for Phase 1) ------------------

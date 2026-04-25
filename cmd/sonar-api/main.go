@@ -17,8 +17,10 @@ import (
 	"github.com/NCLGISA/ScanRay-Sonar/internal/api"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/auth"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/config"
+	scrypto "github.com/NCLGISA/ScanRay-Sonar/internal/crypto"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/db"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/logging"
+	"github.com/NCLGISA/ScanRay-Sonar/internal/probebins"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/version"
 	"github.com/NCLGISA/ScanRay-Sonar/web"
 )
@@ -63,6 +65,11 @@ func run() error {
 		return err
 	}
 
+	sealer, err := scrypto.NewSealer(cfg.MasterKeyB64)
+	if err != nil {
+		return err
+	}
+
 	// NATS is non-fatal at startup — many compose stacks may bring it up
 	// after the API. The api.Server checks IsConnected() before publishing.
 	nc, err := nats.Connect(cfg.NATSURL,
@@ -79,15 +86,22 @@ func run() error {
 		webRoot = nil
 	}
 
+	probeRoot, err := fs.Sub(probebins.FS, "bin")
+	if err != nil {
+		probeRoot = nil
+	}
+
 	srv := api.New(api.Deps{
 		Config:      cfg,
 		Logger:      log,
 		Pool:        pool,
 		Store:       store,
 		Issuer:      iss,
+		Sealer:      sealer,
 		NATS:        nc,
 		OpenAPISpec: api.Spec(),
 		WebFS:       webRoot,
+		ProbeFS:     probeRoot,
 	})
 
 	log.Info("ScanRay Sonar API starting",
