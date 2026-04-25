@@ -1,13 +1,15 @@
 // Command sonar-probe is the cross-platform Sonar endpoint agent. It
-// runs as a service on Linux (Windows/macOS support follow), collects
-// host telemetry, and pushes it to sonar-api over a persistent
-// websocket.
+// runs as a systemd unit on Linux and as a Windows service under SCM,
+// collects host telemetry, and pushes it to sonar-api over a
+// persistent websocket.
 //
 // Subcommands:
 //
 //	sonar-probe enroll --token=... --base=... [--config=...]
 //	sonar-probe run    [--config=...]
 //	sonar-probe version
+//
+// The default config path is platform-specific; see paths_*.go.
 package main
 
 import (
@@ -25,8 +27,6 @@ import (
 	"github.com/NCLGISA/ScanRay-Sonar/internal/probe"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/version"
 )
-
-const defaultConfigPath = "/etc/sonar-probe/agent.json"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -136,6 +136,7 @@ func cmdRun(args []string) error {
 		"agent_id", cfg.AgentID,
 		"site_id", cfg.SiteID,
 		"ingest", cfg.IngestWS,
+		"goos", runtime.GOOS,
 	)
-	return probe.Run(ctx, logger, cfg)
+	return runProbe(ctx, logger, cfg)
 }

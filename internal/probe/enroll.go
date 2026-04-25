@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -88,17 +90,30 @@ func Enroll(ctx context.Context, base, token, hostname, fingerprint, agentVersio
 	}, nil
 }
 
-// osVersion returns a best-effort OS version string. Linux: contents
-// of /etc/os-release PRETTY_NAME, falling back to runtime.GOOS.
+// osVersion returns a best-effort OS version string. Linux reads
+// PRETTY_NAME from /etc/os-release; Windows shells out to `cmd /c ver`
+// (which prints e.g. "Microsoft Windows [Version 10.0.19045.4291]");
+// other platforms just return runtime.GOOS so we don't pretend.
 func osVersion() string {
-	b, err := readSmall("/etc/os-release")
-	if err != nil {
+	switch runtime.GOOS {
+	case "linux":
+		b, err := readSmall("/etc/os-release")
+		if err != nil {
+			return "linux"
+		}
+		for _, line := range splitLines(string(b)) {
+			if v, ok := stripPrefix(line, "PRETTY_NAME="); ok {
+				return unquote(v)
+			}
+		}
+		return "linux"
+	case "windows":
+		out, err := exec.Command("cmd", "/c", "ver").Output()
+		if err != nil {
+			return "windows"
+		}
+		return strings.TrimSpace(string(out))
+	default:
 		return runtime.GOOS
 	}
-	for _, line := range splitLines(string(b)) {
-		if v, ok := stripPrefix(line, "PRETTY_NAME="); ok {
-			return unquote(v)
-		}
-	}
-	return runtime.GOOS
 }

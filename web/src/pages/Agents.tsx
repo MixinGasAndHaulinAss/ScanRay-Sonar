@@ -34,6 +34,7 @@ export default function Agents() {
   const [form, setForm] = useState<TokenForm>(EMPTY_TOKEN_FORM);
   const [err, setErr] = useState<string | null>(null);
   const [issued, setIssued] = useState<NewEnrollmentToken | null>(null);
+  const [issuedOS, setIssuedOS] = useState<"linux" | "windows">("linux");
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -47,6 +48,7 @@ export default function Agents() {
     onSuccess: (t) => {
       qc.invalidateQueries({ queryKey: ["enrollment-tokens"] });
       setIssued(t);
+      setIssuedOS("linux");
       setOpen(false);
     },
     onError: (e) => setErr(e instanceof ApiError ? e.message : "Failed to issue token"),
@@ -87,7 +89,7 @@ export default function Agents() {
 
       {issued && (
         <div className="rounded-xl border border-emerald-700 bg-emerald-950/40 p-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div className="text-sm font-medium text-emerald-200">
               New enrollment token — copy the install command now (token is shown only once)
             </div>
@@ -98,13 +100,47 @@ export default function Agents() {
               Dismiss
             </button>
           </div>
-          <pre className="mt-3 overflow-x-auto rounded bg-ink-950 p-3 font-mono text-xs text-emerald-100">
-            {issued.installCmd}
+
+          <div className="mt-3 flex items-center gap-1 text-xs">
+            {(["linux", "windows"] as const).map((os) => (
+              <button
+                key={os}
+                onClick={() => {
+                  setIssuedOS(os);
+                  setCopied(false);
+                }}
+                className={
+                  "rounded-md px-3 py-1 font-medium " +
+                  (issuedOS === os
+                    ? "bg-emerald-900/60 text-emerald-100"
+                    : "border border-emerald-800/60 text-emerald-300 hover:bg-emerald-900/30")
+                }
+              >
+                {os === "linux" ? "Linux (bash)" : "Windows (PowerShell)"}
+              </button>
+            ))}
+          </div>
+
+          <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-ink-950 p-3 font-mono text-xs text-emerald-100">
+            {issuedOS === "linux"
+              ? issued.installCmds?.linux ?? issued.installCmd
+              : issued.installCmds?.windows ?? ""}
           </pre>
+
+          <p className="mt-2 text-xs text-emerald-300/80">
+            {issuedOS === "linux"
+              ? "Paste into a root shell on the Linux host. Downloads the probe, enrolls, and starts the systemd unit."
+              : "Paste into an elevated PowerShell prompt on the Windows host. Downloads sonar-probe.exe, enrolls, and registers the SonarProbe service."}
+          </p>
+
           <div className="mt-2 flex items-center gap-3 text-xs text-emerald-300">
             <button
               onClick={() => {
-                navigator.clipboard.writeText(issued.installCmd);
+                const cmd =
+                  issuedOS === "linux"
+                    ? issued.installCmds?.linux ?? issued.installCmd
+                    : issued.installCmds?.windows ?? "";
+                navigator.clipboard.writeText(cmd);
                 setCopied(true);
                 setTimeout(() => setCopied(false), 1500);
               }}
@@ -113,7 +149,8 @@ export default function Agents() {
               {copied ? "Copied!" : "Copy install command"}
             </button>
             <span>
-              Site: {siteName(issued.siteId)} · Expires {new Date(issued.expiresAt).toLocaleString()} ·{" "}
+              Site: {siteName(issued.siteId)} · Expires{" "}
+              {new Date(issued.expiresAt).toLocaleString()} ·{" "}
               {issued.maxUses === 1 ? "single-use" : `${issued.maxUses} uses`}
             </span>
           </div>
@@ -267,9 +304,10 @@ export default function Agents() {
           >
             <h3 className="text-lg font-semibold">Issue enrollment token</h3>
             <p className="text-xs text-slate-400">
-              Generates a one-time install command you paste on the target host. Run it as
-              root (or via <code>sudo</code>) — it downloads the probe, enrolls, and starts
-              the systemd unit.
+              Generates a one-time install command you paste on the target host. After
+              issuance, pick the OS tab (Linux or Windows) — Linux installs as a systemd
+              unit (<code>sudo</code>), Windows installs as the <code>SonarProbe</code>{" "}
+              service (elevated PowerShell).
             </p>
             <label className="block text-xs text-slate-400">
               Site

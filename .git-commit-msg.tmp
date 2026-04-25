@@ -1,0 +1,37 @@
+v2026.4.25.2 - Windows probe support
+
+Adds Windows enrollment alongside the existing Linux flow so operators
+can install the Sonar Probe on Windows hosts straight from the Agents
+page.
+
+Backend:
+* internal/probe: split fingerprint by GOOS — Windows reads
+  HKLM\Software\Microsoft\Cryptography!MachineGuid via reg.exe, Linux
+  keeps /etc/machine-id et al. osVersion() now switches on GOOS and
+  shells `cmd /c ver` on Windows.
+* cmd/sonar-probe: new run_windows.go wraps probe.Run with a proper
+  SCM service handler (golang.org/x/sys/windows/svc) so the binary
+  works as the SonarProbe Windows service or in the foreground.
+  Default config path is %ProgramData%\Sonar\agent.json on Windows.
+* docker/api.Dockerfile: probebuild stage now also cross-compiles
+  windows/amd64 -> sonar-probe.exe and embeds it under
+  internal/probebins/bin/windows/amd64.
+* internal/api/handlers_probe.go: allowedProbePlatforms includes
+  windows/amd64; download serves sonar-probe.exe with the right
+  filename. New /api/v1/probe/install.ps1 endpoint serves a
+  PowerShell installer that downloads the exe, enrolls, registers
+  the SonarProbe service via sc.exe, and starts it.
+* internal/api/handlers_agents.go: createEnrollmentToken response now
+  carries an installCmds {linux, windows} bundle. The legacy
+  installCmd field stays on the linux command for back-compat.
+* OpenAPI spec updated for the new arch enum, install.ps1 path, and
+  installCmds schema.
+
+Frontend:
+* Agents page: after issuing a token, show OS tabs (Linux / Windows)
+  with the matching one-liner; copy button copies the active tab.
+* Types: NewEnrollmentToken now exposes installCmds.
+
+Versioning: bump VERSION, web/package.json, package-lock.json,
+Layout APP_VERSION, and openapi.yaml info.version to 2026.4.25.2.
+go.mod promotes golang.org/x/sys to a direct require.

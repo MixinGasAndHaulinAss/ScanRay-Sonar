@@ -28,14 +28,24 @@ type createEnrollmentTokenReq struct {
 	MaxUses  int    `json:"maxUses"`
 }
 
+// installCommands is the per-OS install one-liner bundle returned with
+// every newly-issued enrollment token. The legacy InstallCmd field on
+// the parent struct is kept (= the linux command) for older UIs and
+// scripts; new clients should prefer InstallCmds.
+type installCommands struct {
+	Linux   string `json:"linux"`
+	Windows string `json:"windows"`
+}
+
 type createEnrollmentTokenResp struct {
-	ID        string    `json:"id"`
-	SiteID    string    `json:"siteId"`
-	Label     string    `json:"label"`
-	Token     string    `json:"token"` // PLAINTEXT — shown exactly once
-	ExpiresAt time.Time `json:"expiresAt"`
-	MaxUses   int       `json:"maxUses"`
-	InstallCmd string   `json:"installCmd"`
+	ID          string          `json:"id"`
+	SiteID      string          `json:"siteId"`
+	Label       string          `json:"label"`
+	Token       string          `json:"token"` // PLAINTEXT — shown exactly once
+	ExpiresAt   time.Time       `json:"expiresAt"`
+	MaxUses     int             `json:"maxUses"`
+	InstallCmd  string          `json:"installCmd"`  // linux (kept for back-compat)
+	InstallCmds installCommands `json:"installCmds"` // per-OS one-liners
 }
 
 func (s *Server) handleCreateEnrollmentToken(w http.ResponseWriter, r *http.Request) {
@@ -97,23 +107,27 @@ func (s *Server) handleCreateEnrollmentToken(w http.ResponseWriter, r *http.Requ
 	s.store.Audit(r.Context(), "user", "agent.enroll_token.create", &uid, clientIP(r),
 		map[string]any{"site_id": siteID.String(), "label": req.Label, "token_id": id.String()})
 
+	cmds := s.installCommands(r, plaintext)
 	writeJSON(w, http.StatusCreated, createEnrollmentTokenResp{
-		ID:         id.String(),
-		SiteID:     siteID.String(),
-		Label:      req.Label,
-		Token:      plaintext,
-		ExpiresAt:  expires,
-		MaxUses:    req.MaxUses,
-		InstallCmd: s.installCmd(r, plaintext),
+		ID:          id.String(),
+		SiteID:      siteID.String(),
+		Label:       req.Label,
+		Token:       plaintext,
+		ExpiresAt:   expires,
+		MaxUses:     req.MaxUses,
+		InstallCmd:  cmds.Linux,
+		InstallCmds: cmds,
 	})
 }
 
-func (s *Server) installCmd(r *http.Request, token string) string {
+// installCommands returns the per-OS install one-liners for a freshly
+// minted enrollment token. The base URL is derived the same way as the
+// install scripts themselves (configured PublicURL, falling back to
+// the inbound request host) so the operator can copy the one-liner
+// straight into a target shell without surgery.
+func (s *Server) installCommands(r *http.Request, token string) installCommands {
 	base := s.cfg.PublicURL
 	if base == "" {
-		// Dev fallback: build the URL from the inbound request so a
-		// freshly-installed UI (no PUBLIC_URL configured yet) still
-		// produces a one-liner that works from the same network.
 		scheme := "http"
 		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
 			scheme = "https"
@@ -121,10 +135,21 @@ func (s *Server) installCmd(r *http.Request, token string) string {
 		base = scheme + "://" + r.Host
 	}
 	base = strings.TrimRight(base, "/")
-	return fmt.Sprintf(
+
+	linux := fmt.Sprintf(
 		"curl -fsSL %s/api/v1/probe/install.sh | sudo INSTALL_TOKEN=%s SONAR_BASE=%s bash",
 		base, token, base,
 	)
+	// The Windows command must be a single PowerShell line that an
+	// operator can paste into an elevated PowerShell prompt. Setting
+	// the env vars in the same line scopes them to the iex'd script.
+	windows := fmt.Sprintf(
+		`powershell -NoProfile -ExecutionPolicy Bypass -Command `+
+			`"$env:INSTALL_TOKEN='%s'; $env:SONAR_BASE='%s'; `+
+			`iwr -UseBasicParsing '%s/api/v1/probe/install.ps1' | iex"`,
+		token, base, base,
+	)
+	return installCommands{Linux: linux, Windows: windows}
 }
 
 type enrollmentTokenView struct {

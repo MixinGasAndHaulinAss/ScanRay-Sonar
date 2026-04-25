@@ -71,7 +71,13 @@ export interface NewEnrollmentToken {
   token: string;
   expiresAt: string;
   maxUses: number;
+  /** Linux install one-liner (kept for back-compat). */
   installCmd: string;
+  /** Per-OS install one-liners — pick the one that matches the target host. */
+  installCmds: {
+    linux: string;
+    windows: string;
+  };
 }
 
 export interface VersionInfo {

@@ -37,11 +37,13 @@ RUN set -eux; \
       -X github.com/NCLGISA/ScanRay-Sonar/internal/version.Version=${VERSION} \
       -X github.com/NCLGISA/ScanRay-Sonar/internal/version.Commit=${COMMIT} \
       -X github.com/NCLGISA/ScanRay-Sonar/internal/version.BuildTime=${BUILD_TIME}"; \
-    mkdir -p /probe/linux/amd64 /probe/linux/arm64; \
-    GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" \
-      -o /probe/linux/amd64/sonar-probe ./cmd/sonar-probe; \
-    GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" \
-      -o /probe/linux/arm64/sonar-probe ./cmd/sonar-probe
+    mkdir -p /probe/linux/amd64 /probe/linux/arm64 /probe/windows/amd64; \
+    GOOS=linux   GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" \
+      -o /probe/linux/amd64/sonar-probe       ./cmd/sonar-probe; \
+    GOOS=linux   GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" \
+      -o /probe/linux/arm64/sonar-probe       ./cmd/sonar-probe; \
+    GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" \
+      -o /probe/windows/amd64/sonar-probe.exe ./cmd/sonar-probe
 
 # ---- Stage 3: build the Go binary with the UI + probes baked in -----------
 FROM golang:1.23-alpine AS gobuild

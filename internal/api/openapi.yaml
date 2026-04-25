@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.4.25.1"
+  version: "2026.4.25.2"
   license:
     name: MIT
 servers:
@@ -213,7 +213,7 @@ components:
 
     NewEnrollmentToken:
       type: object
-      required: [id, siteId, label, token, expiresAt, maxUses, installCmd]
+      required: [id, siteId, label, token, expiresAt, maxUses, installCmd, installCmds]
       properties:
         id: { type: string, format: uuid }
         siteId: { type: string, format: uuid }
@@ -225,7 +225,18 @@ components:
         maxUses: { type: integer }
         installCmd:
           type: string
-          description: "Pre-formatted curl|sudo bash one-liner the operator pastes on the target host."
+          description: "Linux install one-liner (kept for back-compat with old UIs). Same as installCmds.linux."
+        installCmds:
+          type: object
+          required: [linux, windows]
+          description: "Per-OS install one-liner. Pick the one that matches the target host."
+          properties:
+            linux:
+              type: string
+              description: "curl | sudo bash one-liner; installs sonar-probe as a systemd unit."
+            windows:
+              type: string
+              description: "PowerShell one-liner (run elevated); installs sonar-probe.exe as the SonarProbe Windows service."
 
     CreateEnrollmentTokenRequest:
       type: object
@@ -559,13 +570,24 @@ paths:
 
   /probe/install.sh:
     get:
-      summary: Probe install one-liner (bash; unauthenticated)
+      summary: Probe install one-liner (Linux bash; unauthenticated)
       security: []
       responses:
         "200":
           description: install script
           content:
             text/x-shellscript:
+              schema: { type: string }
+
+  /probe/install.ps1:
+    get:
+      summary: Probe install one-liner (Windows PowerShell; unauthenticated)
+      security: []
+      responses:
+        "200":
+          description: PowerShell install script
+          content:
+            text/plain:
               schema: { type: string }
 
   /probe/download/{os}/{arch}:
@@ -576,7 +598,7 @@ paths:
         - in: path
           name: os
           required: true
-          schema: { type: string, enum: [linux] }
+          schema: { type: string, enum: [linux, windows] }
         - in: path
           name: arch
           required: true

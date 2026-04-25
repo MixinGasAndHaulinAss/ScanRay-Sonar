@@ -118,6 +118,7 @@ func (s *Server) Routes() http.Handler {
 		r.Post("/agents/enroll", s.handleAgentEnroll)
 		r.Get("/probe/download/{os}/{arch}", s.handleProbeDownload)
 		r.Get("/probe/install.sh", s.handleProbeInstallScript)
+		r.Get("/probe/install.ps1", s.handleProbeInstallScriptPS1)
 
 		// Authenticated.
 		r.Group(func(r chi.Router) {
