@@ -43,6 +43,9 @@ type Snapshot struct {
 	TopByCPU            []ProcessRow `json:"topByCpu"`
 	TopByMem            []ProcessRow `json:"topByMem"`
 	Listeners           []Listener   `json:"listeners"`
+	// Conversations are aggregated active TCP/UDP peer pairs (one row
+	// per (proto, direction, remote, process)). Schema v2+.
+	Conversations       []Conversation `json:"conversations,omitempty"`
 	LoggedInUsers       []SessionRow `json:"loggedInUsers"`
 	PendingReboot       bool         `json:"pendingReboot"`
 	PendingRebootReason string       `json:"pendingRebootReason,omitempty"`
@@ -141,6 +144,24 @@ type Listener struct {
 	ProcessName string `json:"processName,omitempty"`
 }
 
+// Conversation is an aggregated active connection between this host
+// and a remote peer. Direction is inferred from whether the local
+// port matches one of our listeners (inbound) vs an ephemeral port
+// connecting out (outbound). Local peers (loopback) are excluded —
+// they're noise for the "what is this host talking to" view.
+type Conversation struct {
+	Proto       string `json:"proto"`              // tcp, udp
+	Direction   string `json:"direction"`          // inbound, outbound, local
+	RemoteIP    string `json:"remoteIp"`
+	RemoteHost  string `json:"remoteHost,omitempty"` // reverse-DNS, best-effort
+	RemotePort  uint32 `json:"remotePort"`
+	LocalPort   uint32 `json:"localPort,omitempty"`  // populated for inbound (the listener port)
+	State       string `json:"state,omitempty"`      // ESTABLISHED, CLOSE_WAIT, ...
+	PID         int32  `json:"pid,omitempty"`
+	ProcessName string `json:"processName,omitempty"`
+	Count       int    `json:"count"`                // number of socket rows aggregated
+}
+
 type SessionRow struct {
 	User    string `json:"user"`
 	Tty     string `json:"tty,omitempty"`
@@ -164,7 +185,7 @@ type ServiceRow struct {
 func CollectSnapshot(ctx context.Context, hostname string) Snapshot {
 	start := time.Now()
 	s := Snapshot{
-		SchemaVersion: 1,
+		SchemaVersion: 2, // v2 adds Conversations
 		CapturedAt:    start.UTC().Format(time.RFC3339Nano),
 	}
 
@@ -194,7 +215,7 @@ func CollectSnapshot(ctx context.Context, hostname string) Snapshot {
 	collectDisks(ctx, &s)
 	collectNICs(ctx, &s)
 	collectProcesses(ctx, &s)
-	collectListeners(ctx, &s)
+	collectSockets(ctx, &s)
 	collectUsers(ctx, &s)
 	collectOSExtras(ctx, &s) // pending reboot + per-OS service/unit lists
 
@@ -410,54 +431,209 @@ func collectProcesses(ctx context.Context, s *Snapshot) {
 	s.TopByMem = byMem
 }
 
-// collectListeners enumerates listening TCP+UDP sockets via
-// gopsutil/net. The sockets-with-pid lookup needs admin on Windows and
-// CAP_NET_RAW (or root) on Linux; the probe runs as LocalSystem /
-// root respectively, so this should always succeed.
-func collectListeners(ctx context.Context, s *Snapshot) {
+// collectSockets enumerates TCP+UDP sockets via gopsutil/net in a
+// single pass and produces two outputs from one expensive system call:
+//
+//   - Listeners — every "LISTEN" TCP socket plus every UDP socket
+//     (UDP has no listen state; gopsutil reports "NONE"). This is the
+//     "what is this host exposing" view.
+//
+//   - Conversations — every active connection to a non-loopback peer
+//     in a meaningful state (ESTABLISHED / CLOSE_WAIT / FIN_WAIT*).
+//     We aggregate by (proto, direction, remote_ip, remote_port,
+//     process) so a process holding 50 sockets to one peer collapses
+//     to one row with Count=50. Direction is inferred from whether
+//     the local port matches one of our own listeners (inbound) or
+//     not (outbound). TIME_WAIT and SYN_SENT are dropped — they're
+//     largely noise for an operator looking at "what is this box
+//     talking to right now".
+//
+// Reverse DNS is best-effort and bounded; see dnscache.go.
+//
+// The sockets-with-pid lookup needs admin on Windows and CAP_NET_RAW
+// (or root) on Linux; the probe runs as LocalSystem / root, so this
+// should always succeed.
+func collectSockets(ctx context.Context, s *Snapshot) {
 	conns, err := psnet.ConnectionsWithContext(ctx, "all")
 	if err != nil {
 		s.warn("net.Connections: " + err.Error())
 		return
 	}
+
 	pidName := map[int32]string{}
-	for _, c := range conns {
-		// We only care about listening sockets here; "established" /
-		// "time_wait" are noise for an inventory view. UDP doesn't
-		// have a listen state — gopsutil reports "NONE".
-		switch strings.ToUpper(c.Status) {
-		case "LISTEN", "NONE":
-		default:
-			continue
+	resolvePidName := func(pid int32) string {
+		if pid == 0 {
+			return ""
 		}
+		if name, ok := pidName[pid]; ok {
+			return name
+		}
+		if p, err := process.NewProcessWithContext(ctx, pid); err == nil {
+			if n, err := p.NameWithContext(ctx); err == nil {
+				pidName[pid] = n
+				return n
+			}
+		}
+		pidName[pid] = ""
+		return ""
+	}
+
+	// First pass: build listener list and a quick lookup of our own
+	// listening (proto, port) pairs for direction inference.
+	type listenKey struct {
+		proto string
+		port  uint32
+	}
+	ourListeners := map[listenKey]bool{}
+
+	type convKey struct {
+		proto       string
+		direction   string
+		remoteIP    string
+		remotePort  uint32
+		localPort   uint32 // only set for inbound, 0 for outbound
+		processName string
+	}
+	convAgg := map[convKey]*Conversation{}
+
+	for _, c := range conns {
 		proto := "tcp"
 		if c.Type == 2 { // SOCK_DGRAM
 			proto = "udp"
 		}
-		row := Listener{
-			Proto:   proto,
-			Address: c.Laddr.IP,
-			Port:    c.Laddr.Port,
-			PID:     c.Pid,
-		}
-		if c.Pid != 0 {
-			if name, ok := pidName[c.Pid]; ok {
-				row.ProcessName = name
-			} else if p, err := process.NewProcessWithContext(ctx, c.Pid); err == nil {
-				if n, err := p.NameWithContext(ctx); err == nil {
-					row.ProcessName = n
-					pidName[c.Pid] = n
-				}
+		state := strings.ToUpper(c.Status)
+
+		// Listener rows: TCP LISTEN + UDP NONE (gopsutil idiom).
+		if state == "LISTEN" || state == "NONE" {
+			row := Listener{
+				Proto:       proto,
+				Address:     c.Laddr.IP,
+				Port:        c.Laddr.Port,
+				PID:         c.Pid,
+				ProcessName: resolvePidName(c.Pid),
 			}
+			s.Listeners = append(s.Listeners, row)
+			ourListeners[listenKey{proto: proto, port: c.Laddr.Port}] = true
+			continue
 		}
-		s.Listeners = append(s.Listeners, row)
+
+		// Conversation rows: active sockets only. TIME_WAIT and the
+		// transient SYN states are excluded as noise.
+		switch state {
+		case "ESTABLISHED", "CLOSE_WAIT", "FIN_WAIT1", "FIN_WAIT2",
+			"CLOSING", "LAST_ACK":
+			// keep
+		default:
+			continue
+		}
+		if c.Raddr.IP == "" || c.Raddr.Port == 0 {
+			continue
+		}
+		// Loopback peers are not actionable in a "talking to" view.
+		if isLoopbackIP(c.Raddr.IP) {
+			continue
+		}
+
+		direction := "outbound"
+		var localPort uint32
+		if ourListeners[listenKey{proto: proto, port: c.Laddr.Port}] {
+			direction = "inbound"
+			localPort = c.Laddr.Port
+		}
+
+		procName := resolvePidName(c.Pid)
+		key := convKey{
+			proto:       proto,
+			direction:   direction,
+			remoteIP:    c.Raddr.IP,
+			remotePort:  c.Raddr.Port,
+			localPort:   localPort,
+			processName: procName,
+		}
+		if existing, ok := convAgg[key]; ok {
+			existing.Count++
+			// Promote to ESTABLISHED if we ever saw it; otherwise
+			// keep the most-recent state we observed.
+			if state == "ESTABLISHED" {
+				existing.State = state
+			}
+			continue
+		}
+		convAgg[key] = &Conversation{
+			Proto:       proto,
+			Direction:   direction,
+			RemoteIP:    c.Raddr.IP,
+			RemotePort:  c.Raddr.Port,
+			LocalPort:   localPort,
+			State:       state,
+			PID:         c.Pid,
+			ProcessName: procName,
+			Count:       1,
+		}
 	}
+
 	sort.Slice(s.Listeners, func(i, j int) bool {
 		if s.Listeners[i].Proto != s.Listeners[j].Proto {
 			return s.Listeners[i].Proto < s.Listeners[j].Proto
 		}
 		return s.Listeners[i].Port < s.Listeners[j].Port
 	})
+
+	// Materialise + sort conversations: highest count first, then
+	// remote port asc, then remote IP asc, so the "talking to"
+	// table is stable across snapshots.
+	convs := make([]Conversation, 0, len(convAgg))
+	for _, v := range convAgg {
+		convs = append(convs, *v)
+	}
+	sort.Slice(convs, func(i, j int) bool {
+		if convs[i].Count != convs[j].Count {
+			return convs[i].Count > convs[j].Count
+		}
+		if convs[i].RemotePort != convs[j].RemotePort {
+			return convs[i].RemotePort < convs[j].RemotePort
+		}
+		return convs[i].RemoteIP < convs[j].RemoteIP
+	})
+	if len(convs) > 200 {
+		convs = convs[:200]
+	}
+
+	// Reverse-DNS the unique remote IPs in this snapshot. Best-effort:
+	// resolveBatch internally enforces total + per-lookup deadlines so
+	// a hostile resolver can't stall the snapshot loop.
+	if len(convs) > 0 {
+		uniq := map[string]struct{}{}
+		ips := make([]string, 0, len(convs))
+		for _, c := range convs {
+			if _, ok := uniq[c.RemoteIP]; ok {
+				continue
+			}
+			uniq[c.RemoteIP] = struct{}{}
+			ips = append(ips, c.RemoteIP)
+		}
+		names := resolveBatch(ctx, ips)
+		for i := range convs {
+			if n, ok := names[convs[i].RemoteIP]; ok {
+				convs[i].RemoteHost = n
+			}
+		}
+	}
+
+	s.Conversations = convs
+}
+
+// isLoopbackIP returns true for 127.0.0.0/8 and ::1. We strip these
+// before aggregating conversations so the "talking to" view doesn't
+// fill up with same-host RPC chatter.
+func isLoopbackIP(ip string) bool {
+	if ip == "" {
+		return false
+	}
+	if strings.HasPrefix(ip, "127.") || ip == "::1" {
+		return true
+	}
+	return false
 }
 
 func collectUsers(ctx context.Context, s *Snapshot) {

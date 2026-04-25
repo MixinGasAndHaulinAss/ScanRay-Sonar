@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.4.25.5"
+  version: "2026.4.25.6"
   license:
     name: MIT
 servers:
@@ -517,7 +517,11 @@ paths:
                     properties:
                       lastMetrics:
                         type: object
-                        description: Verbatim last snapshot the probe sent (Snapshot v1)
+                        description: |
+                          Verbatim last snapshot the probe sent (Snapshot v2). Includes
+                          a `conversations` array of aggregated active TCP/UDP peer
+                          pairs (direction, remoteIp, remoteHost, remotePort, localPort,
+                          state, pid, processName, count) for the "talking to" view.
         "404": { $ref: "#/components/responses/NotFound" }
     delete:
       summary: Remove an agent (siteadmin+)

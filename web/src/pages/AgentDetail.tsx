@@ -11,13 +11,14 @@
 // fast even on a slow VPN.
 
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type {
   AgentDetail,
   MetricSeries,
   Site,
+  SnapshotConversation,
   SnapshotDisk,
   SnapshotListener,
   SnapshotNIC,
@@ -169,6 +170,8 @@ export default function AgentDetailPage() {
           </div>
 
           <ListenersTable listeners={snap.listeners} />
+
+          <ConversationsTable conversations={snap.conversations ?? []} />
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <SessionsTable sessions={snap.loggedInUsers} />
@@ -457,6 +460,143 @@ function ListenersTable({ listeners }: { listeners: SnapshotListener[] }) {
         </div>
       )}
     </Section>
+  );
+}
+
+// ---- Conversations ("talking to") ----------------------------------------
+
+function ConversationsTable({ conversations }: { conversations: SnapshotConversation[] }) {
+  const [filter, setFilter] = useState("");
+  const [dir, setDir] = useState<"all" | "outbound" | "inbound">("all");
+
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    return conversations.filter((c) => {
+      if (dir !== "all" && c.direction !== dir) return false;
+      if (!q) return true;
+      const peer = (c.remoteHost ?? c.remoteIp).toLowerCase();
+      return (
+        peer.includes(q) ||
+        c.remoteIp.includes(q) ||
+        String(c.remotePort).includes(q) ||
+        (c.processName ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [conversations, filter, dir]);
+
+  const counts = useMemo(() => {
+    let inbound = 0;
+    let outbound = 0;
+    for (const c of conversations) {
+      if (c.direction === "inbound") inbound++;
+      else if (c.direction === "outbound") outbound++;
+    }
+    return { inbound, outbound, total: conversations.length };
+  }, [conversations]);
+
+  return (
+    <Section
+      title={`Talking to (${counts.total} peers · ${counts.outbound} out · ${counts.inbound} in)`}
+    >
+      {conversations.length === 0 ? (
+        <Empty>
+          No active peer conversations reported. Requires probe v2026.4.25.6+ with the
+          conversations collector enabled.
+        </Empty>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Filter by host, IP, port, or process…"
+              className="w-72 rounded-md border border-ink-800 bg-ink-950 px-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:border-sonar-500 focus:outline-none"
+            />
+            <div className="flex overflow-hidden rounded-md border border-ink-800 text-[11px]">
+              {(["all", "outbound", "inbound"] as const).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setDir(d)}
+                  className={
+                    "px-2.5 py-1 transition " +
+                    (dir === d
+                      ? "bg-sonar-700/40 text-sonar-200"
+                      : "bg-ink-900 text-slate-400 hover:bg-ink-800")
+                  }
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+            <span className="text-[11px] text-slate-500">
+              showing {filtered.length} of {conversations.length}
+            </span>
+          </div>
+          <div className="max-h-[28rem] overflow-auto">
+            <Table head={["Dir", "Peer", "Port", "Proto", "Process", "State", "Conns"]}>
+              {filtered.map((c, i) => (
+                <tr key={i} className="border-t border-ink-800">
+                  <td className="px-3 py-1.5">
+                    <DirectionPill dir={c.direction} />
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <div className="flex flex-col">
+                      <span className="text-xs text-slate-200">
+                        {c.remoteHost || c.remoteIp}
+                      </span>
+                      {c.remoteHost && (
+                        <span className="font-mono text-[10px] text-slate-500">
+                          {c.remoteIp}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-1.5 text-xs tabular-nums">
+                    {c.remotePort}
+                    {c.direction === "inbound" && c.localPort != null && (
+                      <span className="ml-1 text-[10px] text-slate-500">
+                        ← :{c.localPort}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-1.5 font-mono text-xs text-slate-400">{c.proto}</td>
+                  <td className="px-3 py-1.5 text-xs">
+                    {c.processName || "—"}
+                    {c.pid ? (
+                      <span className="ml-1 text-[10px] text-slate-500">pid {c.pid}</span>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-1.5 text-[11px] text-slate-500">
+                    {c.state || "—"}
+                  </td>
+                  <td className="px-3 py-1.5 text-right text-xs tabular-nums text-slate-300">
+                    {c.count}
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          </div>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function DirectionPill({ dir }: { dir: SnapshotConversation["direction"] }) {
+  const cls =
+    dir === "outbound"
+      ? "bg-sonar-900/60 text-sonar-200"
+      : dir === "inbound"
+        ? "bg-emerald-900/60 text-emerald-200"
+        : "bg-slate-800 text-slate-300";
+  const label = dir === "outbound" ? "out" : dir === "inbound" ? "in" : dir;
+  return (
+    <span
+      className={`inline-block rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${cls}`}
+    >
+      {label}
+    </span>
   );
 }
 

@@ -71,6 +71,8 @@ export interface Snapshot {
   topByCpu: SnapshotProcess[];
   topByMem: SnapshotProcess[];
   listeners: SnapshotListener[];
+  /** Schema v2+: aggregated active peer conversations. Optional for back-compat. */
+  conversations?: SnapshotConversation[];
   loggedInUsers: SnapshotSession[];
   pendingReboot: boolean;
   pendingRebootReason?: string;
@@ -146,6 +148,20 @@ export interface SnapshotListener {
   port: number;
   pid?: number;
   processName?: string;
+}
+export interface SnapshotConversation {
+  proto: "tcp" | "udp";
+  direction: "inbound" | "outbound" | "local";
+  remoteIp: string;
+  remoteHost?: string;
+  remotePort: number;
+  /** Set for inbound conversations — the local listening port being hit. */
+  localPort?: number;
+  state?: string;
+  pid?: number;
+  processName?: string;
+  /** Number of socket rows aggregated into this conversation. */
+  count: number;
 }
 export interface SnapshotSession {
   user: string;
