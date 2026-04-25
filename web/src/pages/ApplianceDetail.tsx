@@ -299,7 +299,7 @@ function ChartCard({
               : `now ${last?.toFixed(1)}${suffix}`}
         </div>
       </div>
-      <Sparkline data={data} height={40} />
+      <Sparkline values={data} height={40} min={0} max={100} />
     </div>
   );
 }
@@ -522,11 +522,17 @@ function IfaceSparkline({
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <div>
         <div className="mb-1 text-xs text-emerald-300">in bps (24h)</div>
-        <Sparkline data={inSeries} height={32} />
+        <Sparkline
+          values={inSeries}
+          height={32}
+          min={0}
+          strokeClass="stroke-emerald-400"
+          fillClass="fill-emerald-500/15"
+        />
       </div>
       <div>
         <div className="mb-1 text-xs text-sonar-300">out bps (24h)</div>
-        <Sparkline data={outSeries} height={32} />
+        <Sparkline values={outSeries} height={32} min={0} />
       </div>
     </div>
   );
