@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gosnmp/gosnmp"
@@ -148,8 +149,11 @@ func (c *Client) Close() error {
 	return c.g.Conn.Close()
 }
 
-// Get returns the named scalar OIDs. Map keys are the requested OIDs;
-// missing or NoSuchObject results are omitted (not error).
+// Get returns the named scalar OIDs. Map keys are the requested OIDs
+// in their original form (the leading "." that gosnmp prepends to
+// returned names is stripped, so callers can look up either "1.3.6…"
+// or ".1.3.6…" — we normalize on insert). Missing or NoSuchObject
+// results are omitted (not error).
 func (c *Client) Get(oids []string) (map[string]Value, error) {
 	if len(oids) == 0 {
 		return map[string]Value{}, nil
@@ -163,7 +167,7 @@ func (c *Client) Get(oids []string) (map[string]Value, error) {
 		if v.Type == gosnmp.NoSuchObject || v.Type == gosnmp.NoSuchInstance || v.Type == gosnmp.EndOfMibView {
 			continue
 		}
-		out[v.Name] = wrap(v)
+		out[strings.TrimPrefix(v.Name, ".")] = wrap(v)
 	}
 	return out, nil
 }
