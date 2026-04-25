@@ -1,0 +1,349 @@
+openapi: 3.1.0
+info:
+  title: ScanRay Sonar API
+  description: |
+    Single-pane-of-visibility API for the ScanRay Sonar platform.
+    Phase 1 surface: authentication, sites, users, agents, appliances,
+    plus health and version endpoints.
+
+    All non-auth endpoints require `Authorization: Bearer <jwt>`.
+    Mutating endpoints additionally require RBAC role >= the level
+    documented per-operation.
+  version: "2026.4.24.1"
+  license:
+    name: MIT
+servers:
+  - url: /api/v1
+    description: Versioned API root
+
+# ---------------------------------------------------------------------------
+# Security
+# ---------------------------------------------------------------------------
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  # ---- Reusable schemas -------------------------------------------------
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, examples: ["unauthorized"] }
+        message: { type: string }
+        details: { type: object, additionalProperties: true }
+
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [ok, degraded, down] }
+        checks:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              ok: { type: boolean }
+              detail: { type: string }
+
+    VersionInfo:
+      type: object
+      required: [version, commit, buildTime, goVersion]
+      properties:
+        version: { type: string }
+        commit: { type: string }
+        buildTime: { type: string }
+        goVersion: { type: string }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+        totp: { type: string, description: "Required if MFA enrolled" }
+
+    LoginResponse:
+      type: object
+      required: [accessToken, refreshToken, expiresAt, user]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        expiresAt: { type: string, format: date-time }
+        mfaRequired: { type: boolean, default: false }
+        user: { $ref: "#/components/schemas/User" }
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string }
+
+    User:
+      type: object
+      required: [id, email, displayName, role, totpEnrolled, isActive, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        displayName: { type: string }
+        role: { type: string, enum: [superadmin, siteadmin, tech, readonly] }
+        totpEnrolled: { type: boolean }
+        isActive: { type: boolean }
+        lastLoginAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    CreateUserRequest:
+      type: object
+      required: [email, displayName, password, role]
+      properties:
+        email: { type: string, format: email }
+        displayName: { type: string }
+        password: { type: string, format: password, minLength: 12 }
+        role: { type: string, enum: [superadmin, siteadmin, tech, readonly] }
+
+    Site:
+      type: object
+      required: [id, slug, name, timezone, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string, pattern: "^[a-z0-9-]+$" }
+        name: { type: string }
+        timezone: { type: string }
+        description: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    CreateSiteRequest:
+      type: object
+      required: [slug, name]
+      properties:
+        slug: { type: string, pattern: "^[a-z0-9-]+$" }
+        name: { type: string }
+        timezone: { type: string, default: "UTC" }
+        description: { type: string }
+
+    Agent:
+      type: object
+      required: [id, siteId, hostname, os, isActive, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        siteId: { type: string, format: uuid }
+        hostname: { type: string }
+        fingerprint: { type: string, nullable: true }
+        os: { type: string }
+        osVersion: { type: string }
+        agentVersion: { type: string }
+        enrolledAt: { type: string, format: date-time, nullable: true }
+        lastSeenAt: { type: string, format: date-time, nullable: true }
+        isActive: { type: boolean }
+        tags:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    Appliance:
+      type: object
+      required: [id, siteId, name, vendor, mgmtIp, snmpVersion, pollIntervalSeconds, isActive, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        siteId: { type: string, format: uuid }
+        name: { type: string }
+        vendor: { type: string, enum: [meraki, cisco, aruba, ubiquiti, mikrotik, generic] }
+        model: { type: string, nullable: true }
+        serial: { type: string, nullable: true }
+        mgmtIp: { type: string, format: ipv4 }
+        snmpVersion: { type: string, enum: [v1, v2c, v3] }
+        pollIntervalSeconds: { type: integer, minimum: 10, maximum: 3600 }
+        isActive: { type: boolean }
+        tags:
+          type: array
+          items: { type: string }
+        lastPolledAt: { type: string, format: date-time, nullable: true }
+        lastError: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+  # ---- Reusable responses ----------------------------------------------
+  responses:
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Authenticated but lacks the required role
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    BadRequest:
+      description: Validation failure
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+paths:
+  /healthz:
+    get:
+      summary: Liveness/readiness probe
+      security: []
+      responses:
+        "200":
+          description: Service status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+
+  /version:
+    get:
+      summary: Build version metadata
+      security: []
+      responses:
+        "200":
+          description: Version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VersionInfo" }
+
+  /auth/login:
+    post:
+      summary: Exchange email/password (+optional TOTP) for tokens
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Login OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /auth/refresh:
+    post:
+      summary: Refresh an access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "200":
+          description: New access token
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /auth/me:
+    get:
+      summary: Current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /sites:
+    get:
+      summary: List sites visible to the caller
+      responses:
+        "200":
+          description: Sites
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Site" }
+    post:
+      summary: Create a new site (superadmin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSiteRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Site" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /users:
+    get:
+      summary: List users (superadmin)
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/User" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      summary: Create a user (superadmin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateUserRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /agents:
+    get:
+      summary: List agents (filter by site)
+      parameters:
+        - in: query
+          name: siteId
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Agent" }
+
+  /appliances:
+    get:
+      summary: List appliances (filter by site)
+      parameters:
+        - in: query
+          name: siteId
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Appliances
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Appliance" }

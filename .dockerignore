@@ -1,0 +1,21 @@
+# Build / IDE noise
+.git/
+.github/
+.idea/
+.vscode/
+*.md
+*.log
+
+# Local artifacts
+bin/
+dist/
+data/
+node_modules/
+
+# Sensitive
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key

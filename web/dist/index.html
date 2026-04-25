@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ScanRay Sonar</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background: #0a0d12;
+        color: #e6edf3;
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+      }
+      .card {
+        max-width: 640px;
+        padding: 2rem 2.25rem;
+        background: #11161d;
+        border: 1px solid #1f2937;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,.5);
+      }
+      h1 { margin: 0 0 .25rem; font-size: 1.6rem; letter-spacing: -0.01em; }
+      p  { color: #9aa6b2; line-height: 1.55; }
+      code { background: #0a0d12; padding: 2px 6px; border-radius: 6px; }
+      a { color: #60a5fa; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>ScanRay Sonar</h1>
+      <p>The web console build is not present yet. Build it once, then rebuild the API binary:</p>
+      <pre><code>cd web
+npm install
+npm run build
+cd ..
+go build ./cmd/sonar-api</code></pre>
+      <p>The OpenAPI spec is live at <a href="/api/v1/openapi.yaml">/api/v1/openapi.yaml</a>.</p>
+    </div>
+  </body>
+</html>

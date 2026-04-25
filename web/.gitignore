@@ -1,0 +1,10 @@
+node_modules/
+*.log
+.vite/
+
+# We track web/dist/index.html as a placeholder so the Go binary embed
+# step works on a fresh clone (no Node toolchain required to build the
+# server). Real builds overwrite it; the repo never tracks generated
+# JS/CSS bundles.
+dist/*
+!dist/index.html

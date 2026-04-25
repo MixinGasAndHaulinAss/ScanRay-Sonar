@@ -1,0 +1,96 @@
+# =============================================================================
+# ScanRay Sonar — Docker Compose stack
+#
+# IMPORTANT: every public-facing service binds to 127.0.0.1 only. The host
+# `dev` VM exposes them via Cloudflare Tunnel (cloudflared on the host,
+# NOT in this stack). Do not change the bindings without updating the
+# host CF tunnel config and the threat model.
+# =============================================================================
+
+name: scanraysonar
+
+services:
+  sonar-postgres:
+    image: timescale/timescaledb:2.17.2-pg16
+    container_name: sonar-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${SONAR_DB_NAME:-sonar}
+      POSTGRES_USER: ${SONAR_DB_USER:-sonar}
+      POSTGRES_PASSWORD: ${SONAR_DB_PASSWORD:?SONAR_DB_PASSWORD must be set in .env}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - sonar-pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SONAR_DB_USER:-sonar} -d ${SONAR_DB_NAME:-sonar}"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  sonar-nats:
+    image: nats:2.10-alpine
+    container_name: sonar-nats
+    restart: unless-stopped
+    command:
+      - "-js"
+      - "-sd"
+      - "/data"
+      - "-m"
+      - "8222"
+    volumes:
+      - sonar-natsdata:/data
+    ports:
+      - "127.0.0.1:4222:4222"
+      - "127.0.0.1:8222:8222"
+
+  sonar-api:
+    image: ghcr.io/nclgisa/scanray-sonar-api:${SONAR_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+      args:
+        VERSION: ${SONAR_VERSION:-dev}
+    container_name: sonar-api
+    restart: unless-stopped
+    depends_on:
+      sonar-postgres:
+        condition: service_healthy
+      sonar-nats:
+        condition: service_started
+    env_file: .env
+    environment:
+      SONAR_BIND_ADDR: 0.0.0.0:8080
+      SONAR_DB_HOST: sonar-postgres
+      SONAR_NATS_URL: nats://sonar-nats:4222
+    ports:
+      - "127.0.0.1:8080:8080"
+    # No container-level healthcheck: distroless has no shell/curl. The
+    # /api/v1/healthz endpoint is exposed for upstream (Cloudflare /
+    # external monitoring) probes.
+
+  sonar-poller:
+    image: ghcr.io/nclgisa/scanray-sonar-poller:${SONAR_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/poller.Dockerfile
+      args:
+        VERSION: ${SONAR_VERSION:-dev}
+    container_name: sonar-poller
+    restart: unless-stopped
+    depends_on:
+      sonar-postgres:
+        condition: service_healthy
+      sonar-nats:
+        condition: service_started
+    env_file: .env
+    environment:
+      SONAR_DB_HOST: sonar-postgres
+      SONAR_NATS_URL: nats://sonar-nats:4222
+
+volumes:
+  sonar-pgdata:
+    name: sonar-pgdata
+  sonar-natsdata:
+    name: sonar-natsdata
