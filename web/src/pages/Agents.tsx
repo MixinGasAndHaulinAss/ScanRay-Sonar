@@ -130,7 +130,7 @@ export default function Agents() {
           <p className="mt-2 text-xs text-emerald-300/80">
             {issuedOS === "linux"
               ? "Paste into a root shell on the Linux host. Downloads the probe, enrolls, and starts the systemd unit."
-              : "Paste into an elevated PowerShell prompt on the Windows host. Downloads sonar-probe.exe, enrolls, and registers the SonarProbe service."}
+              : "Paste into an elevated cmd.exe or PowerShell prompt on the Windows host. The command is base64-encoded so it survives both shells; it downloads sonar-probe.exe, enrolls, and registers the SonarProbe service. Readable script: /api/v1/probe/install.ps1."}
           </p>
 
           <div className="mt-2 flex items-center gap-3 text-xs text-emerald-300">

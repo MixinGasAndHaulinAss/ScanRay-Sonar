@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf16"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -140,16 +141,34 @@ func (s *Server) installCommands(r *http.Request, token string) installCommands 
 		"curl -fsSL %s/api/v1/probe/install.sh | sudo INSTALL_TOKEN=%s SONAR_BASE=%s bash",
 		base, token, base,
 	)
-	// The Windows command must be a single PowerShell line that an
-	// operator can paste into an elevated PowerShell prompt. Setting
-	// the env vars in the same line scopes them to the iex'd script.
-	windows := fmt.Sprintf(
-		`powershell -NoProfile -ExecutionPolicy Bypass -Command `+
-			`"$env:INSTALL_TOKEN='%s'; $env:SONAR_BASE='%s'; `+
-			`iwr -UseBasicParsing '%s/api/v1/probe/install.ps1' | iex"`,
+	// The Windows command must paste cleanly into BOTH cmd.exe and an
+	// already-running PowerShell prompt. A naïve `powershell -Command
+	// "$env:X='...'; ..."` form breaks under PowerShell parents
+	// because the outer shell expands $env:X before launching the
+	// child, leaving the inner process to choke on a stray `=...`.
+	// `-EncodedCommand` sidesteps that entirely: PowerShell decodes
+	// it itself after the OS handed it the raw base64 string.
+	script := fmt.Sprintf(
+		"$env:INSTALL_TOKEN='%s'; $env:SONAR_BASE='%s'; "+
+			"iwr -UseBasicParsing '%s/api/v1/probe/install.ps1' | iex",
 		token, base, base,
 	)
+	windows := "powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand " +
+		pwshEncode(script)
 	return installCommands{Linux: linux, Windows: windows}
+}
+
+// pwshEncode converts a PowerShell command string into the form
+// expected by powershell.exe -EncodedCommand: UTF-16LE bytes, then
+// standard base64. Surrogate pairs are preserved by going through
+// utf16.Encode on the rune slice rather than naive byte casting.
+func pwshEncode(script string) string {
+	u16 := utf16.Encode([]rune(script))
+	buf := make([]byte, 0, len(u16)*2)
+	for _, r := range u16 {
+		buf = append(buf, byte(r), byte(r>>8))
+	}
+	return base64.StdEncoding.EncodeToString(buf)
 }
 
 type enrollmentTokenView struct {
