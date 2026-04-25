@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"strings"
 	"text/template"
 
 	"github.com/go-chi/chi/v5"
@@ -169,25 +170,54 @@ func (s *Server) handleProbeInstallScript(w http.ResponseWriter, r *http.Request
 
 // ---- Windows installer (PowerShell) --------------------------------------
 
+// installScriptTmplPS1 is the rendered Windows installer. The token and
+// base URL are baked in at render time when the operator fetches the
+// script via /probe/install.ps1?token=...&base=..., which is how the
+// one-liner avoids the $env:INSTALL_TOKEN expansion trap when pasted
+// into an already-running PowerShell prompt. Direct manual usage
+// (`iwr ... | iex` without query params) still works via the env-var
+// fallback below.
+//
+// Service registration uses New-Service rather than `sc.exe create`.
+// The PowerShell call operator + sc.exe combination has well-known
+// quoting bugs around binPath= values that contain both spaces and
+// embedded double quotes (which ours always does); New-Service talks
+// to the SCM API directly so the BinaryPathName is stored verbatim
+// without command-line marshaling.
 const installScriptTmplPS1 = `#requires -RunAsAdministrator
 <#
   ScanRay Sonar — probe install one-liner (Windows).
 
-  Required environment variables:
-    INSTALL_TOKEN   Single-use enrollment token from the Sonar UI.
-    SONAR_BASE      Base URL of sonar-api (defaults to the host that
-                    served this script).
+  Inputs (any one):
+    1. ?token=<TOKEN> query string when the script is fetched
+       (this is what the UI's one-liner uses).
+    2. INSTALL_TOKEN environment variable (manual usage).
+
+  Optional:
+    SONAR_BASE   Override the base URL baked in at render time.
 #>
 
 $ErrorActionPreference = 'Stop'
 
-if (-not $env:INSTALL_TOKEN) {
-  Write-Error "INSTALL_TOKEN environment variable is required"
+# The Token/Base placeholders are replaced server-side. An empty
+# baked token means the script was fetched without ?token=, so fall
+# back to the env var. We use sequential 'if' statements instead of
+# the expression form because that needs backtick line-continuations,
+# and this whole script lives inside a Go raw-string literal where
+# backticks are the string terminator.
+$BakedToken = '{{.Token}}'
+$BakedBase  = '{{.Base}}'
+
+$Token = $null
+if ($BakedToken) { $Token = $BakedToken }
+elseif ($env:INSTALL_TOKEN) { $Token = $env:INSTALL_TOKEN }
+if (-not $Token) {
+  Write-Error "Missing token. Fetch this script with ?token=<TOKEN> or set the INSTALL_TOKEN env var."
   exit 2
 }
-$Token = $env:INSTALL_TOKEN
-$Base  = if ($env:SONAR_BASE) { $env:SONAR_BASE } else { '{{.Base}}' }
-$Base  = $Base.TrimEnd('/')
+
+if ($env:SONAR_BASE) { $Base = $env:SONAR_BASE } else { $Base = $BakedBase }
+$Base = $Base.TrimEnd('/')
 
 switch ($env:PROCESSOR_ARCHITECTURE) {
   'AMD64' { $Arch = 'amd64' }
@@ -211,24 +241,61 @@ Write-Host "==> downloading sonar-probe (windows/$Arch) from $Base"
 Invoke-WebRequest -UseBasicParsing -Uri "$Base/api/v1/probe/download/windows/$Arch" -OutFile "$Bin.tmp"
 Move-Item -Force -Path "$Bin.tmp" -Destination $Bin
 
-# If the service is already installed (re-enroll), stop + delete it
-# first so 'sc.exe create' below succeeds and the new binary isn't
-# locked by a running process.
+# Re-enroll path: stop + delete the existing service so the new
+# binary isn't locked and New-Service below doesn't collide. Wait
+# until the SCM has actually finished removing it before continuing
+# (sc.exe delete is asynchronous; the entry can linger for a few
+# seconds while existing handles drain).
 if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
   Write-Host "==> stopping existing $ServiceName service"
   Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
   & sc.exe delete $ServiceName | Out-Null
-  Start-Sleep -Seconds 2
+  $deadline = (Get-Date).AddSeconds(15)
+  while ((Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) -and ((Get-Date) -lt $deadline)) {
+    Start-Sleep -Milliseconds 250
+  }
+  if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
+    Write-Error "Existing $ServiceName service did not unregister within 15s; aborting."
+    exit 4
+  }
 }
 
 Write-Host "==> enrolling host"
 & $Bin enroll --token=$Token --base=$Base --config=$Cfg
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "==> registering Windows service"
-$BinPath = '"' + $Bin + '" run --config="' + $Cfg + '"'
-& sc.exe create $ServiceName binPath= $BinPath start= auto DisplayName= "ScanRay Sonar Probe" | Out-Null
-& sc.exe description $ServiceName "Endpoint agent for ScanRay Sonar (phones home over WSS)." | Out-Null
+Write-Host "==> registering Windows service ($ServiceName)"
+# New-Service stores BinaryPathName verbatim via the SCM API, so we
+# just need a properly-quoted Win32 command line. Windows itself
+# parses this string with CommandLineToArgvW when starting the
+# service, so embedded quotes around paths-with-spaces are correct
+# here (and would NOT be if we tried to round-trip through sc.exe
+# via PowerShell's call operator).
+$BinaryPathName = '"{0}" run --config="{1}"' -f $Bin, $Cfg
+# Splatting via a hashtable so we don't need PowerShell line
+# continuation backticks inside this Go raw-string literal.
+$svcParams = @{
+  Name           = $ServiceName
+  BinaryPathName = $BinaryPathName
+  DisplayName    = 'ScanRay Sonar Probe'
+  Description    = 'Endpoint agent for ScanRay Sonar (phones home over WSS).'
+  StartupType    = 'Automatic'
+}
+New-Service @svcParams | Out-Null
+
+# Sanity check: confirm the SCM actually has the service before we
+# try to start it. If New-Service somehow no-op'd (it shouldn't with
+# -ErrorAction Stop, but defense in depth) we want a clear error
+# instead of a confusing "Cannot find any service" later.
+if (-not (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue)) {
+  Write-Error "Service $ServiceName was not registered."
+  exit 5
+}
+
+# Auto-restart on crash: 5s, 5s, 5s; reset failure counter after 60s
+# of healthy uptime. sc.exe failure only takes the service name +
+# scalar flags so the PowerShell call-operator quoting trap doesn't
+# apply here.
 & sc.exe failure $ServiceName reset= 60 actions= restart/5000/restart/5000/restart/5000 | Out-Null
 
 Start-Service -Name $ServiceName
@@ -247,5 +314,51 @@ func (s *Server) handleProbeInstallScriptPS1(w http.ResponseWriter, r *http.Requ
 	// download offer when fetched via Invoke-WebRequest. The .ps1
 	// extension is enough cue for humans.
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_ = tmpl.Execute(w, map[string]string{"Base": s.installerBase(r)})
+
+	base := s.installerBase(r)
+	if b := strings.TrimSpace(r.URL.Query().Get("base")); b != "" {
+		base = strings.TrimRight(b, "/")
+	}
+	// Token comes from ?token= and is interpolated into the rendered
+	// script as a literal PowerShell single-quoted string. Reject any
+	// character that would break out of that string so the template
+	// can never be coerced into executing additional code, even if a
+	// hostile caller invents the URL by hand. Tokens issued by this
+	// server are base64url so the allowed alphabet is more than
+	// sufficient; we deliberately omit the equals sign because raw
+	// base64url uses no padding.
+	token := r.URL.Query().Get("token")
+	if token != "" && !validInstallToken(token) {
+		writeErr(w, http.StatusBadRequest, "bad_request", "invalid token characters")
+		return
+	}
+
+	_ = tmpl.Execute(w, map[string]string{
+		"Base":  base,
+		"Token": token,
+	})
+}
+
+// validInstallToken returns true iff s contains only base64url
+// characters (the alphabet used by handleCreateEnrollmentToken).
+// Anything else (including ' " $ ; backtick newline) would let a
+// caller break out of the single-quoted PowerShell literal we splat
+// the token into, so we refuse to render the script at all.
+func validInstallToken(s string) bool {
+	if len(s) == 0 || len(s) > 256 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'a' && c <= 'z',
+			c >= 'A' && c <= 'Z',
+			c >= '0' && c <= '9',
+			c == '-', c == '_':
+			// allowed
+		default:
+			return false
+		}
+	}
+	return true
 }
