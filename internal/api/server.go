@@ -6,6 +6,8 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"io/fs"
@@ -181,6 +183,21 @@ func (s *Server) handleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 // directory paths the same way, which produces redirect loops when the
 // router below it (chi) is also routing /. Reading the asset and
 // streaming it via http.ServeContent skips that behavior entirely.
+//
+// Cache strategy:
+//   - Vite emits content-hashed filenames under /assets/ (e.g.
+//     assets/index-If7J8Sj9.js). Those are safe to cache forever:
+//     a new bundle gets a new filename, so a stale URL can never
+//     refer to outdated content. We send "immutable" so browsers
+//     and Cloudflare both pin them.
+//   - index.html and any other root-level file have stable URLs
+//     and DO change every deploy. Without explicit headers, both
+//     Cloudflare and browsers apply heuristic caching, which is
+//     what causes "I deployed but the UI didn't change" — the
+//     user's index.html still references the previous bundle.
+//     We force "no-cache, must-revalidate" + a content ETag so
+//     every request is conditional and a redeploy is reflected on
+//     the next page load.
 func (s *Server) serveSPA(w http.ResponseWriter, r *http.Request) {
 	if s.webFS == nil {
 		writeErr(w, http.StatusNotFound, "not_found", "no embedded web build")
@@ -203,6 +220,14 @@ func (s *Server) serveSPA(w http.ResponseWriter, r *http.Request) {
 		}
 		name = "index.html"
 	}
+
+	if strings.HasPrefix(name, "assets/") {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	} else {
+		w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+	}
+	sum := sha256.Sum256(data)
+	w.Header().Set("ETag", `"`+hex.EncodeToString(sum[:16])+`"`)
 
 	http.ServeContent(w, r, name, info.ModTime(), bytes.NewReader(data))
 }
