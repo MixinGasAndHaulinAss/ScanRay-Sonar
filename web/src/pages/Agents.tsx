@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import type { Agent, EnrollmentToken, NewEnrollmentToken, Site } from "../api/types";
 import { formatBytes, formatPct, formatRelative, pctBarColor } from "../lib/format";
+import TagFilter from "../components/TagFilter";
 
 // Persist the tag filter selection across reloads. Operators tend to
 // curate a single saved filter — "production hosts only" — and want
@@ -224,42 +225,17 @@ export default function Agents() {
               placeholder="Search hostname / IP / tag…"
               className="h-8 rounded-md border border-ink-700 bg-ink-950 px-2 text-xs text-slate-100 placeholder:text-slate-600"
             />
+            <TagFilter
+              availableTags={allTags}
+              selected={tagFilter}
+              onChange={setTagFilter}
+              mode="and"
+            />
             <span className="text-xs tabular-nums text-slate-500">
               {visibleAgents.length} / {agents.data?.length ?? 0}
             </span>
           </div>
         </div>
-        {allTags.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] uppercase tracking-wide text-slate-500">Filter:</span>
-            {allTags.map((t) => {
-              const on = tagFilter.includes(t);
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => toggleTagFilter(t)}
-                  className={
-                    "rounded-full border px-2 py-0.5 text-[10px] transition " +
-                    (on
-                      ? "border-sonar-500 bg-sonar-700/40 text-sonar-100"
-                      : "border-ink-700 bg-ink-900 text-slate-400 hover:border-sonar-700 hover:text-sonar-200")
-                  }
-                >
-                  {t}
-                </button>
-              );
-            })}
-            {tagFilter.length > 0 && (
-              <button
-                onClick={() => setTagFilter([])}
-                className="ml-1 text-[10px] text-slate-500 hover:text-slate-300 hover:underline"
-              >
-                clear
-              </button>
-            )}
-          </div>
-        )}
         <div className="overflow-hidden rounded-xl border border-ink-800 bg-ink-900">
           <table className="w-full text-left text-sm">
             <thead className="bg-ink-800/60 text-xs uppercase tracking-wide text-slate-400">

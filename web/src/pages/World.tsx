@@ -28,6 +28,7 @@ import worldTopo from "../assets/world-110m.json";
 import { api } from "../api/client";
 import type { Agent, Site } from "../api/types";
 import { formatRelative } from "../lib/format";
+import TagFilter from "../components/TagFilter";
 
 // Types: react-simple-maps wants a GeoJSON FeatureCollection. We
 // convert from TopoJSON once on module load so re-renders are cheap.
@@ -125,7 +126,7 @@ export default function World() {
   });
 
   const [siteFilter, setSiteFilter] = useState<string>("");
-  const [tagFilter, setTagFilter] = useState<string>("");
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [showPrivacy, setShowPrivacy] = useState(true);
   const [hovered, setHovered] = useState<Cluster | null>(null);
@@ -165,7 +166,10 @@ export default function World() {
     const q = search.trim().toLowerCase();
     return located.filter((a) => {
       if (siteFilter && a.siteId !== siteFilter) return false;
-      if (tagFilter && !(a.tags ?? []).includes(tagFilter)) return false;
+      if (tagFilter.length > 0) {
+        const tags = new Set(a.tags ?? []);
+        for (const t of tagFilter) if (!tags.has(t)) return false;
+      }
       if (q) {
         const hay =
           a.hostname.toLowerCase() +
@@ -262,36 +266,12 @@ export default function World() {
             </option>
           ))}
         </select>
-        <div className="flex flex-wrap items-center gap-1">
-          <span className="text-[10px] uppercase tracking-wide text-slate-500">
-            Tag
-          </span>
-          <button
-            onClick={() => setTagFilter("")}
-            className={
-              "rounded-full px-2 py-0.5 text-[11px] " +
-              (tagFilter === ""
-                ? "bg-sonar-700/40 text-sonar-200"
-                : "bg-ink-950 text-slate-400 hover:bg-ink-800")
-            }
-          >
-            any
-          </button>
-          {allTags.map((t) => (
-            <button
-              key={t}
-              onClick={() => setTagFilter(t === tagFilter ? "" : t)}
-              className={
-                "rounded-full px-2 py-0.5 text-[11px] " +
-                (tagFilter === t
-                  ? "bg-sonar-700/40 text-sonar-200"
-                  : "bg-ink-950 text-slate-400 hover:bg-ink-800")
-              }
-            >
-              {t}
-            </button>
-          ))}
-        </div>
+        <TagFilter
+          availableTags={allTags}
+          selected={tagFilter}
+          onChange={setTagFilter}
+          mode="and"
+        />
         <span className="ml-auto text-[10px] text-slate-500">
           drag to pan · scroll to zoom · click marker for detail
         </span>

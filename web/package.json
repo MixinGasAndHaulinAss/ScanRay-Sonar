@@ -1,7 +1,7 @@
 {
   "name": "scanray-sonar-web",
   "private": true,
-  "version": "2026.4.26.9",
+  "version": "2026.4.26.10",
   "type": "module",
   "scripts": {
     "dev": "vite",

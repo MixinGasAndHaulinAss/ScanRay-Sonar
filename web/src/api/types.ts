@@ -526,6 +526,18 @@ export interface TopologyNode {
   portsTotal?: number;
   portsUp?: number;
   uplinkCount?: number;
+  /** User-defined tags carried over from the appliance row (managed nodes only). */
+  tags?: string[];
+  /** True when MgmtIP is in an RFC1918 / link-local / loopback block. */
+  isPrivate?: boolean;
+  /** MaxMind enrichment of MgmtIP (public addresses only). */
+  countryIso?: string;
+  countryName?: string;
+  city?: string;
+  lat?: number;
+  lon?: number;
+  asn?: number;
+  org?: string;
 }
 
 export interface TopologyEdge {

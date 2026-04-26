@@ -14,7 +14,7 @@ Sonar is the third member of the **ScanRay** product line (alongside ScanRay Con
 
 - **Endpoint agent (`sonar-probe`)** — single Go binary cross-compiled for Linux/Windows/macOS (amd64 + arm64). Self-enrolls over WebSocket, then streams snapshots every 30 s with: CPU / memory / disk / NIC counters; **expanded top-process stats** (cpu %, mem %, disk-r/w bps, net-up/down bps, open conns); listeners + remote conversations (per-process, per-peer, with port set); DNS resolution telemetry; **hardware specs** (CPU model, RAM modules, motherboard / BIOS, disk model+serial, NICs, GPU, chassis — collected via DMI/SMBIOS on Linux and WMI on Windows); **public-IP discovery** via `icanhazip.com`; agent **tags** for GUI filtering.
 - **Network appliances** — SNMP **v1, v2c, v3** poller covering IF-MIB (port + interface counters), ENTITY-MIB / ENTITY-SENSOR-MIB (chassis + transceiver DDM), LLDP and Cisco CDP (auto-topology). SNMP credentials encrypted at rest with the master key. Per-appliance polling goroutines compute deltas + bps rates in-memory.
-- **Switch topology** — interactive force-directed graph of all managed appliances plus foreign neighbors discovered via LLDP/CDP, with Cisco IP-phone suppression, **physical-vs-virtual port** distinction, **uplink highlighting**, and last-seen timestamps. Pan + scroll-to-zoom; click any node to focus.
+- **Switch topology** — interactive force-directed graph of all managed appliances plus foreign neighbors discovered via LLDP/CDP, with Cisco IP-phone suppression, **physical-vs-virtual port** distinction, **uplink highlighting**, and last-seen timestamps. Pan + scroll-to-zoom; click any node to focus. A second **"Map"** tab plots the same nodes geographically by management-IP MaxMind lookup, with private addresses called out in a side panel. A searchable **tag-filter dropdown** narrows the view (and is shared with the Agents and World pages).
 - **Per-agent network graph** — deterministic radial layout (host center → processes inner ring → ISP / providers outer ring) with optional endpoints tier. Built from the snapshot's conversation list, enriched offline with MaxMind GeoLite2 (City + ASN). Node-detail panel surfaces "which providers does this process talk to," "which processes touch this ISP," top endpoints, conn counts, and remote-port sets, with click-through navigation.
 - **World map** — zoomable, clickable world map (`react-simple-maps` + bundled `world-110m.json`) plotting every agent at its public-IP location, with country / city / ASN labels.
 - **Multi-site** + **RBAC** (`superadmin`/`siteadmin`/`tech`/`readonly`) + Argon2id local accounts + TOTP MFA; full **CRUD UI for users, sites, and appliances** (delete, not just disable).
@@ -252,7 +252,7 @@ timeout: 600
 
 ## Versioning (CalVer)
 
-Format: `YYYY.M.D.patch` — e.g. `2026.4.26.9`. The single source of truth is the [`VERSION`](VERSION) file. CI reads it and injects it into all binaries via `-ldflags`. The same string is also rendered on the login screen and inside the app shell so operators can see at a glance what's deployed.
+Format: `YYYY.M.D.patch` — e.g. `2026.4.26.10`. The single source of truth is the [`VERSION`](VERSION) file. CI reads it and injects it into all binaries via `-ldflags`. The same string is also rendered on the login screen and inside the app shell so operators can see at a glance what's deployed.
 
 To bump, update **four** files in lockstep:
 
