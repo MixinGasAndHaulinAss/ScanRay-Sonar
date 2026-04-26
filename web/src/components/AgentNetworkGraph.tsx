@@ -1,23 +1,32 @@
 // AgentNetworkGraph — the "Network Topology" canvas on the agent
-// detail page. Renders a four-tier force-directed graph:
+// detail page. Renders a deterministic radial graph:
 //
-//     host  →  process  →  endpoint  →  ISP
+//     host (centre)
+//        ↓
+//     processes (inner ring, evenly spaced)
+//        ↓
+//     ISPs (outer ring, sorted angularly so each ISP sits near the
+//          processes that talk to it)
 //
-// Inspired by ThousandEyes / Auvik-style endpoint graphs: process
-// nodes are gear-icon pills, endpoint nodes are small location
-// pins, ISP nodes are globe-icon pills (one per organisation/ASN).
+// Endpoints (one node per remote IP) are HIDDEN by default and
+// reachable through the "Show endpoints" toggle for deep inspection.
+// In the default view we draw direct process→ISP edges, which is
+// what most operators actually want to see ("which providers is
+// each process talking to?").
 //
-// The canvas is big (fills the right column of the agent page),
-// pannable by dragging empty space, and zoomable with the mouse
-// wheel or the +/- buttons. A floating "Display options" panel on
-// the left toggles which tiers and labels are visible; a floating
-// "Node details" panel on the right reveals all known facts about
-// the selected node.
+// Why a fixed radial layout rather than a force-directed one:
+//   * The data is hierarchical (host → process → provider). A
+//     ring layout makes that hierarchy visible at a glance.
+//   * Force layouts on this kind of one-to-many fan-out push leaf
+//     nodes into the corners and crisscross every edge.
+//   * No simulation means dragging a node moves only that node.
+//     Nothing else jiggles, nothing oscillates.
 //
 // Data flow:
 //   useQuery → api.get<AgentNetworkGraph>("/agents/{id}/network-graph")
 //   peer list (already aggregated by remote IP, GeoIP-enriched on
-//   the server side) → in-memory tier construction → ForceGraph
+//   the server side) → in-memory aggregation + radial placement
+//   → ForceGraph in staticLayout mode
 
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -64,7 +73,10 @@ interface NetNodeData extends ForceNodeInput {
 }
 
 interface NetEdgeInput extends ForceEdgeInput {
-  tier: "h-p" | "p-e" | "e-i";
+  tier: "h-p" | "p-i" | "p-e" | "e-i";
+  /** Number of connections this edge represents — used to weight the
+   *  stroke. Optional; falls back to 1. */
+  weight?: number;
 }
 
 const DIRECTIONS: Array<"all" | "outbound" | "inbound"> = ["all", "outbound", "inbound"];
@@ -72,6 +84,7 @@ const SCOPES: Array<"all" | "public" | "private"> = ["all", "public", "private"]
 
 interface DisplayOptions {
   showIsp: boolean;
+  showEndpoints: boolean;
   uniqueProcesses: boolean;
   showProcessLabels: boolean;
   showEndpointLabels: boolean;
@@ -81,6 +94,9 @@ interface DisplayOptions {
 
 const DEFAULT_OPTIONS: DisplayOptions = {
   showIsp: true,
+  // Endpoints (one node per remote IP) are deep-inspection detail.
+  // Default off — most operators want host → process → provider.
+  showEndpoints: false,
   uniqueProcesses: false,
   showProcessLabels: true,
   showEndpointLabels: false,
@@ -163,19 +179,10 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
 
     const W = size.w;
     const H = size.h;
+    const cx = W / 2;
+    const cy = H / 2;
 
-    ns.push({
-      id: "host",
-      kind: "host",
-      label: data.agent.hostname,
-      sub: data.agent.primaryIp ?? data.agent.publicIp ?? undefined,
-      host: data.agent,
-      pinned: true,
-      initialX: W / 2,
-      initialY: H / 2,
-    });
-
-    // ---- Process aggregation -------------------------------------
+    // ---- 1. Aggregate processes (deterministic order by key) ----
     const procMap = new Map<string, ProcessAgg>();
     for (const peer of filteredPeers) {
       for (const pr of peer.processes) {
@@ -198,78 +205,244 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
         agg.totalConns += pr.count;
       }
     }
-    for (const proc of procMap.values()) {
+    const processes = Array.from(procMap.values()).sort((a, b) =>
+      a.key.localeCompare(b.key),
+    );
+
+    // ---- 2. Aggregate ISPs and a procISP adjacency map ----------
+    // procISP[procKey][ispKey] = total conn count
+    const ispMap = new Map<string, IspAgg>();
+    const procISP = new Map<string, Map<string, number>>();
+    const ispKeyFor = (peer: AgentNetworkPeer) => {
+      const org =
+        peer.org ||
+        (peer.isPrivate ? "Private network" : peer.countryName || "Unknown");
+      return peer.asn ? `AS${peer.asn}` : org;
+    };
+    if (options.showIsp) {
+      for (const peer of filteredPeers) {
+        const ispKey = ispKeyFor(peer);
+        const org =
+          peer.org ||
+          (peer.isPrivate ? "Private network" : peer.countryName || "Unknown");
+        let agg = ispMap.get(ispKey);
+        if (!agg) {
+          agg = {
+            key: ispKey,
+            org,
+            asn: peer.asn,
+            peers: new Set(),
+            countries: new Set(),
+          };
+          ispMap.set(ispKey, agg);
+        }
+        agg.peers.add(peer.ip);
+        if (peer.countryIso) agg.countries.add(peer.countryIso);
+        for (const pr of peer.processes) {
+          const procKey =
+            options.uniqueProcesses && pr.pid != null
+              ? `${pr.name}#${pr.pid}`
+              : pr.name || "(unknown)";
+          let m = procISP.get(procKey);
+          if (!m) {
+            m = new Map();
+            procISP.set(procKey, m);
+          }
+          m.set(ispKey, (m.get(ispKey) ?? 0) + pr.count);
+        }
+      }
+    }
+    const isps = Array.from(ispMap.values());
+
+    // ---- 3. Compute radial layout -------------------------------
+    // Inner ring (processes): radius scales with count and average
+    // pill width so pills don't overlap. Same for the outer ring
+    // (ISPs). With small counts we floor at sensible defaults so a
+    // 1-process agent doesn't render a microscopic ring.
+    const procPillW = (p: ProcessAgg) =>
+      Math.max(80, p.name.length * 6.4 + 32);
+    const ispPillW = (i: IspAgg) => Math.max(100, i.org.length * 6.6 + 38);
+    const avgProcW =
+      processes.length > 0
+        ? processes.reduce((s, p) => s + procPillW(p), 0) / processes.length
+        : 120;
+    const avgIspW =
+      isps.length > 0
+        ? isps.reduce((s, i) => s + ispPillW(i), 0) / isps.length
+        : 140;
+    // Chord length between adjacent pills on a ring of N evenly
+    // spaced points = 2 r sin(π/N). We need that ≥ pillWidth · 1.15.
+    const chordR = (n: number, pillW: number) =>
+      n > 1 ? (pillW * 1.15) / (2 * Math.sin(Math.PI / n)) : 0;
+    const r1 = Math.max(170, chordR(processes.length, avgProcW));
+    const r2 = options.showIsp
+      ? Math.max(r1 + 200, chordR(isps.length, avgIspW))
+      : r1;
+
+    // Process angles: evenly spaced, starting at the top.
+    const procAngles = new Map<string, number>();
+    processes.forEach((p, i) => {
+      const a = -Math.PI / 2 + (i / Math.max(1, processes.length)) * 2 * Math.PI;
+      procAngles.set(p.key, a);
+    });
+
+    // ISP "ideal" angle: weighted circular mean of the angles of
+    // its connected processes. Then we sort ISPs by ideal angle and
+    // distribute them evenly on the outer ring in that order — so
+    // an ISP is placed close to the angular cluster of processes
+    // that talk to it. This dramatically cuts edge crossings vs.
+    // even-distribution-by-name.
+    const ispAngles = new Map<string, number>();
+    if (options.showIsp && isps.length > 0) {
+      const ideal = isps.map((isp) => {
+        let sx = 0;
+        let sy = 0;
+        let tw = 0;
+        const m = procISP;
+        for (const [pKey, ispCounts] of m) {
+          const w = ispCounts.get(isp.key);
+          if (!w) continue;
+          const a = procAngles.get(pKey);
+          if (a == null) continue;
+          sx += Math.cos(a) * w;
+          sy += Math.sin(a) * w;
+          tw += w;
+        }
+        return {
+          isp,
+          a: tw > 0 ? Math.atan2(sy, sx) : 0,
+        };
+      });
+      ideal.sort((u, v) => u.a - v.a);
+      ideal.forEach((entry, i) => {
+        const a = -Math.PI / 2 + (i / ideal.length) * 2 * Math.PI;
+        ispAngles.set(entry.isp.key, a);
+      });
+    }
+
+    // ---- 4. Emit nodes with deterministic positions -------------
+    ns.push({
+      id: "host",
+      kind: "host",
+      label: data.agent.hostname,
+      sub: data.agent.primaryIp ?? data.agent.publicIp ?? undefined,
+      host: data.agent,
+      pinned: true,
+      initialX: cx,
+      initialY: cy,
+    });
+
+    for (const proc of processes) {
+      const a = procAngles.get(proc.key)!;
       ns.push({
         id: `proc:${proc.key}`,
         kind: "process",
         label: proc.name,
         sub: proc.pid != null ? `pid ${proc.pid}` : undefined,
         process: proc,
+        initialX: cx + r1 * Math.cos(a),
+        initialY: cy + r1 * Math.sin(a),
       });
-      es.push({ from: "host", to: `proc:${proc.key}`, rest: 130, tier: "h-p" });
+      es.push({
+        from: "host",
+        to: `proc:${proc.key}`,
+        tier: "h-p",
+        weight: proc.totalConns,
+      });
     }
 
-    // ---- Endpoint nodes ------------------------------------------
-    for (const peer of filteredPeers) {
-      const epId = `ep:${peer.direction}:${peer.ip}`;
-      ns.push({
-        id: epId,
-        kind: "endpoint",
-        label: peer.host || peer.ip,
-        sub: peer.org || (peer.isPrivate ? "private" : peer.countryIso ?? undefined),
-        endpoint: peer,
-      });
-      for (const pr of peer.processes) {
-        const key =
-          options.uniqueProcesses && pr.pid != null
-            ? `${pr.name}#${pr.pid}`
-            : pr.name || "(unknown)";
-        es.push({
-          from: `proc:${key}`,
-          to: epId,
-          rest: 130 + Math.min(60, Math.log2(peer.totalConns + 2) * 8),
-          tier: "p-e",
-        });
-      }
-    }
-
-    // ---- ISP aggregation -----------------------------------------
     if (options.showIsp) {
-      const ispMap = new Map<string, IspAgg>();
-      for (const peer of filteredPeers) {
-        const org = peer.org || (peer.isPrivate ? "Private network" : peer.countryName || "Unknown");
-        const key = peer.asn ? `AS${peer.asn}` : org;
-        let agg = ispMap.get(key);
-        if (!agg) {
-          agg = { key, org, asn: peer.asn, peers: new Set(), countries: new Set() };
-          ispMap.set(key, agg);
-        }
-        agg.peers.add(peer.ip);
-        if (peer.countryIso) agg.countries.add(peer.countryIso);
-      }
-      for (const isp of ispMap.values()) {
+      for (const isp of isps) {
+        const a = ispAngles.get(isp.key) ?? 0;
         ns.push({
           id: `isp:${isp.key}`,
           kind: "isp",
           label: isp.org,
           sub: isp.asn ? `AS${isp.asn}` : undefined,
           isp,
-        });
-      }
-      for (const peer of filteredPeers) {
-        const org = peer.org || (peer.isPrivate ? "Private network" : peer.countryName || "Unknown");
-        const key = peer.asn ? `AS${peer.asn}` : org;
-        es.push({
-          from: `ep:${peer.direction}:${peer.ip}`,
-          to: `isp:${key}`,
-          rest: 110,
-          tier: "e-i",
+          initialX: cx + r2 * Math.cos(a),
+          initialY: cy + r2 * Math.sin(a),
         });
       }
     }
 
+    if (options.showEndpoints) {
+      // Endpoint nodes ride a third ring between the inner and
+      // outer rings, placed at the angular average of their
+      // (first) connected process and ISP.
+      const rMid = options.showIsp ? (r1 + r2) / 2 : r1 + 120;
+      for (const peer of filteredPeers) {
+        const epId = `ep:${peer.direction}:${peer.ip}`;
+        const firstProc = peer.processes[0];
+        const procKey = firstProc
+          ? options.uniqueProcesses && firstProc.pid != null
+            ? `${firstProc.name}#${firstProc.pid}`
+            : firstProc.name || "(unknown)"
+          : null;
+        const pa = procKey ? procAngles.get(procKey) ?? 0 : 0;
+        const ia = options.showIsp
+          ? ispAngles.get(ispKeyFor(peer)) ?? pa
+          : pa;
+        // Average of unit vectors → handles wrap-around correctly.
+        const mx = Math.cos(pa) + Math.cos(ia);
+        const my = Math.sin(pa) + Math.sin(ia);
+        const ma =
+          mx === 0 && my === 0 ? pa : Math.atan2(my, mx);
+        ns.push({
+          id: epId,
+          kind: "endpoint",
+          label: peer.host || peer.ip,
+          sub:
+            peer.org ||
+            (peer.isPrivate ? "private" : peer.countryIso ?? undefined),
+          endpoint: peer,
+          initialX: cx + rMid * Math.cos(ma),
+          initialY: cy + rMid * Math.sin(ma),
+        });
+        for (const pr of peer.processes) {
+          const k =
+            options.uniqueProcesses && pr.pid != null
+              ? `${pr.name}#${pr.pid}`
+              : pr.name || "(unknown)";
+          es.push({
+            from: `proc:${k}`,
+            to: epId,
+            tier: "p-e",
+            weight: pr.count,
+          });
+        }
+        if (options.showIsp) {
+          es.push({
+            from: epId,
+            to: `isp:${ispKeyFor(peer)}`,
+            tier: "e-i",
+            weight: peer.totalConns,
+          });
+        }
+      }
+    } else if (options.showIsp) {
+      // No endpoints: draw direct process → ISP edges.
+      for (const [procKey, ispCounts] of procISP) {
+        for (const [ispKey, count] of ispCounts) {
+          es.push({
+            from: `proc:${procKey}`,
+            to: `isp:${ispKey}`,
+            tier: "p-i",
+            weight: count,
+          });
+        }
+      }
+    }
+
     return { nodes: ns, edges: es };
-  }, [data, filteredPeers, size, options.showIsp, options.uniqueProcesses]);
+  }, [
+    data,
+    filteredPeers,
+    size,
+    options.showIsp,
+    options.showEndpoints,
+    options.uniqueProcesses,
+  ]);
 
   const selectedNode = useMemo(() => {
     if (!selected) return null;
@@ -343,6 +516,7 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
           width={size.w}
           height={size.h}
           enableZoomPan
+          staticLayout
           worldPadding={28}
           renderEdge={(e, a, b) => <NetEdge edge={e} a={a} b={b} selectedId={selected} />}
           renderNode={(s) => (
@@ -373,6 +547,11 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
                 label="Show ISP"
                 value={options.showIsp}
                 onChange={(v) => setOptions((o) => ({ ...o, showIsp: v }))}
+              />
+              <Toggle
+                label="Show endpoints"
+                value={options.showEndpoints}
+                onChange={(v) => setOptions((o) => ({ ...o, showEndpoints: v }))}
               />
               <Toggle
                 label="Unique processes"
@@ -451,16 +630,16 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
                 Edges
               </li>
               <li className="flex items-center gap-2">
-                <svg width="36" height="6"><line x1="0" y1="3" x2="36" y2="3" stroke="#475569" strokeWidth="1.6" /></svg>
+                <svg width="36" height="6"><line x1="0" y1="3" x2="36" y2="3" stroke="#64748b" strokeWidth="1.6" /></svg>
                 Host → process
               </li>
               <li className="flex items-center gap-2">
                 <svg width="36" height="6"><line x1="0" y1="3" x2="36" y2="3" stroke="#0ea5e9" strokeWidth="1.4" /></svg>
-                Process → endpoint
+                Process → ISP
               </li>
               <li className="flex items-center gap-2">
-                <svg width="36" height="6"><line x1="0" y1="3" x2="36" y2="3" stroke="#64748b" strokeWidth="1.2" strokeDasharray="3 3" /></svg>
-                Endpoint → ISP
+                <svg width="36" height="6"><line x1="0" y1="3" x2="36" y2="3" stroke="#475569" strokeWidth="1.2" strokeDasharray="3 3" /></svg>
+                Endpoint → ISP <span className="text-slate-500">(when shown)</span>
               </li>
             </ul>
             <div className="mt-2 border-t border-ink-800 pt-2 text-[10px] text-slate-500">
@@ -534,11 +713,18 @@ function NetEdge({
   let width: number;
   switch (edge.tier) {
     case "h-p":
-      stroke = isSel ? "#7dd3fc" : "#475569";
-      width = isSel ? 2 : 1.6;
+      stroke = isSel ? "#7dd3fc" : "#64748b";
+      width = isSel ? 2.2 : 1.6;
+      break;
+    case "p-i":
+      // Direct process → ISP edge (default view). Sky blue, lightly
+      // de-emphasised when no node is selected so the labels read
+      // through.
+      stroke = isSel ? "#38bdf8" : "#0ea5e9";
+      width = isSel ? 2.2 : 1.4;
       break;
     case "p-e":
-      stroke = isSel ? "#0ea5e9" : "#0ea5e9aa";
+      stroke = isSel ? "#38bdf8" : "#0ea5e9";
       width = isSel ? 2.2 : 1.3;
       break;
     case "e-i":
@@ -557,7 +743,7 @@ function NetEdge({
       stroke={stroke}
       strokeWidth={width}
       strokeDasharray={dash}
-      opacity={isSel ? 1 : 0.7}
+      opacity={isSel ? 1 : 0.55}
     />
   );
 }

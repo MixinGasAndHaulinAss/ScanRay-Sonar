@@ -108,6 +108,13 @@ interface Props<N extends ForceNodeInput, E extends ForceEdgeInput> {
   enableZoomPan?: boolean;
   /** SVG-coordinate margin to enforce around node positions. Defaults 40. */
   worldPadding?: number;
+  /** When true, the simulation is OFF. Initial positions come from
+   *  initialX/initialY on each node (so the parent owns the layout),
+   *  and dragging just moves the single grabbed node — no force
+   *  propagation, no relax pass, no spasm. Re-seeds whenever the
+   *  layout key changes (we hash node ids + initial positions into
+   *  shapeKey so a parent re-layout is honoured). */
+  staticLayout?: boolean;
 }
 
 const REPULSE = 22000;
@@ -226,6 +233,7 @@ function ForceGraphInner<
     onBackgroundClick,
     enableZoomPan = false,
     worldPadding = 40,
+    staticLayout = false,
   }: Props<N, E>,
   ref: React.Ref<ForceGraphHandle>,
 ) {
@@ -234,15 +242,24 @@ function ForceGraphInner<
   // NOT cause the layout to reflow — important so that 30s polls of
   // the same data don't shuffle positions while the operator looks.
   //
-  // We deliberately do NOT include width/height: the simulation
-  // works in world coordinates, and a 1-pixel resize (very common
-  // when the parent re-renders due to a click) should never blow
-  // away the operator's layout.
-  const shapeKey = useMemo(
-    () =>
-      `${nodes.map((n) => n.id).join("|")}::${edges.map((e) => `${e.from}->${e.to}`).join("|")}`,
-    [nodes, edges],
-  );
+  // For staticLayout we *also* hash initial positions (rounded to
+  // nearest 5 px to avoid jitter) so a parent recompute of the
+  // layout is honoured. For force mode we deliberately omit
+  // width/height so a 1-pixel resize doesn't blow away positions.
+  const shapeKey = useMemo(() => {
+    const base = `${nodes.map((n) => n.id).join("|")}::${edges
+      .map((e) => `${e.from}->${e.to}`)
+      .join("|")}`;
+    if (!staticLayout) return base;
+    const positions = nodes
+      .map((n) => {
+        const x = Math.round((n.initialX ?? 0) / 5) * 5;
+        const y = Math.round((n.initialY ?? 0) / 5) * 5;
+        return `${n.id}@${x},${y}`;
+      })
+      .join("|");
+    return `${base}::${positions}`;
+  }, [nodes, edges, staticLayout]);
 
   const [sims, setSims] = useState<SimNode<N>[]>([]);
   // Bump on every tick to force a re-render. We don't useState for
@@ -258,16 +275,19 @@ function ForceGraphInner<
 
   useEffect(() => {
     const fresh = nodes.map((n) => seededInit(n, width, height));
-    for (let i = 0; i < PRELAYOUT_TICKS; i++) tick(fresh, edges, width, height, worldPadding);
+    if (!staticLayout) {
+      for (let i = 0; i < PRELAYOUT_TICKS; i++)
+        tick(fresh, edges, width, height, worldPadding);
+    }
     setSims(fresh);
     setTickN((n) => n + 1);
-    // We deliberately depend ONLY on shapeKey: it already encodes
-    // node IDs, edge endpoints, and canvas size. Adding the array
-    // refs would re-seed on every parent render (fresh array refs
-    // each time React Query refetches) which throws away the
-    // operator's drag positions. See: docs/dev-notes/forcegraph.md
+    // We deliberately depend ONLY on shapeKey + staticLayout. shapeKey
+    // already encodes node IDs, edge endpoints, and (in static mode)
+    // initial positions. Adding the array refs would re-seed on every
+    // parent render (React Query returns fresh array refs each
+    // refetch) which would throw away the operator's drag positions.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shapeKey]);
+  }, [shapeKey, staticLayout]);
 
   const dragRef = useRef<{ id: string; pointerId: number } | null>(null);
   const panRef = useRef<{ pointerId: number; sx: number; sy: number; tx0: number; ty0: number } | null>(null);
@@ -362,6 +382,12 @@ function ForceGraphInner<
     // past the click threshold (handleNodePointerMove). Clicking a
     // node without dragging should never permanently anchor it.
 
+    if (staticLayout) {
+      // No simulation in static mode — drag just translates the one
+      // node we grabbed. Nothing to RAF.
+      return;
+    }
+
     const loop = () => {
       if (!dragRef.current) {
         rafRef.current = null;
@@ -383,8 +409,18 @@ function ForceGraphInner<
     const sim = sims.find((s) => s.id === drag.id);
     if (!sim) return;
     const w = screenToWorld(e);
-    sim.fx = Math.max(worldPadding, Math.min(width - worldPadding, w.x));
-    sim.fy = Math.max(worldPadding, Math.min(height - worldPadding, w.y));
+    const x = Math.max(worldPadding, Math.min(width - worldPadding, w.x));
+    const y = Math.max(worldPadding, Math.min(height - worldPadding, w.y));
+    if (staticLayout) {
+      // Move the node directly. No fx/fy gymnastics — there is no
+      // simulation, so x/y is the source of truth.
+      sim.x = x;
+      sim.y = y;
+      setTickN((n) => n + 1);
+    } else {
+      sim.fx = x;
+      sim.fy = y;
+    }
     movedRef.current = true;
   };
 
@@ -392,10 +428,11 @@ function ForceGraphInner<
     const drag = dragRef.current;
     dragRef.current = null;
     const sim = sims.find((s) => s.id === id);
-    if (sim) {
+    if (sim && !staticLayout) {
       if (!movedRef.current) {
-        // Pure click: clear any anchor we might have set so the
-        // node is free to participate in the layout again.
+        // Pure click in force mode: clear any anchor we might have
+        // set so the node is free to participate in the layout
+        // again. (In static mode we never anchored.)
         sim.fx = undefined;
         sim.fy = undefined;
       }
@@ -409,7 +446,7 @@ function ForceGraphInner<
       // canvas appear to spin.
       return;
     }
-    startLiveRelax(60);
+    if (!staticLayout) startLiveRelax(60);
   };
 
   // Background pan handlers (only meaningful when enableZoomPan).
