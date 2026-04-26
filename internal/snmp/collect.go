@@ -53,26 +53,41 @@ func CollectAll(ctx context.Context, c *Client) Snapshot {
 		s.LLDP = neighbors
 	}
 
-	// Layer LLDP info onto interface IsUplink: any port with an LLDP
-	// neighbor whose remote sysDescr smells like a switch/router is an
-	// uplink even if speed/alias didn't catch it.
-	markUplinksFromLLDP(s.Interfaces, s.LLDP)
+	// CDP runs unconditionally because Cisco-CDP-MIB just returns
+	// noSuchObject on non-Cisco gear, costing us one tiny BulkWalk per
+	// poll. The payoff is huge for Cisco-heavy estates where LLDP is
+	// frequently disabled out-of-the-box.
+	if cdp, err := CollectCDP(ctx, c); err != nil {
+		s.CollectionWarnings = append(s.CollectionWarnings, "cdp: "+err.Error())
+	} else {
+		s.CDP = cdp
+	}
+
+	// Layer neighbor info onto interface IsUplink: any port with an
+	// LLDP/CDP neighbor whose remote sysDescr smells like a
+	// switch/router is an uplink even if speed/alias didn't catch it.
+	markUplinksFromNeighbors(s.Interfaces, s.LLDP, s.CDP)
 
 	s.CollectMs = time.Since(start).Milliseconds()
 	return s
 }
 
-// markUplinksFromLLDP flips IsUplink=true for any local ifIndex that
-// appears as the local end of an LLDP neighbor row. This is a strong
-// signal: LLDP neighbors on a network appliance are almost exclusively
-// other network appliances (you don't run lldpd on user laptops by
-// default).
-func markUplinksFromLLDP(ifs []Interface, lldp []LLDP) {
-	if len(lldp) == 0 || len(ifs) == 0 {
+// markUplinksFromNeighbors flips IsUplink=true for any local ifIndex
+// that appears as the local end of an LLDP or CDP neighbor row. Either
+// protocol is a strong signal: discovery neighbors on a network
+// appliance are almost exclusively other network appliances (you don't
+// run lldpd/cdpd on user laptops by default).
+func markUplinksFromNeighbors(ifs []Interface, lldp []LLDP, cdp []CDP) {
+	if (len(lldp) == 0 && len(cdp) == 0) || len(ifs) == 0 {
 		return
 	}
-	hasNeighbor := make(map[int32]bool, len(lldp))
+	hasNeighbor := make(map[int32]bool, len(lldp)+len(cdp))
 	for _, n := range lldp {
+		if n.LocalIfIndex != 0 {
+			hasNeighbor[n.LocalIfIndex] = true
+		}
+	}
+	for _, n := range cdp {
 		if n.LocalIfIndex != 0 {
 			hasNeighbor[n.LocalIfIndex] = true
 		}
@@ -493,6 +508,93 @@ func CollectLLDP(_ context.Context, c *Client) ([]LLDP, error) {
 	out := make([]LLDP, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, *r)
+	}
+	return out, nil
+}
+
+// ---------------------------------------------------------------------
+// CISCO-CDP-MIB::cdpCacheTable  (1.3.6.1.4.1.9.9.23.1.2.1.1)
+// ---------------------------------------------------------------------
+//
+// Index format is (cdpCacheIfIndex, cdpCacheDeviceIndex). The first
+// component is the *local* ifIndex on the device we're polling, which
+// is what we need to attach the neighbor to one of our interface rows.
+// The second component just disambiguates multiple neighbors heard on
+// the same port (rare on access switches, common on hub-and-spoke
+// trunks).
+const (
+	oidCdpCacheAddrType = "1.3.6.1.4.1.9.9.23.1.2.1.1.3"
+	oidCdpCacheAddress  = "1.3.6.1.4.1.9.9.23.1.2.1.1.4"
+	oidCdpCacheVersion  = "1.3.6.1.4.1.9.9.23.1.2.1.1.5"
+	oidCdpCacheDeviceID = "1.3.6.1.4.1.9.9.23.1.2.1.1.6"
+	oidCdpCacheDevPort  = "1.3.6.1.4.1.9.9.23.1.2.1.1.7"
+	oidCdpCachePlatform = "1.3.6.1.4.1.9.9.23.1.2.1.1.8"
+	oidCdpCacheCaps     = "1.3.6.1.4.1.9.9.23.1.2.1.1.9"
+)
+
+// CollectCDP walks the Cisco CDP cache. Returns nil, nil on devices
+// that don't expose the MIB (most non-Cisco vendors) — that's not an
+// error from our perspective, just an empty-result.
+func CollectCDP(_ context.Context, c *Client) ([]CDP, error) {
+	type key struct{ ifIdx, devIdx int32 }
+	rows := map[key]*CDP{}
+
+	row := func(k key) *CDP {
+		if r := rows[k]; r != nil {
+			return r
+		}
+		r := &CDP{LocalIfIndex: k.ifIdx}
+		rows[k] = r
+		return r
+	}
+	walk := func(root string, fn func(k key, v Value)) {
+		vars, err := c.BulkWalk(root)
+		if err != nil {
+			return
+		}
+		for _, kv := range vars {
+			parts := suffixParts(kv.OID, root)
+			if len(parts) < 2 {
+				continue
+			}
+			fn(key{ifIdx: parts[0], devIdx: parts[1]}, kv.Value)
+		}
+	}
+
+	walk(oidCdpCacheDeviceID, func(k key, v Value) { row(k).RemoteSysName = v.String() })
+	walk(oidCdpCacheDevPort, func(k key, v Value) { row(k).RemotePortID = v.String() })
+	walk(oidCdpCachePlatform, func(k key, v Value) { row(k).RemotePlatform = v.String() })
+	walk(oidCdpCacheVersion, func(k key, v Value) { row(k).RemoteVersion = v.String() })
+	walk(oidCdpCacheCaps, func(k key, v Value) {
+		if n, ok := v.Int64(); ok {
+			row(k).RemoteCaps = int32(n)
+		}
+	})
+	// Address type is 1=IPv4, 2=IPv6, etc. We only render IPv4 today
+	// because cdpCacheAddress is a raw OctetString of the bytes and
+	// IPv6 needs 16 bytes formatted differently.
+	addrType := map[key]int32{}
+	walk(oidCdpCacheAddrType, func(k key, v Value) {
+		if n, ok := v.Int64(); ok {
+			addrType[k] = int32(n)
+		}
+	})
+	walk(oidCdpCacheAddress, func(k key, v Value) {
+		b := v.Bytes()
+		if addrType[k] == 1 && len(b) == 4 {
+			row(k).RemoteAddress = strconv.Itoa(int(b[0])) + "." +
+				strconv.Itoa(int(b[1])) + "." +
+				strconv.Itoa(int(b[2])) + "." +
+				strconv.Itoa(int(b[3]))
+		}
+	})
+
+	out := make([]CDP, 0, len(rows))
+	for _, r := range rows {
+		// Only keep rows that actually identified the neighbor.
+		if r.RemoteSysName != "" || r.RemoteAddress != "" {
+			out = append(out, *r)
+		}
 	}
 	return out, nil
 }

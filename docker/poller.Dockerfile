@@ -14,15 +14,20 @@ COPY . .
 # fresh dependency added during dev (without a local Go toolchain on the
 # author's box) is fully resolved at build time.
 RUN go mod tidy
-ARG VERSION=dev
+ARG VERSION=
 ARG COMMIT=unknown
 ARG BUILD_TIME=unknown
-RUN CGO_ENABLED=0 go build \
+RUN set -eux; \
+    V="${VERSION:-$(cat VERSION 2>/dev/null | tr -d '[:space:]')}"; \
+    V="${V:-dev}"; \
+    BT="${BUILD_TIME}"; \
+    if [ "$BT" = "unknown" ]; then BT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"; fi; \
+    CGO_ENABLED=0 go build \
       -trimpath \
       -ldflags "-s -w \
-        -X github.com/NCLGISA/ScanRay-Sonar/internal/version.Version=${VERSION} \
+        -X github.com/NCLGISA/ScanRay-Sonar/internal/version.Version=${V} \
         -X github.com/NCLGISA/ScanRay-Sonar/internal/version.Commit=${COMMIT} \
-        -X github.com/NCLGISA/ScanRay-Sonar/internal/version.BuildTime=${BUILD_TIME}" \
+        -X github.com/NCLGISA/ScanRay-Sonar/internal/version.BuildTime=${BT}" \
       -o /out/sonar-poller ./cmd/sonar-poller
 
 FROM gcr.io/distroless/static-debian12:nonroot

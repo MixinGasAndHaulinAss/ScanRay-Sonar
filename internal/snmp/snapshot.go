@@ -23,6 +23,7 @@ type Snapshot struct {
 	Interfaces []Interface `json:"interfaces"`
 	Entities   []Entity    `json:"entities,omitempty"`
 	LLDP       []LLDP      `json:"lldp,omitempty"`
+	CDP        []CDP       `json:"cdp,omitempty"`
 
 	// CollectionWarnings accumulates non-fatal issues (timeouts on a
 	// single MIB, unsupported OID on this vendor, etc.) so an operator
@@ -128,4 +129,20 @@ type LLDP struct {
 	RemotePortID  string `json:"remotePortId,omitempty"`
 	RemotePortDescr string `json:"remotePortDescr,omitempty"`
 	RemoteChassisID string `json:"remoteChassisId,omitempty"`
+}
+
+// CDP is one neighbor row from CISCO-CDP-MIB::cdpCacheTable. Cisco gear
+// almost universally has CDP on by default, while LLDP is often left
+// disabled — so for a Cisco-heavy estate CDP is the more reliable
+// topology source. Conceptually this is the same shape as LLDP and the
+// /topology API merges both lists into a single edge set, deduping by
+// (localIfIndex, remoteSysName).
+type CDP struct {
+	LocalIfIndex int32  `json:"localIfIndex"`
+	RemoteSysName string `json:"remoteSysName,omitempty"`     // cdpCacheDeviceId
+	RemotePortID  string `json:"remotePortId,omitempty"`      // cdpCacheDevicePort
+	RemoteAddress string `json:"remoteAddress,omitempty"`     // cdpCacheAddress (IPv4 dotted-quad when v4)
+	RemotePlatform string `json:"remotePlatform,omitempty"`   // cdpCachePlatform
+	RemoteVersion string `json:"remoteVersion,omitempty"`     // cdpCacheVersion
+	RemoteCaps    int32  `json:"remoteCapabilities,omitempty"` // cdpCacheCapabilities (bitmask)
 }

@@ -1,10 +1,19 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { ApiError, api, tokens } from "../api/client";
-import type { LoginResponse } from "../api/types";
+import type { LoginResponse, VersionInfo } from "../api/types";
 
 export default function Login() {
   const nav = useNavigate();
+  // /version is public, so we can render the CalVer build tag below the
+  // form without an auth token. Useful for support: a screenshot of the
+  // login page is enough to confirm which build a user is hitting.
+  const { data: ver } = useQuery({
+    queryKey: ["version"],
+    queryFn: () => api.get<VersionInfo>("/version"),
+    staleTime: 60_000,
+  });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [totp, setTotp] = useState("");
@@ -95,6 +104,17 @@ export default function Login() {
         >
           {busy ? "Signing in…" : "Sign in"}
         </button>
+
+        {ver && (
+          <div className="pt-2 text-center text-[10px] uppercase tracking-wider text-slate-600">
+            v{ver.version}
+            {ver.commit && ver.commit !== "unknown" && (
+              <span className="ml-2 font-mono normal-case text-slate-700">
+                {ver.commit.slice(0, 7)}
+              </span>
+            )}
+          </div>
+        )}
       </form>
     </div>
   );

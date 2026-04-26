@@ -176,10 +176,18 @@ func (c *Client) Get(oids []string) (map[string]Value, error) {
 // slice. Uses GETBULK (v2c+) where possible; falls back to GETNEXT for
 // v1. The walker stops automatically when an OID falls outside the
 // requested root.
+//
+// gosnmp returns OID names with a leading "." prepended, while the
+// constants we walk against are written without one. Callers like
+// suffixParts compare by prefix (`HasPrefix(oid, root+".")`), which
+// silently drops every row when one side has the dot and the other
+// doesn't — that's how the LLDP collector ended up returning zero
+// neighbors on every device until this was fixed. Strip the leading
+// dot here so all walk consumers see consistently-rooted OIDs.
 func (c *Client) BulkWalk(root string) ([]Variable, error) {
 	var out []Variable
 	cb := func(v gosnmp.SnmpPDU) error {
-		out = append(out, Variable{OID: v.Name, Value: wrap(v)})
+		out = append(out, Variable{OID: strings.TrimPrefix(v.Name, "."), Value: wrap(v)})
 		return nil
 	}
 	var err error

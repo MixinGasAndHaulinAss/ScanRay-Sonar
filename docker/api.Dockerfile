@@ -64,15 +64,25 @@ COPY --from=web /src/web/dist ./web/dist
 # Drop the cross-compiled probe binaries into the embed directory so the
 # API binary serves them via /api/v1/probe/download/{os}/{arch}.
 COPY --from=probebuild /probe ./internal/probebins/bin
-ARG VERSION=dev
+ARG VERSION=
 ARG COMMIT=unknown
 ARG BUILD_TIME=unknown
-RUN CGO_ENABLED=0 go build \
+# Single source of truth for the CalVer string is the top-level VERSION
+# file. The build arg can override (CI passes a pinned value); when it's
+# empty (local docker compose build with no --build-arg) we fall back
+# to the file so the resulting binary always reports the real version
+# instead of "dev".
+RUN set -eux; \
+    V="${VERSION:-$(cat VERSION 2>/dev/null | tr -d '[:space:]')}"; \
+    V="${V:-dev}"; \
+    BT="${BUILD_TIME}"; \
+    if [ "$BT" = "unknown" ]; then BT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"; fi; \
+    CGO_ENABLED=0 go build \
       -trimpath \
       -ldflags "-s -w \
-        -X github.com/NCLGISA/ScanRay-Sonar/internal/version.Version=${VERSION} \
+        -X github.com/NCLGISA/ScanRay-Sonar/internal/version.Version=${V} \
         -X github.com/NCLGISA/ScanRay-Sonar/internal/version.Commit=${COMMIT} \
-        -X github.com/NCLGISA/ScanRay-Sonar/internal/version.BuildTime=${BUILD_TIME}" \
+        -X github.com/NCLGISA/ScanRay-Sonar/internal/version.BuildTime=${BT}" \
       -o /out/sonar-api ./cmd/sonar-api
 
 # ---- Stage 4: runtime ------------------------------------------------------

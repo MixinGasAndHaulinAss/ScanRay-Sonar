@@ -4,13 +4,17 @@ import { api, tokens } from "../api/client";
 import type { Site, User, VersionInfo } from "../api/types";
 import clsx from "clsx";
 
-const APP_VERSION = "2026.4.26.0";
+// APP_VERSION is just the static fallback shown if /version hasn't
+// returned yet (or fails). The real source of truth is the Go binary's
+// embedded VERSION, fetched below via useQuery.
+const APP_VERSION = "2026.4.28.0";
 
 const navItems = [
   { to: "/", label: "Dashboard" },
   { to: "/sites", label: "Sites" },
   { to: "/agents", label: "Agents" },
   { to: "/appliances", label: "Appliances" },
+  { to: "/topology", label: "Topology" },
   { to: "/users", label: "Users", role: "superadmin" as const },
 ];
 

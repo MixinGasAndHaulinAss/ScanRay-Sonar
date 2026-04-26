@@ -7,6 +7,7 @@ import Agents from "./pages/Agents";
 import AgentDetailPage from "./pages/AgentDetail";
 import Appliances from "./pages/Appliances";
 import ApplianceDetailPage from "./pages/ApplianceDetail";
+import Topology from "./pages/Topology";
 import Users from "./pages/Users";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -68,6 +69,16 @@ export default function App() {
           <RequireAuth>
             <ErrorBoundary label="Appliance detail crashed">
               <ApplianceDetailPage />
+            </ErrorBoundary>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/topology"
+        element={
+          <RequireAuth>
+            <ErrorBoundary label="Topology crashed">
+              <Topology />
             </ErrorBoundary>
           </RequireAuth>
         }

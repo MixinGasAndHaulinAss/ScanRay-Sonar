@@ -381,6 +381,40 @@ export interface VersionInfo {
   goVersion: string;
 }
 
+export interface TopologyNode {
+  id: string;
+  /** "appliance" = managed by us; "foreign" = only learned via a neighbor's CDP/LLDP. */
+  kind: "appliance" | "foreign";
+  name: string;
+  label: string;
+  vendor?: string;
+  model?: string;
+  platform?: string;
+  mgmtIp?: string;
+  siteId?: string;
+  status: "up" | "degraded" | "down" | "unknown";
+  lastSeenAt?: string;
+  portsTotal?: number;
+  portsUp?: number;
+  uplinkCount?: number;
+}
+
+export interface TopologyEdge {
+  from: string;
+  to: string;
+  fromPort?: string;
+  toPort?: string;
+  /** "both" means the same link was reported by both LLDP and CDP (or by both ends). */
+  protocol: "lldp" | "cdp" | "both";
+  operUp: boolean;
+}
+
+export interface Topology {
+  generatedAt: string;
+  nodes: TopologyNode[];
+  edges: TopologyEdge[];
+}
+
 export interface LoginResponse {
   accessToken: string;
   refreshToken: string;

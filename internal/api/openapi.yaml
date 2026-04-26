@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.4.27.1"
+  version: "2026.4.28.0"
   license:
     name: MIT
 servers:
@@ -535,6 +535,60 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /topology:
+    get:
+      summary: Network topology graph (managed appliances + LLDP/CDP neighbors)
+      description: |
+        Builds a deduped node/edge graph from every appliance's
+        last_snapshot. Managed nodes are real Appliance rows; foreign
+        nodes are devices we only learned about via a neighbor's CDP
+        or LLDP advertisement (id is `foreign:<sysname>`). Edges are
+        keyed by an unordered node-pair so a link reported by both
+        ends collapses into one edge with `protocol: "both"`.
+      parameters:
+        - in: query
+          name: siteId
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Topology
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  generatedAt: { type: string, format: date-time }
+                  nodes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:        { type: string }
+                        kind:      { type: string, enum: [appliance, foreign] }
+                        name:      { type: string }
+                        label:     { type: string }
+                        vendor:    { type: string }
+                        model:     { type: string }
+                        platform:  { type: string }
+                        mgmtIp:    { type: string }
+                        siteId:    { type: string, format: uuid }
+                        status:    { type: string, enum: [up, degraded, down, unknown] }
+                        lastSeenAt:  { type: string, format: date-time }
+                        portsTotal:  { type: integer }
+                        portsUp:     { type: integer }
+                        uplinkCount: { type: integer }
+                  edges:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        from:      { type: string }
+                        to:        { type: string }
+                        fromPort:  { type: string }
+                        toPort:    { type: string }
+                        protocol:  { type: string, enum: [lldp, cdp, both] }
+                        operUp:    { type: boolean }
 
   /appliances:
     get:

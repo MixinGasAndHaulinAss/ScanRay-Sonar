@@ -152,6 +152,8 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/appliances/{id}/metrics", s.handleApplianceMetrics)
 			r.Get("/appliances/{id}/interfaces/{ifIndex}/metrics", s.handleApplianceIfaceMetrics)
 			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/appliances/{id}", s.handleDeleteAppliance)
+
+			r.Get("/topology", s.handleTopology)
 		})
 	})
 
