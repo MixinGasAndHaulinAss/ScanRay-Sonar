@@ -64,7 +64,10 @@ services:
       # build succeed on hosts behind TLS-inspecting firewalls.
       network: host
       args:
-        VERSION: ${SONAR_VERSION:-dev}
+        # Default empty so the Dockerfile falls back to reading the
+        # top-level VERSION file (single source of truth). Override
+        # SONAR_VERSION in CI to pin the binary's reported version.
+        VERSION: ${SONAR_VERSION-}
     container_name: sonar-api
     restart: unless-stopped
     depends_on:
@@ -90,7 +93,7 @@ services:
       dockerfile: docker/poller.Dockerfile
       network: host
       args:
-        VERSION: ${SONAR_VERSION:-dev}
+        VERSION: ${SONAR_VERSION-}
     container_name: sonar-poller
     restart: unless-stopped
     depends_on:
