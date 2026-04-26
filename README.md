@@ -252,7 +252,7 @@ timeout: 600
 
 ## Versioning (CalVer)
 
-Format: `YYYY.M.D.patch` — e.g. `2026.4.26.11`. The single source of truth is the [`VERSION`](VERSION) file. CI reads it and injects it into all binaries via `-ldflags`. The same string is also rendered on the login screen and inside the app shell so operators can see at a glance what's deployed.
+Format: `YYYY.M.D.patch` — e.g. `2026.4.26.12`. The single source of truth is the [`VERSION`](VERSION) file. CI reads it and injects it into all binaries via `-ldflags`. The same string is also rendered on the login screen and inside the app shell so operators can see at a glance what's deployed.
 
 To bump, update **four** files in lockstep:
 

@@ -45,6 +45,7 @@ import type {
   GeometryCollection,
 } from "topojson-specification";
 import worldTopo from "../assets/world-110m.json";
+import usStatesTopo from "../assets/us-states-10m.json";
 import { api } from "../api/client";
 import type { AgentNetworkGraph, AgentNetworkPeer } from "../api/types";
 import ForceGraph, {
@@ -58,6 +59,16 @@ import ForceGraph, {
 const WORLD_FEATURES = (() => {
   const topo = worldTopo as unknown as TopoJsonTopology;
   const obj = topo.objects.countries as GeometryCollection;
+  return feature(topo, obj) as unknown as GeoJSON.FeatureCollection;
+})();
+
+// US state borders (us-atlas 10m). Drawn as a thin overlay on top
+// of the country layer. The atlas uses [longitude, latitude] in
+// degrees so it lines up with the same Equal Earth projection as
+// world-110m without any extra transform.
+const US_STATE_FEATURES = (() => {
+  const topo = usStatesTopo as unknown as TopoJsonTopology;
+  const obj = topo.objects.states as GeometryCollection;
   return feature(topo, obj) as unknown as GeoJSON.FeatureCollection;
 })();
 
@@ -1919,6 +1930,32 @@ function PeersMapView({
                 }
               </Geographies>
 
+              {/* US state borders. Strokes get thinner as the user
+                  zooms in so they don't dominate at high zoom; we
+                  also fade the layer below zoom 1.4 so countries
+                  read cleanly at world-overview level. */}
+              {zoom >= 1.0 && (
+                <Geographies geography={US_STATE_FEATURES}>
+                  {({ geographies }) =>
+                    geographies.map((geo) => (
+                      <Geography
+                        key={geo.rsmKey}
+                        geography={geo}
+                        fill="transparent"
+                        stroke="#334155"
+                        strokeWidth={0.45 / zoom}
+                        strokeOpacity={Math.min(0.85, 0.25 + zoom * 0.18)}
+                        style={{
+                          default: { outline: "none", pointerEvents: "none" },
+                          hover: { outline: "none", pointerEvents: "none" },
+                          pressed: { outline: "none", pointerEvents: "none" },
+                        }}
+                      />
+                    ))
+                  }
+                </Geographies>
+              )}
+
               {/* Lines from host to each cluster (when we have a host
                   fix). Drawn before markers so markers sit on top. */}
               {showLines && hostFix &&
@@ -1939,6 +1976,14 @@ function PeersMapView({
                 const r = clusterRadius(c.members.length) / Math.sqrt(zoom);
                 const isActive =
                   active && active.lat === c.lat && active.lon === c.lon;
+                // Scale the count digit so it sits inside the
+                // cluster bubble at every zoom level. SVG <text>
+                // ignores Tailwind font-size classes — the size has
+                // to be set via the fontSize attribute (or `style`).
+                // The divisor grows with the digit count so a "1"
+                // and "127" both fit cleanly.
+                const digits = c.members.length.toString().length;
+                const labelSize = Math.max(2, (r * 1.55) / (digits + 0.8));
                 return (
                   <Marker
                     key={`${c.lat}:${c.lon}`}
@@ -1954,7 +1999,7 @@ function PeersMapView({
                       pressed: { cursor: "pointer" },
                     }}
                   >
-                    <g>
+                    <g pointerEvents="visible">
                       {c.members.length > 1 && (
                         <circle
                           r={r * 1.7}
@@ -1966,13 +2011,16 @@ function PeersMapView({
                         r={r}
                         fill={DIR_COLOR[dir]}
                         stroke={isActive ? "#ffffff" : "#0f172a"}
-                        strokeWidth={isActive ? 2 : 1}
+                        strokeWidth={(isActive ? 2 : 1) / Math.sqrt(zoom)}
                       />
                       {c.members.length > 1 && (
                         <text
                           textAnchor="middle"
-                          y={r / 3}
-                          className="pointer-events-none select-none fill-white text-[8px] font-semibold"
+                          dominantBaseline="central"
+                          fontSize={labelSize}
+                          fontWeight={700}
+                          fill="#ffffff"
+                          pointerEvents="none"
                         >
                           {c.members.length}
                         </text>
@@ -1983,27 +2031,40 @@ function PeersMapView({
               })}
 
               {/* Host marker — distinct cyan diamond so it doesn't get
-                  confused with a peer cluster. */}
+                  confused with a peer cluster. Size + label scale
+                  inversely with zoom so the diamond stays a
+                  consistent visual size. */}
               {hostFix && (
                 <Marker coordinates={[hostFix.lon, hostFix.lat]}>
-                  <g>
-                    <rect
-                      x={-5}
-                      y={-5}
-                      width={10}
-                      height={10}
-                      fill={DIR_COLOR.host}
-                      stroke="#0f172a"
-                      strokeWidth={1.5}
-                      transform="rotate(45)"
-                    />
-                    <text
-                      textAnchor="middle"
-                      y={-9}
-                      className="pointer-events-none select-none fill-cyan-200 text-[8px] font-semibold"
-                    >
-                      {agent.hostname}
-                    </text>
+                  <g pointerEvents="none">
+                    {(() => {
+                      const half = 5 / Math.sqrt(zoom);
+                      const fs = 7 / Math.sqrt(zoom);
+                      const yOff = -(half * 2 + fs * 0.4);
+                      return (
+                        <>
+                          <rect
+                            x={-half}
+                            y={-half}
+                            width={half * 2}
+                            height={half * 2}
+                            fill={DIR_COLOR.host}
+                            stroke="#0f172a"
+                            strokeWidth={1.5 / Math.sqrt(zoom)}
+                            transform="rotate(45)"
+                          />
+                          <text
+                            textAnchor="middle"
+                            y={yOff}
+                            fontSize={fs}
+                            fontWeight={600}
+                            fill="#a5f3fc"
+                          >
+                            {agent.hostname}
+                          </text>
+                        </>
+                      );
+                    })()}
                   </g>
                 </Marker>
               )}

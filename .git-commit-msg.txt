@@ -1,0 +1,18 @@
+2026.4.26.12: agent map — fix label sizing, add US state borders
+
+Two fixes for the per-agent Network Topology Map tab:
+
+1. Marker labels were rendering at the document default font-size
+   (~16px in user-coords) because SVG <text> ignores Tailwind's
+   text-[8px] arbitrary-value class. The host hostname and cluster
+   counts ended up many times larger than their bubbles. Switched
+   to explicit fontSize attributes that scale with the bubble
+   radius (and inversely with zoom for the host marker), with a
+   digit-count-aware divisor so cluster labels like "1", "11",
+   "127" all fit cleanly.
+
+2. Added US state borders. New asset
+   web/src/assets/us-states-10m.json (us-atlas 10m, ~115KB) and a
+   second <Geographies> overlay rendered on top of the country
+   layer. Stroke width and opacity scale with zoom so states are
+   subtle at world-view and crisp when zoomed into the US.
