@@ -31,6 +31,20 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+  ComposableMap,
+  Geographies,
+  Geography,
+  Line as GeoLine,
+  Marker,
+  ZoomableGroup,
+} from "react-simple-maps";
+import { feature } from "topojson-client";
+import type {
+  Topology as TopoJsonTopology,
+  GeometryCollection,
+} from "topojson-specification";
+import worldTopo from "../assets/world-110m.json";
 import { api } from "../api/client";
 import type { AgentNetworkGraph, AgentNetworkPeer } from "../api/types";
 import ForceGraph, {
@@ -39,6 +53,15 @@ import ForceGraph, {
   type ForceNodeInput,
   type SimNode,
 } from "./ForceGraph";
+
+// World features parsed once at module load — rerenders are cheap.
+const WORLD_FEATURES = (() => {
+  const topo = worldTopo as unknown as TopoJsonTopology;
+  const obj = topo.objects.countries as GeometryCollection;
+  return feature(topo, obj) as unknown as GeoJSON.FeatureCollection;
+})();
+
+const TAB_KEY = "sonar.agent.netgraph.tab";
 
 type NodeKind = "host" | "process" | "endpoint" | "isp";
 
@@ -160,6 +183,14 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
   const [options, setOptions] = useState<DisplayOptions>(DEFAULT_OPTIONS);
   const [legendOpen, setLegendOpen] = useState(false);
   const [optionsCollapsed, setOptionsCollapsed] = useState(false);
+
+  const [tab, setTab] = useState<"graph" | "map">(() => {
+    const v = localStorage.getItem(TAB_KEY);
+    return v === "map" ? "map" : "graph";
+  });
+  useEffect(() => {
+    localStorage.setItem(TAB_KEY, tab);
+  }, [tab]);
 
   const graphRef = useRef<ForceGraphHandle | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -631,6 +662,34 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
       {/* Header / filters bar */}
       <div className="flex flex-wrap items-center gap-2 border-b border-ink-800 px-3 py-2">
         <h3 className="text-sm font-semibold text-slate-200">Network Topology</h3>
+        <div className="flex items-center gap-1 rounded-md border border-ink-700 bg-ink-950 p-0.5 text-[11px]">
+          <button
+            type="button"
+            onClick={() => setTab("graph")}
+            className={
+              "rounded px-2 py-0.5 transition " +
+              (tab === "graph"
+                ? "bg-sonar-700/40 text-sonar-100"
+                : "text-slate-400 hover:text-slate-200")
+            }
+            title="Radial process / ISP graph"
+          >
+            Graph
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("map")}
+            className={
+              "rounded px-2 py-0.5 transition " +
+              (tab === "map"
+                ? "bg-sonar-700/40 text-sonar-100"
+                : "text-slate-400 hover:text-slate-200")
+            }
+            title="Plot remote peers on a world map"
+          >
+            Map
+          </button>
+        </div>
         <span className="text-[11px] text-slate-500">
           {counts.total} peers · {counts.outbound} out · {counts.inbound} in · {counts.publicCount} public
         </span>
@@ -643,23 +702,27 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
             placeholder="Filter by process…"
             className="h-7 w-44 rounded-md border border-ink-700 bg-ink-950 px-2 text-xs text-slate-200 placeholder:text-slate-600 focus:border-sonar-500 focus:outline-none"
           />
-          <button
-            type="button"
-            onClick={() => setLegendOpen((v) => !v)}
-            className={
-              "rounded-md border px-2 py-1 text-[11px] " +
-              (legendOpen
-                ? "border-sonar-500 bg-sonar-500/10 text-sonar-400"
-                : "border-ink-700 bg-ink-900 text-slate-300 hover:border-ink-600")
-            }
-            title="Show legend"
-          >
-            <IconLegend className="mr-1 inline-block h-3.5 w-3.5 -translate-y-px" /> Map Legend
-          </button>
+          {tab === "graph" && (
+            <button
+              type="button"
+              onClick={() => setLegendOpen((v) => !v)}
+              className={
+                "rounded-md border px-2 py-1 text-[11px] " +
+                (legendOpen
+                  ? "border-sonar-500 bg-sonar-500/10 text-sonar-400"
+                  : "border-ink-700 bg-ink-900 text-slate-300 hover:border-ink-600")
+              }
+              title="Show legend"
+            >
+              <IconLegend className="mr-1 inline-block h-3.5 w-3.5 -translate-y-px" /> Map Legend
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Canvas + overlays */}
+      {tab === "map" ? (
+        <PeersMapView agent={data.agent} peers={filteredPeers} />
+      ) : (
       <div ref={containerRef} className="relative h-[75vh] min-h-[520px] overflow-hidden bg-ink-950">
         <ForceGraph<NetNodeData, NetEdgeInput>
           ref={graphRef}
@@ -844,6 +907,7 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
           />
         )}
       </div>
+      )}
     </div>
   );
 }
@@ -1704,6 +1768,519 @@ function SectionShell({ children }: { children: React.ReactNode }) {
 function truncate(s: string, n: number) {
   if (!s) return "";
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+
+// ===================== PEERS MAP VIEW =========================
+//
+// World-map render of every remote peer the agent has talked to, plus
+// the agent itself when its own GeoIP is known. We share the
+// react-simple-maps stack with the World page so zoom / pan / cluster
+// behaviour feels identical.
+//
+// Direction colouring: outbound = sky blue, inbound = amber. (The
+// "local" direction shouldn't appear here because filteredPeers
+// already excludes loopback / RFC1918 when scope=public, and
+// inbound/outbound is set per peer at ingest.)
+//
+// Peers without a GeoIP fix (private addresses, anycast, fresh
+// allocations MaxMind doesn't recognise) get listed in a side panel
+// so they're still inspectable.
+
+const DIR_COLOR: Record<"outbound" | "inbound" | "local" | "host", string> = {
+  outbound: "#0ea5e9",
+  inbound: "#f59e0b",
+  local: "#94a3b8",
+  host: "#22d3ee",
+};
+
+interface PeerCluster {
+  lat: number;
+  lon: number;
+  members: AgentNetworkPeer[];
+}
+
+function clusterPeers(peers: AgentNetworkPeer[], precision: number): PeerCluster[] {
+  const map = new Map<string, PeerCluster>();
+  for (const p of peers) {
+    if (p.lat == null || p.lon == null) continue;
+    if (p.lat === 0 && p.lon === 0) continue;
+    const key = `${p.lat.toFixed(precision)}:${p.lon.toFixed(precision)}`;
+    let c = map.get(key);
+    if (!c) {
+      c = { lat: 0, lon: 0, members: [] };
+      map.set(key, c);
+    }
+    c.members.push(p);
+  }
+  return Array.from(map.values()).map((c) => ({
+    members: c.members,
+    lat: c.members.reduce((s, m) => s + (m.lat as number), 0) / c.members.length,
+    lon: c.members.reduce((s, m) => s + (m.lon as number), 0) / c.members.length,
+  }));
+}
+
+function clusterRadius(n: number): number {
+  if (n === 1) return 4.5;
+  if (n < 5) return 7;
+  if (n < 20) return 10;
+  return 13;
+}
+
+function dominantDirection(
+  members: AgentNetworkPeer[],
+): "inbound" | "outbound" | "local" {
+  let inb = 0;
+  let out = 0;
+  let loc = 0;
+  for (const m of members) {
+    if (m.direction === "inbound") inb++;
+    else if (m.direction === "outbound") out++;
+    else loc++;
+  }
+  if (out >= inb && out >= loc) return "outbound";
+  if (inb >= loc) return "inbound";
+  return "local";
+}
+
+function PeersMapView({
+  agent,
+  peers,
+}: {
+  agent: AgentNetworkGraph["agent"];
+  peers: AgentNetworkPeer[];
+}) {
+  const [zoom, setZoom] = useState(1);
+  const [center, setCenter] = useState<[number, number]>([0, 20]);
+  const [hovered, setHovered] = useState<PeerCluster | null>(null);
+  const [pinned, setPinned] = useState<PeerCluster | null>(null);
+  const [showLines, setShowLines] = useState(true);
+
+  const { mappable, unmapped } = useMemo(() => {
+    const mappable: AgentNetworkPeer[] = [];
+    const unmapped: AgentNetworkPeer[] = [];
+    for (const p of peers) {
+      if (p.lat != null && p.lon != null && (p.lat !== 0 || p.lon !== 0)) {
+        mappable.push(p);
+      } else {
+        unmapped.push(p);
+      }
+    }
+    return { mappable, unmapped };
+  }, [peers]);
+
+  const precision = zoom < 1.5 ? 0 : zoom < 4 ? 1 : zoom < 8 ? 2 : 3;
+  const clusters = useMemo(
+    () => clusterPeers(mappable, precision),
+    [mappable, precision],
+  );
+
+  const hostFix =
+    agent.lat != null && agent.lon != null && (agent.lat !== 0 || agent.lon !== 0)
+      ? { lat: agent.lat as number, lon: agent.lon as number }
+      : null;
+
+  const active = pinned ?? hovered;
+
+  return (
+    <div className="relative h-[75vh] min-h-[520px] bg-ink-950">
+      <div className="grid h-full lg:grid-cols-[1fr_320px]">
+        <div className="relative overflow-hidden">
+          <ComposableMap
+            projection="geoEqualEarth"
+            projectionConfig={{ scale: 175 }}
+            style={{ width: "100%", height: "100%" }}
+          >
+            <ZoomableGroup
+              zoom={zoom}
+              center={center}
+              onMoveEnd={({ coordinates, zoom: z }) => {
+                setCenter(coordinates);
+                setZoom(z);
+              }}
+              minZoom={1}
+              maxZoom={32}
+            >
+              <Geographies geography={WORLD_FEATURES}>
+                {({ geographies }) =>
+                  geographies.map((geo) => (
+                    <Geography
+                      key={geo.rsmKey}
+                      geography={geo}
+                      fill="#0f172a"
+                      stroke="#1e293b"
+                      strokeWidth={0.4}
+                      style={{
+                        default: { outline: "none" },
+                        hover: { outline: "none", fill: "#111c33" },
+                        pressed: { outline: "none" },
+                      }}
+                    />
+                  ))
+                }
+              </Geographies>
+
+              {/* Lines from host to each cluster (when we have a host
+                  fix). Drawn before markers so markers sit on top. */}
+              {showLines && hostFix &&
+                clusters.map((c) => (
+                  <GeoLine
+                    key={`l-${c.lat}-${c.lon}`}
+                    from={[hostFix.lon, hostFix.lat]}
+                    to={[c.lon, c.lat]}
+                    stroke={DIR_COLOR[dominantDirection(c.members)]}
+                    strokeWidth={0.6 / Math.sqrt(zoom)}
+                    strokeOpacity={0.35}
+                    strokeLinecap="round"
+                  />
+                ))}
+
+              {clusters.map((c) => {
+                const dir = dominantDirection(c.members);
+                const r = clusterRadius(c.members.length) / Math.sqrt(zoom);
+                const isActive =
+                  active && active.lat === c.lat && active.lon === c.lon;
+                return (
+                  <Marker
+                    key={`${c.lat}:${c.lon}`}
+                    coordinates={[c.lon, c.lat]}
+                    onMouseEnter={() => setHovered(c)}
+                    onMouseLeave={() =>
+                      setHovered((h) => (h === c ? null : h))
+                    }
+                    onClick={() => setPinned((p) => (p === c ? null : c))}
+                    style={{
+                      default: { cursor: "pointer" },
+                      hover: { cursor: "pointer" },
+                      pressed: { cursor: "pointer" },
+                    }}
+                  >
+                    <g>
+                      {c.members.length > 1 && (
+                        <circle
+                          r={r * 1.7}
+                          fill={DIR_COLOR[dir]}
+                          opacity={0.18}
+                        />
+                      )}
+                      <circle
+                        r={r}
+                        fill={DIR_COLOR[dir]}
+                        stroke={isActive ? "#ffffff" : "#0f172a"}
+                        strokeWidth={isActive ? 2 : 1}
+                      />
+                      {c.members.length > 1 && (
+                        <text
+                          textAnchor="middle"
+                          y={r / 3}
+                          className="pointer-events-none select-none fill-white text-[8px] font-semibold"
+                        >
+                          {c.members.length}
+                        </text>
+                      )}
+                    </g>
+                  </Marker>
+                );
+              })}
+
+              {/* Host marker — distinct cyan diamond so it doesn't get
+                  confused with a peer cluster. */}
+              {hostFix && (
+                <Marker coordinates={[hostFix.lon, hostFix.lat]}>
+                  <g>
+                    <rect
+                      x={-5}
+                      y={-5}
+                      width={10}
+                      height={10}
+                      fill={DIR_COLOR.host}
+                      stroke="#0f172a"
+                      strokeWidth={1.5}
+                      transform="rotate(45)"
+                    />
+                    <text
+                      textAnchor="middle"
+                      y={-9}
+                      className="pointer-events-none select-none fill-cyan-200 text-[8px] font-semibold"
+                    >
+                      {agent.hostname}
+                    </text>
+                  </g>
+                </Marker>
+              )}
+            </ZoomableGroup>
+          </ComposableMap>
+
+          {/* Top-left toolbar */}
+          <div className="absolute left-3 top-3 flex items-center gap-2 rounded-md border border-ink-700 bg-ink-900/95 px-3 py-1.5 text-[11px] text-slate-300 backdrop-blur">
+            <span className="rounded-full border border-ink-700 bg-ink-950 px-2 py-0.5">
+              {mappable.length} mapped · {unmapped.length} no fix
+            </span>
+            <label className="inline-flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                className="accent-sonar-500"
+                checked={showLines}
+                onChange={(e) => setShowLines(e.target.checked)}
+                disabled={!hostFix}
+              />
+              Show lines
+            </label>
+            <button
+              onClick={() => {
+                setZoom(1);
+                setCenter([0, 20]);
+              }}
+              className="rounded-full border border-ink-700 bg-ink-950 px-2 py-0.5 text-slate-200 hover:border-ink-600 hover:bg-ink-800"
+            >
+              Reset view
+            </button>
+          </div>
+
+          {/* Legend (bottom-left) */}
+          <div className="absolute bottom-3 left-3 flex items-center gap-3 rounded-md border border-ink-800 bg-ink-950/90 px-3 py-1.5 text-[10px] uppercase tracking-wider text-slate-400 backdrop-blur">
+            <Dot color={DIR_COLOR.outbound} /> outbound
+            <Dot color={DIR_COLOR.inbound} /> inbound
+            <DotDiamond color={DIR_COLOR.host} /> host
+          </div>
+
+          {/* Hint (bottom-right) */}
+          <div className="absolute bottom-3 right-3 rounded-md border border-ink-800 bg-ink-950/90 px-2.5 py-1 text-[10px] text-slate-500 backdrop-blur">
+            drag to pan · scroll to zoom · click marker for detail
+          </div>
+
+          {active && (
+            <PeerClusterPopover
+              cluster={active}
+              pinned={pinned === active}
+              onClose={() => setPinned(null)}
+            />
+          )}
+
+          {mappable.length === 0 && (
+            <div className="absolute inset-0 grid place-items-center px-6 text-center text-xs text-slate-500">
+              <div className="max-w-md space-y-1.5">
+                <div className="text-sm font-semibold text-slate-300">
+                  Nothing to plot.
+                </div>
+                <div>
+                  No remote peer in the current filter has a GeoIP fix.
+                  Switch <em>Scope</em> to <em>public</em>, or check that
+                  the API has the MaxMind GeoLite2 databases loaded
+                  (<code className="font-mono">make refresh-geoip</code>).
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <UnmappedPeersPanel peers={unmapped} />
+      </div>
+    </div>
+  );
+}
+
+function PeerClusterPopover({
+  cluster,
+  pinned,
+  onClose,
+}: {
+  cluster: PeerCluster;
+  pinned: boolean;
+  onClose: () => void;
+}) {
+  const sorted = useMemo(
+    () => [...cluster.members].sort((a, b) => b.totalConns - a.totalConns),
+    [cluster],
+  );
+  return (
+    <div className="absolute right-3 top-3 max-h-[60vh] w-72 overflow-auto rounded-lg border border-ink-700 bg-ink-950/95 p-3 text-xs shadow-xl backdrop-blur">
+      <div className="mb-2 flex items-baseline justify-between">
+        <div>
+          <div className="text-[10px] uppercase tracking-wide text-slate-500">
+            {cluster.members.length} peer
+            {cluster.members.length === 1 ? "" : "s"}
+          </div>
+          <div className="font-mono text-[10px] text-slate-400">
+            {cluster.lat.toFixed(2)}°, {cluster.lon.toFixed(2)}°
+          </div>
+        </div>
+        {pinned && (
+          <button
+            onClick={onClose}
+            className="text-[10px] text-slate-500 hover:text-slate-200"
+          >
+            close
+          </button>
+        )}
+      </div>
+      <ul className="space-y-1.5">
+        {sorted.map((m) => (
+          <li
+            key={m.ip}
+            className="rounded border border-ink-800 bg-ink-900/60 p-1.5"
+          >
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="truncate font-mono text-[11px] text-sonar-300">
+                {m.ip}
+              </span>
+              <span
+                className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px]"
+                style={{
+                  background: DIR_COLOR[m.direction] + "33",
+                  color: DIR_COLOR[m.direction],
+                }}
+              >
+                {m.direction}
+              </span>
+            </div>
+            <div className="text-[10px] text-slate-500">
+              {m.city ? `${m.city}, ` : ""}
+              {m.countryName || m.countryIso || "—"}
+              {m.totalConns ? ` · ${m.totalConns} conn` : ""}
+            </div>
+            {(m.asn || m.org) && (
+              <div className="truncate text-[10px] text-slate-600">
+                {m.asn ? `AS${m.asn} ` : ""}
+                {m.org || ""}
+              </div>
+            )}
+            {m.processes && m.processes.length > 0 && (
+              <div className="mt-0.5 truncate text-[10px] text-slate-500">
+                {m.processes
+                  .slice(0, 3)
+                  .map((p) => `${p.name}${p.count ? `×${p.count}` : ""}`)
+                  .join(", ")}
+                {m.processes.length > 3 ? ` +${m.processes.length - 3}` : ""}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function UnmappedPeersPanel({ peers }: { peers: AgentNetworkPeer[] }) {
+  const groups = useMemo(() => {
+    const privatePeers: AgentNetworkPeer[] = [];
+    const noFix: AgentNetworkPeer[] = [];
+    for (const p of peers) {
+      if (p.isPrivate) privatePeers.push(p);
+      else noFix.push(p);
+    }
+    privatePeers.sort((a, b) => b.totalConns - a.totalConns);
+    noFix.sort((a, b) => b.totalConns - a.totalConns);
+    return { privatePeers, noFix };
+  }, [peers]);
+
+  return (
+    <div className="overflow-auto border-l border-ink-800 bg-ink-900/60 p-3 text-xs">
+      <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        Not on the map ({peers.length})
+      </div>
+      {groups.privatePeers.length > 0 && (
+        <UnmappedPeerGroup
+          title="Private network"
+          help="RFC1918 / link-local / loopback. MaxMind has no data for these."
+          items={groups.privatePeers}
+        />
+      )}
+      {groups.noFix.length > 0 && (
+        <UnmappedPeerGroup
+          title="No GeoIP fix"
+          help="Public IP that MaxMind didn't return city/lat for — common for fresh allocations and anycast prefixes."
+          items={groups.noFix}
+        />
+      )}
+      {peers.length === 0 && (
+        <div className="text-[11px] text-slate-500">
+          Every peer has a fix.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UnmappedPeerGroup({
+  title,
+  help,
+  items,
+}: {
+  title: string;
+  help: string;
+  items: AgentNetworkPeer[];
+}) {
+  return (
+    <div className="mb-3 last:mb-0">
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          {title}
+        </span>
+        <span className="text-[10px] tabular-nums text-slate-600">
+          {items.length}
+        </span>
+      </div>
+      <div className="mb-1 text-[10px] text-slate-600">{help}</div>
+      <ul className="space-y-1">
+        {items.slice(0, 25).map((p) => (
+          <li
+            key={p.ip}
+            className="rounded border border-ink-800 bg-ink-950/60 p-1.5"
+          >
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="truncate font-mono text-[10px] text-slate-200">
+                {p.ip}
+              </span>
+              <span
+                className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px]"
+                style={{
+                  background: DIR_COLOR[p.direction] + "33",
+                  color: DIR_COLOR[p.direction],
+                }}
+              >
+                {p.direction}
+              </span>
+            </div>
+            {(p.org || p.processes?.length) && (
+              <div className="truncate text-[10px] text-slate-500">
+                {p.org || ""}
+                {p.org && p.processes?.length ? " · " : ""}
+                {p.processes
+                  ?.slice(0, 2)
+                  .map((pr) => pr.name)
+                  .join(", ")}
+                {p.processes && p.processes.length > 2
+                  ? ` +${p.processes.length - 2}`
+                  : ""}
+              </div>
+            )}
+          </li>
+        ))}
+        {items.length > 25 && (
+          <li className="px-1 text-[10px] text-slate-600">
+            …and {items.length - 25} more
+          </li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
+function Dot({ color }: { color: string }) {
+  return (
+    <span
+      className="inline-block h-2.5 w-2.5 rounded-full"
+      style={{ background: color }}
+    />
+  );
+}
+function DotDiamond({ color }: { color: string }) {
+  return (
+    <span
+      className="inline-block h-2.5 w-2.5 rotate-45"
+      style={{ background: color }}
+    />
+  );
 }
 
 // ===================== ICONS (inline SVG) =====================

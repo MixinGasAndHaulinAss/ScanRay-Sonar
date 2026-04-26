@@ -48,18 +48,6 @@ type topologyNode struct {
 	// a tag-filter dropdown over the topology. Foreign nodes never
 	// have tags (we don't manage them) — the field is omitted then.
 	Tags []string `json:"tags,omitempty"`
-	// Geo enrichment for the Map tab. Populated by a MaxMind lookup
-	// against MgmtIP when it's a public address. For RFC1918 / link-
-	// local / loopback we set IsPrivate=true and skip the lookup; the
-	// Map UI groups those into a single "private network" stack.
-	IsPrivate   bool    `json:"isPrivate,omitempty"`
-	CountryISO  string  `json:"countryIso,omitempty"`
-	CountryName string  `json:"countryName,omitempty"`
-	City        string  `json:"city,omitempty"`
-	Lat         float64 `json:"lat,omitempty"`
-	Lon         float64 `json:"lon,omitempty"`
-	ASN         uint    `json:"asn,omitempty"`
-	Org         string  `json:"org,omitempty"`
 }
 
 // topologyEdge is one discovered link between two nodes. Direction is
@@ -178,7 +166,6 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 		if model != nil {
 			n.Model = *model
 		}
-		s.enrichNodeGeo(&n)
 
 		var snap *snmp.Snapshot
 		if len(snapBytes) > 0 {
@@ -266,7 +253,7 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 		// them here and merge after the loop so multiple appliances
 		// reporting the same neighbor share one node.
 		if strings.HasPrefix(remoteID, "foreign:") {
-			fn := topologyNode{
+			foreignNodes[remoteID] = topologyNode{
 				ID:       remoteID,
 				Kind:     "foreign",
 				Name:     remoteSys,
@@ -275,8 +262,6 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 				MgmtIP:   remoteAddr,
 				Status:   "unknown",
 			}
-			s.enrichNodeGeo(&fn)
-			foreignNodes[remoteID] = fn
 		}
 	}
 
@@ -335,35 +320,6 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 		return resp.Edges[i].To < resp.Edges[j].To
 	})
 	writeJSON(w, http.StatusOK, resp)
-}
-
-// enrichNodeGeo fills the geo fields on a topology node from MaxMind.
-// Private / link-local / loopback addresses skip the lookup entirely
-// (MaxMind returns empty rows for them anyway, and we want the UI to
-// know to group them into a single "private network" stack on the
-// Map tab rather than rendering at 0,0 in the Atlantic).
-func (s *Server) enrichNodeGeo(n *topologyNode) {
-	if n.MgmtIP == "" {
-		return
-	}
-	if isPrivateIP(n.MgmtIP) {
-		n.IsPrivate = true
-		return
-	}
-	if s.geo == nil || !s.geo.Has() {
-		return
-	}
-	res, ok := s.geo.Lookup(n.MgmtIP)
-	if !ok {
-		return
-	}
-	n.CountryISO = res.CountryISO
-	n.CountryName = res.CountryName
-	n.City = res.City
-	n.Lat = res.Lat
-	n.Lon = res.Lon
-	n.ASN = res.ASN
-	n.Org = res.Organization
 }
 
 func deref(p *string, fallbackS string) string {
