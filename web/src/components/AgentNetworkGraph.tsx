@@ -173,7 +173,7 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
             edges={edges}
             width={W}
             height={H}
-            renderEdge={(e, a, b) => {
+            renderEdge={(_e, a, b) => {
               const isSel = selected != null && (a.id === selected || b.id === selected);
               return (
                 <line

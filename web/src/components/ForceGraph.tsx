@@ -298,7 +298,7 @@ export default function ForceGraph<
     movedRef.current = true;
   };
 
-  const handlePointerUp = (e: React.PointerEvent, id: string) => {
+  const handlePointerUp = (_e: React.PointerEvent, id: string) => {
     const drag = dragRef.current;
     dragRef.current = null;
     const sim = sims.find((s) => s.id === id);

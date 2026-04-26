@@ -183,7 +183,7 @@ function TopologyGraph({ data }: { data: Topology }) {
 }
 
 function NodeBubble({ sim }: { sim: SimNode<TopoNode> }) {
-  const n = sim.ref;
+  const n = sim.data.ref;
   const r = nodeRadius(n);
   const isAppliance = n.kind === "appliance";
   const fill = isAppliance ? STATUS_FILL[n.status] : "#1e293b";

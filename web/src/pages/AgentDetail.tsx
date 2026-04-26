@@ -1131,27 +1131,29 @@ function HardwareSystemBlock({ hw }: { hw: SnapshotHardware }) {
   const cpu = hw.cpu ?? {};
   // Lay out the most identity-sensitive fields first so an operator
   // can confirm "yes this is the box I think it is" at a glance.
-  const items: Array<[string, string | undefined]> = [
-    ["Vendor", sys.manufacturer],
-    ["Product", sys.productName],
-    ["Serial", sys.serialNumber],
-    ["Chassis", joinNonEmpty([sys.chassisType, sys.chassisAssetTag], " · ")],
-    ["BIOS", joinNonEmpty([sys.biosVendor, sys.biosVersion, sys.biosDate], " · ")],
-    ["Board", joinNonEmpty([sys.boardManufacturer, sys.boardProduct], " · ")],
-    ["Board serial", sys.boardSerial],
+  const items: Array<[string, string | undefined]> = (
     [
-      "CPU",
-      joinNonEmpty(
-        [
-          cpu.model,
-          cpu.cores ? `${cpu.cores} cores` : undefined,
-          cpu.threads ? `${cpu.threads} threads` : undefined,
-          cpu.mhzNominal ? `${cpu.mhzNominal} MHz` : undefined,
-        ],
-        " · ",
-      ),
-    ],
-  ].filter(([, v]) => v && v !== "");
+      ["Vendor", sys.manufacturer],
+      ["Product", sys.productName],
+      ["Serial", sys.serialNumber],
+      ["Chassis", joinNonEmpty([sys.chassisType, sys.chassisAssetTag], " · ")],
+      ["BIOS", joinNonEmpty([sys.biosVendor, sys.biosVersion, sys.biosDate], " · ")],
+      ["Board", joinNonEmpty([sys.boardManufacturer, sys.boardProduct], " · ")],
+      ["Board serial", sys.boardSerial],
+      [
+        "CPU",
+        joinNonEmpty(
+          [
+            cpu.model,
+            cpu.cores ? `${cpu.cores} cores` : undefined,
+            cpu.threads ? `${cpu.threads} threads` : undefined,
+            cpu.mhzNominal ? `${cpu.mhzNominal} MHz` : undefined,
+          ],
+          " · ",
+        ),
+      ],
+    ] as Array<[string, string | undefined]>
+  ).filter(([, v]) => v && v !== "");
   if (items.length === 0) return null;
   return (
     <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-2 lg:grid-cols-3">
