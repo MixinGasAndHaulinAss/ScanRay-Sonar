@@ -268,6 +268,85 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, o)
 }
 
+// handleDeleteUser permanently removes a user. user_sites and api_keys
+// rows cascade away via FK; enrollment_tokens.created_by is SET NULL;
+// audit_log.actor_id is plain UUID (no FK) so the user's history is
+// preserved as an orphan reference, which is the right call — we want
+// the audit trail to outlive the account.
+//
+// Two guards: superadmins can't delete themselves (would lock the
+// caller out mid-request and break the audit/Audit context), and we
+// refuse to delete the last remaining superadmin so the platform can
+// never end up with no one able to manage users.
+func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "id must be a UUID")
+		return
+	}
+	caller := userIDFromCtx(r.Context())
+	if id.String() == caller.String() {
+		writeErr(w, http.StatusBadRequest, "self_delete", "you cannot delete your own account; ask another superadmin")
+		return
+	}
+
+	tx, err := s.pool.Begin(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "server_error", "begin tx failed")
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	// Check role + last-superadmin invariant atomically with the delete
+	// so a concurrent role flip can't smuggle us into an empty-admin
+	// state.
+	var (
+		targetEmail string
+		targetRole  string
+	)
+	if err := tx.QueryRow(r.Context(), `SELECT email, role FROM users WHERE id = $1`, id).
+		Scan(&targetEmail, &targetRole); err != nil {
+		writeErr(w, http.StatusNotFound, "not_found", "user not found")
+		return
+	}
+	if targetRole == string(auth.RoleSuperAdmin) {
+		var remaining int
+		if err := tx.QueryRow(r.Context(),
+			`SELECT COUNT(*) FROM users WHERE role = $1 AND id <> $2 AND is_active = TRUE`,
+			auth.RoleSuperAdmin, id).Scan(&remaining); err != nil {
+			writeErr(w, http.StatusInternalServerError, "server_error", "count superadmins failed")
+			return
+		}
+		if remaining == 0 {
+			writeErr(w, http.StatusBadRequest, "last_superadmin",
+				"refusing to delete the last active superadmin")
+			return
+		}
+	}
+
+	tag, err := tx.Exec(r.Context(), `DELETE FROM users WHERE id = $1`, id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "server_error", "delete failed")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		writeErr(w, http.StatusNotFound, "not_found", "user not found")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		writeErr(w, http.StatusInternalServerError, "server_error", "commit failed")
+		return
+	}
+
+	s.store.Audit(r.Context(), "user", "user.delete", &caller, clientIP(r),
+		map[string]any{
+			"target_user_id": id.String(),
+			"target_email":   targetEmail,
+			"target_role":    targetRole,
+		})
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // itoa / join are tiny stdlib-free helpers used only by the dynamic
 // PATCH builder above. Inlining keeps the hot path allocation-free
 // without dragging in fmt for a handful of integer-to-string calls.

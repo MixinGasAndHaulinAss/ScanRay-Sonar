@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.4.27.0"
+  version: "2026.4.27.1"
   license:
     name: MIT
 servers:
@@ -516,6 +516,25 @@ paths:
               schema: { $ref: "#/components/schemas/User" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
+    delete:
+      summary: Permanently delete a user (superadmin)
+      description: |
+        Hard-deletes the user and cascade-removes their site memberships
+        and API keys. Audit log entries created by the user are
+        preserved (the actor_id becomes an orphan reference, intentional).
+        Returns 400 with code `self_delete` when the caller targets their
+        own account, and 400 with code `last_superadmin` when removing
+        the user would leave zero active superadmins.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: Deleted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /appliances:
     get:

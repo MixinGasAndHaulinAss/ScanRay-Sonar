@@ -133,6 +133,7 @@ func (s *Server) Routes() http.Handler {
 			r.With(requireRole(auth.RoleSuperAdmin)).Get("/users", s.handleListUsers)
 			r.With(requireRole(auth.RoleSuperAdmin)).Post("/users", s.handleCreateUser)
 			r.With(requireRole(auth.RoleSuperAdmin)).Patch("/users/{id}", s.handleUpdateUser)
+			r.With(requireRole(auth.RoleSuperAdmin)).Delete("/users/{id}", s.handleDeleteUser)
 
 			r.Get("/agents", s.handleListAgents)
 			// chi matches static segments before wildcards, so the

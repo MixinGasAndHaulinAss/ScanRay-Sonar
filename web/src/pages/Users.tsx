@@ -69,6 +69,21 @@ export default function Users() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
   });
 
+  const [toDelete, setToDelete] = useState<User | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
+
+  const del = useMutation({
+    mutationFn: (id: string) => api.del<void>(`/users/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      setToDelete(null);
+      setDeleteConfirm("");
+      setDeleteErr(null);
+    },
+    onError: (e) => setDeleteErr(e instanceof ApiError ? e.message : "Delete failed"),
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -137,13 +152,27 @@ export default function Users() {
                     {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : "—"}
                   </td>
                   <td className="px-4 py-2 text-right">
-                    <button
-                      disabled={isMe}
-                      onClick={() => deactivate.mutate({ id: u.id, isActive: !u.isActive })}
-                      className="rounded-md border border-ink-700 px-2 py-1 text-xs hover:bg-ink-800 disabled:opacity-30"
-                    >
-                      {u.isActive ? "Disable" : "Enable"}
-                    </button>
+                    <div className="flex justify-end gap-1.5">
+                      <button
+                        disabled={isMe}
+                        onClick={() => deactivate.mutate({ id: u.id, isActive: !u.isActive })}
+                        className="rounded-md border border-ink-700 px-2 py-1 text-xs hover:bg-ink-800 disabled:opacity-30"
+                      >
+                        {u.isActive ? "Disable" : "Enable"}
+                      </button>
+                      <button
+                        disabled={isMe}
+                        onClick={() => {
+                          setToDelete(u);
+                          setDeleteConfirm("");
+                          setDeleteErr(null);
+                        }}
+                        title={isMe ? "You cannot delete your own account" : "Permanently delete this user"}
+                        className="rounded-md border border-red-900/60 bg-red-950/30 px-2 py-1 text-xs text-red-300 hover:bg-red-900/40 disabled:opacity-30"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -182,6 +211,60 @@ export default function Users() {
               Dismiss
             </button>
           </div>
+        </div>
+      )}
+
+      {toDelete && (
+        <div className="fixed inset-0 z-30 grid place-items-center bg-black/70 px-4">
+          <form
+            className="w-full max-w-md space-y-3 rounded-xl border border-red-900/60 bg-ink-900 p-5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (deleteConfirm === toDelete.email) del.mutate(toDelete.id);
+            }}
+          >
+            <h3 className="text-lg font-semibold text-red-200">Delete user</h3>
+            <p className="text-sm text-slate-300">
+              This permanently removes{" "}
+              <span className="font-mono text-slate-100">{toDelete.email}</span>{" "}
+              and revokes all of their site memberships and API keys. Audit-log
+              entries the user created are preserved.
+            </p>
+            <p className="text-xs text-slate-500">
+              Disabling is reversible; deletion is not. Type the email to
+              confirm.
+            </p>
+            <input
+              autoFocus
+              autoComplete="off"
+              spellCheck={false}
+              className="w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 font-mono text-sm"
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+              placeholder={toDelete.email}
+            />
+            {deleteErr && <div className="text-xs text-red-300">{deleteErr}</div>}
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                className="rounded-md border border-ink-700 px-3 py-1.5 text-sm"
+                onClick={() => {
+                  setToDelete(null);
+                  setDeleteConfirm("");
+                  setDeleteErr(null);
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={deleteConfirm !== toDelete.email || del.isPending}
+                className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium hover:bg-red-500 disabled:opacity-40"
+              >
+                {del.isPending ? "Deleting…" : "Delete user"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
