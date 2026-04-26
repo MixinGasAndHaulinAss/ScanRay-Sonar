@@ -79,6 +79,45 @@ interface NetEdgeInput extends ForceEdgeInput {
   weight?: number;
 }
 
+// Connection index: pre-aggregated adjacency that the Node Details
+// panel uses to answer "which providers does this process talk to?"
+// and "which processes touch this ISP?". Computed in the same pass
+// as the radial layout so we don't iterate the peer list twice.
+interface ConnRow {
+  key: string;
+  label: string;
+  sub?: string;
+  count: number;
+}
+interface PeerCount {
+  peer: AgentNetworkPeer;
+  count: number;
+}
+interface ConnIndex {
+  procToIsps: Map<string, ConnRow[]>;
+  procToPeers: Map<string, PeerCount[]>;
+  ispToProcs: Map<string, ConnRow[]>;
+  ispToPeers: Map<string, AgentNetworkPeer[]>;
+  /** Top-level summary used by the Host details. */
+  totalConns: number;
+  totalInbound: number;
+  totalOutbound: number;
+  topProcesses: ProcessAgg[];
+  topIsps: IspAgg[];
+}
+
+const EMPTY_INDEX: ConnIndex = {
+  procToIsps: new Map(),
+  procToPeers: new Map(),
+  ispToProcs: new Map(),
+  ispToPeers: new Map(),
+  totalConns: 0,
+  totalInbound: 0,
+  totalOutbound: 0,
+  topProcesses: [],
+  topIsps: [],
+};
+
 const DIRECTIONS: Array<"all" | "outbound" | "inbound"> = ["all", "outbound", "inbound"];
 const SCOPES: Array<"all" | "public" | "private"> = ["all", "public", "private"];
 
@@ -172,10 +211,10 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
     return { inbound, outbound, publicCount, privateCount, total: data?.peers.length ?? 0 };
   }, [data]);
 
-  const { nodes, edges } = useMemo(() => {
+  const { nodes, edges, connIndex } = useMemo(() => {
     const ns: NetNodeData[] = [];
     const es: NetEdgeInput[] = [];
-    if (!data) return { nodes: ns, edges: es };
+    if (!data) return { nodes: ns, edges: es, connIndex: EMPTY_INDEX };
 
     const W = size.w;
     const H = size.h;
@@ -209,47 +248,72 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
       a.key.localeCompare(b.key),
     );
 
-    // ---- 2. Aggregate ISPs and a procISP adjacency map ----------
-    // procISP[procKey][ispKey] = total conn count
+    // ---- 2. Aggregate ISPs and adjacency maps -------------------
+    // We always build these (regardless of options.showIsp) because
+    // the Node Details panel uses them to answer "which providers
+    // does this process talk to?" / "which processes touch this
+    // ISP?" — operators want that even when ISPs aren't drawn on
+    // the canvas.
+    //
+    //   procISP[procKey][ispKey]    = total conn count
+    //   procPeers[procKey][peerIp]  = { peer, count }
+    //   ispPeerMap[ispKey]          = list of peers (one per IP)
     const ispMap = new Map<string, IspAgg>();
     const procISP = new Map<string, Map<string, number>>();
+    const procPeers = new Map<string, Map<string, PeerCount>>();
+    const ispPeerMap = new Map<string, AgentNetworkPeer[]>();
     const ispKeyFor = (peer: AgentNetworkPeer) => {
       const org =
         peer.org ||
         (peer.isPrivate ? "Private network" : peer.countryName || "Unknown");
       return peer.asn ? `AS${peer.asn}` : org;
     };
-    if (options.showIsp) {
-      for (const peer of filteredPeers) {
-        const ispKey = ispKeyFor(peer);
-        const org =
-          peer.org ||
-          (peer.isPrivate ? "Private network" : peer.countryName || "Unknown");
-        let agg = ispMap.get(ispKey);
-        if (!agg) {
-          agg = {
-            key: ispKey,
-            org,
-            asn: peer.asn,
-            peers: new Set(),
-            countries: new Set(),
-          };
-          ispMap.set(ispKey, agg);
+    for (const peer of filteredPeers) {
+      const ispKey = ispKeyFor(peer);
+      const org =
+        peer.org ||
+        (peer.isPrivate ? "Private network" : peer.countryName || "Unknown");
+      let agg = ispMap.get(ispKey);
+      if (!agg) {
+        agg = {
+          key: ispKey,
+          org,
+          asn: peer.asn,
+          peers: new Set(),
+          countries: new Set(),
+        };
+        ispMap.set(ispKey, agg);
+      }
+      agg.peers.add(peer.ip);
+      if (peer.countryIso) agg.countries.add(peer.countryIso);
+
+      let bucket = ispPeerMap.get(ispKey);
+      if (!bucket) {
+        bucket = [];
+        ispPeerMap.set(ispKey, bucket);
+      }
+      bucket.push(peer);
+
+      for (const pr of peer.processes) {
+        const procKey =
+          options.uniqueProcesses && pr.pid != null
+            ? `${pr.name}#${pr.pid}`
+            : pr.name || "(unknown)";
+        let m = procISP.get(procKey);
+        if (!m) {
+          m = new Map();
+          procISP.set(procKey, m);
         }
-        agg.peers.add(peer.ip);
-        if (peer.countryIso) agg.countries.add(peer.countryIso);
-        for (const pr of peer.processes) {
-          const procKey =
-            options.uniqueProcesses && pr.pid != null
-              ? `${pr.name}#${pr.pid}`
-              : pr.name || "(unknown)";
-          let m = procISP.get(procKey);
-          if (!m) {
-            m = new Map();
-            procISP.set(procKey, m);
-          }
-          m.set(ispKey, (m.get(ispKey) ?? 0) + pr.count);
+        m.set(ispKey, (m.get(ispKey) ?? 0) + pr.count);
+
+        let pp = procPeers.get(procKey);
+        if (!pp) {
+          pp = new Map();
+          procPeers.set(procKey, pp);
         }
+        const existing = pp.get(peer.ip);
+        if (existing) existing.count += pr.count;
+        else pp.set(peer.ip, { peer, count: pr.count });
       }
     }
     const isps = Array.from(ispMap.values());
@@ -434,7 +498,95 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
       }
     }
 
-    return { nodes: ns, edges: es };
+    // ---- 5. Build the connection index for the details panel ----
+    const procToIsps = new Map<string, ConnRow[]>();
+    for (const [procKey, ispCounts] of procISP) {
+      const rows: ConnRow[] = [];
+      for (const [ispKey, count] of ispCounts) {
+        const isp = ispMap.get(ispKey);
+        if (!isp) continue;
+        rows.push({
+          key: ispKey,
+          label: isp.org,
+          sub: isp.asn ? `AS${isp.asn}` : undefined,
+          count,
+        });
+      }
+      rows.sort((a, b) => b.count - a.count);
+      procToIsps.set(procKey, rows);
+    }
+
+    const procToPeers = new Map<string, PeerCount[]>();
+    for (const [procKey, pmap] of procPeers) {
+      const rows = Array.from(pmap.values()).sort((a, b) => b.count - a.count);
+      procToPeers.set(procKey, rows);
+    }
+
+    const ispToProcs = new Map<string, ConnRow[]>();
+    for (const [procKey, ispCounts] of procISP) {
+      const proc = procMap.get(procKey);
+      if (!proc) continue;
+      for (const [ispKey, count] of ispCounts) {
+        let rows = ispToProcs.get(ispKey);
+        if (!rows) {
+          rows = [];
+          ispToProcs.set(ispKey, rows);
+        }
+        rows.push({
+          key: procKey,
+          label: proc.name,
+          sub: proc.pid != null ? `pid ${proc.pid}` : undefined,
+          count,
+        });
+      }
+    }
+    for (const rows of ispToProcs.values()) {
+      rows.sort((a, b) => b.count - a.count);
+    }
+
+    const ispToPeers = new Map<string, AgentNetworkPeer[]>();
+    for (const [ispKey, peers] of ispPeerMap) {
+      const seen = new Set<string>();
+      const unique: AgentNetworkPeer[] = [];
+      for (const p of peers) {
+        const k = `${p.direction}:${p.ip}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        unique.push(p);
+      }
+      unique.sort((a, b) => b.totalConns - a.totalConns);
+      ispToPeers.set(ispKey, unique);
+    }
+
+    let totalConns = 0;
+    let totalInbound = 0;
+    let totalOutbound = 0;
+    for (const p of filteredPeers) {
+      totalConns += p.totalConns;
+      if (p.direction === "inbound") totalInbound += p.totalConns;
+      else if (p.direction === "outbound") totalOutbound += p.totalConns;
+    }
+
+    const topProcesses = [...processes]
+      .sort((a, b) => b.totalConns - a.totalConns)
+      .slice(0, 6);
+    const topIsps = [...isps]
+      .sort((a, b) => b.peers.size - a.peers.size)
+      .slice(0, 6);
+
+    const connIndex: ConnIndex = {
+      procToIsps,
+      procToPeers,
+      ispToProcs,
+      ispToPeers,
+      totalConns,
+      totalInbound,
+      totalOutbound,
+      topProcesses,
+      topIsps,
+    };
+
+    return { nodes: ns, edges: es, connIndex };
   }, [
     data,
     filteredPeers,
@@ -684,8 +836,11 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
         {selectedNode && (
           <NodeDetailsPanel
             node={selectedNode}
+            index={connIndex}
+            uniqueProcesses={options.uniqueProcesses}
             onClose={() => setSelected(null)}
             onCenter={() => graphRef.current?.centerOn(selectedNode.id)}
+            onSelectId={(id) => setSelected(id)}
           />
         )}
       </div>
@@ -992,15 +1147,21 @@ function IspPill({
 
 function NodeDetailsPanel({
   node,
+  index,
+  uniqueProcesses,
   onClose,
   onCenter,
+  onSelectId,
 }: {
   node: NetNodeData;
+  index: ConnIndex;
+  uniqueProcesses: boolean;
   onClose: () => void;
   onCenter: () => void;
+  onSelectId: (id: string) => void;
 }) {
   return (
-    <div className="absolute right-3 top-3 z-10 max-h-[calc(75vh-1.5rem)] w-80 overflow-auto rounded-lg border border-ink-700 bg-ink-900/95 p-3 text-xs shadow-xl backdrop-blur">
+    <div className="absolute right-3 top-3 z-10 max-h-[calc(75vh-1.5rem)] w-96 overflow-auto rounded-lg border border-ink-700 bg-ink-900/95 p-3 text-xs shadow-xl backdrop-blur">
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <NodeKindIcon kind={node.kind} />
@@ -1025,15 +1186,43 @@ function NodeDetailsPanel({
           </button>
         </div>
       </div>
-      {node.kind === "host" && <HostDetails host={node.host!} />}
-      {node.kind === "process" && <ProcessDetails proc={node.process!} />}
-      {node.kind === "endpoint" && <EndpointDetails peer={node.endpoint!} />}
-      {node.kind === "isp" && <IspDetails isp={node.isp!} />}
+      {node.kind === "host" && (
+        <HostDetails
+          host={node.host!}
+          index={index}
+          onSelectId={onSelectId}
+        />
+      )}
+      {node.kind === "process" && (
+        <ProcessDetails
+          proc={node.process!}
+          index={index}
+          onSelectId={onSelectId}
+        />
+      )}
+      {node.kind === "endpoint" && (
+        <EndpointDetails
+          peer={node.endpoint!}
+          uniqueProcesses={uniqueProcesses}
+          onSelectId={onSelectId}
+        />
+      )}
+      {node.kind === "isp" && (
+        <IspDetails isp={node.isp!} index={index} onSelectId={onSelectId} />
+      )}
     </div>
   );
 }
 
-function HostDetails({ host }: { host: AgentNetworkGraph["agent"] }) {
+function HostDetails({
+  host,
+  index,
+  onSelectId,
+}: {
+  host: AgentNetworkGraph["agent"];
+  index: ConnIndex;
+  onSelectId: (id: string) => void;
+}) {
   return (
     <dl className="space-y-1.5">
       <Field label="Node Type" value="Host (this agent)" />
@@ -1050,6 +1239,43 @@ function HostDetails({ host }: { host: AgentNetworkGraph["agent"] }) {
       />
       <Field label="ISP" value={host.org ?? "—"} />
       <Field label="ASN" value={host.asn ? `AS${host.asn}` : "—"} mono />
+
+      <SectionHeading>Connections</SectionHeading>
+      <Field label="Total" value={String(index.totalConns)} mono />
+      <Field label="Outbound" value={String(index.totalOutbound)} mono />
+      <Field label="Inbound" value={String(index.totalInbound)} mono />
+
+      {index.topProcesses.length > 0 && (
+        <>
+          <SectionHeading>Top processes by conn count</SectionHeading>
+          <RowList
+            rows={index.topProcesses.map((p) => ({
+              key: p.key,
+              label: p.name,
+              sub: p.pid != null ? `pid ${p.pid}` : undefined,
+              count: p.totalConns,
+              onClick: () => onSelectId(`proc:${p.key}`),
+            }))}
+          />
+        </>
+      )}
+
+      {index.topIsps.length > 0 && (
+        <>
+          <SectionHeading>Top providers by endpoint count</SectionHeading>
+          <RowList
+            rows={index.topIsps.map((i) => ({
+              key: i.key,
+              label: i.org,
+              sub: i.asn ? `AS${i.asn}` : undefined,
+              count: i.peers.size,
+              countSuffix: " endpts",
+              onClick: () => onSelectId(`isp:${i.key}`),
+            }))}
+          />
+        </>
+      )}
+
       <div className="pt-1">
         <Link
           to={`/agents/${host.id}`}
@@ -1062,97 +1288,293 @@ function HostDetails({ host }: { host: AgentNetworkGraph["agent"] }) {
   );
 }
 
-function ProcessDetails({ proc }: { proc: ProcessAgg }) {
+function ProcessDetails({
+  proc,
+  index,
+  onSelectId,
+}: {
+  proc: ProcessAgg;
+  index: ConnIndex;
+  onSelectId: (id: string) => void;
+}) {
+  const isps = index.procToIsps.get(proc.key) ?? [];
+  const peers = index.procToPeers.get(proc.key) ?? [];
+  const ports = portsForProc(peers);
   return (
     <dl className="space-y-1.5">
       <Field label="Node Type" value="Process" />
       <Field label="Name" value={proc.name} mono />
       {proc.pid != null && <Field label="PID" value={String(proc.pid)} mono />}
-      <Field label="Endpoints" value={String(proc.peers.size)} />
-      <Field label="Connections" value={String(proc.totalConns)} />
+
+      <SectionHeading>Connections</SectionHeading>
+      <Field label="Total" value={String(proc.totalConns)} mono />
+      <Field label="Endpoints" value={String(proc.peers.size)} mono />
+      <Field label="Providers" value={String(isps.length)} mono />
+      <Field
+        label="Remote ports"
+        value={ports.length ? ports.slice(0, 12).join(", ") : "—"}
+        mono
+      />
+
+      {isps.length > 0 && (
+        <>
+          <SectionHeading>Talks to (provider · conns)</SectionHeading>
+          <RowList
+            rows={isps.map((r) => ({
+              key: r.key,
+              label: r.label,
+              sub: r.sub,
+              count: r.count,
+              onClick: () => onSelectId(`isp:${r.key}`),
+            }))}
+          />
+        </>
+      )}
+
+      {peers.length > 0 && (
+        <>
+          <SectionHeading>Top endpoints (peer · conns)</SectionHeading>
+          <RowList
+            rows={peers.slice(0, 8).map((pc) => ({
+              key: pc.peer.ip,
+              label: pc.peer.host || pc.peer.ip,
+              sub:
+                pc.peer.org ||
+                (pc.peer.isPrivate ? "private" : pc.peer.countryIso),
+              count: pc.count,
+              onClick: () =>
+                onSelectId(`ep:${pc.peer.direction}:${pc.peer.ip}`),
+            }))}
+          />
+          {peers.length > 8 && (
+            <div className="pt-0.5 text-right text-[10px] text-slate-500">
+              + {peers.length - 8} more
+            </div>
+          )}
+        </>
+      )}
     </dl>
   );
 }
 
-function EndpointDetails({ peer }: { peer: AgentNetworkPeer }) {
+function EndpointDetails({
+  peer,
+  uniqueProcesses,
+  onSelectId,
+}: {
+  peer: AgentNetworkPeer;
+  uniqueProcesses: boolean;
+  onSelectId: (id: string) => void;
+}) {
+  const procKeyOf = (p: { name: string; pid?: number }) =>
+    uniqueProcesses && p.pid != null
+      ? `${p.name}#${p.pid}`
+      : p.name || "(unknown)";
   return (
     <dl className="space-y-1.5">
       <Field label="Node Type" value="Endpoint Address" />
-      <Field
-        label="Address"
-        value={peer.ip + (peer.ports?.length ? `:${peer.ports.slice(0, 3).join("/")}` : "")}
-        mono
-      />
+      <Field label="Address" value={peer.ip} mono />
       <Field label="DNS Name" value={peer.host || "—"} mono />
       <Field label="Direction" value={peer.direction} />
       <Field label="Scope" value={peer.isPrivate ? "private" : "public"} />
-      <Field label="Connections" value={String(peer.totalConns)} />
-      <Field
-        label="Ports"
-        value={(peer.ports ?? []).slice(0, 8).join(", ") || "—"}
-        mono
-      />
       <Field
         label="Country"
         value={
           peer.countryName
-            ? peer.countryName + (peer.countryIso ? ` (${peer.countryIso})` : "")
+            ? peer.countryName +
+              (peer.countryIso ? ` (${peer.countryIso})` : "")
             : peer.countryIso || "—"
         }
       />
       <Field label="City" value={peer.city || "—"} />
       <Field label="ISP" value={peer.org || "—"} />
       <Field label="ASN" value={peer.asn ? `AS${peer.asn}` : "—"} mono />
-      <div className="pt-1">
-        <div className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">
-          Processes touching this endpoint
+
+      <SectionHeading>Connections</SectionHeading>
+      <Field label="Total" value={String(peer.totalConns)} mono />
+      <Field
+        label="Remote ports"
+        value={(peer.ports ?? []).slice(0, 12).join(", ") || "—"}
+        mono
+      />
+
+      {peer.processes.length > 0 && (
+        <>
+          <SectionHeading>Processes touching this endpoint</SectionHeading>
+          <RowList
+            rows={peer.processes.map((p, i) => ({
+              key: `${p.name}#${p.pid ?? "_"}#${i}`,
+              label: p.name || "—",
+              sub: p.pid != null ? `pid ${p.pid}` : undefined,
+              count: p.count,
+              onClick: () => onSelectId(`proc:${procKeyOf(p)}`),
+            }))}
+          />
+        </>
+      )}
+
+      {peer.org && (
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={() =>
+              onSelectId(`isp:${peer.asn ? `AS${peer.asn}` : peer.org}`)
+            }
+            className="text-[11px] text-sonar-400 hover:underline"
+          >
+            Open provider details →
+          </button>
         </div>
-        <ul className="space-y-0.5">
-          {peer.processes.map((p, i) => (
-            <li
-              key={i}
-              className="flex items-center justify-between rounded bg-ink-950/60 px-2 py-1"
-            >
-              <span className="font-mono text-slate-200">{p.name || "—"}</span>
-              <span className="tabular-nums text-slate-500">
-                {p.pid != null ? `pid ${p.pid} · ` : ""}
-                {p.count}×
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
-      {/* Fields the reference UI shows that we don't capture yet —
-          rendered transparently with "—" so operators learn the shape
-          of the data model and we can light them up later when the
-          probe collects them. */}
-      <div className="pt-1">
-        <div className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">
-          Performance (probe v-future)
-        </div>
-        <Field label="Upload Rate" value="—" />
-        <Field label="Download Rate" value="—" />
-        <Field label="Avg. Latency" value="—" />
-        <Field label="Max Latency" value="—" />
-        <Field label="Packet Loss" value="—" />
-      </div>
+      )}
     </dl>
   );
 }
 
-function IspDetails({ isp }: { isp: IspAgg }) {
+function IspDetails({
+  isp,
+  index,
+  onSelectId,
+}: {
+  isp: IspAgg;
+  index: ConnIndex;
+  onSelectId: (id: string) => void;
+}) {
+  const procs = index.ispToProcs.get(isp.key) ?? [];
+  const peers = index.ispToPeers.get(isp.key) ?? [];
+  const totalConns = peers.reduce((s, p) => s + p.totalConns, 0);
+  const ports = portsForPeers(peers);
   return (
     <dl className="space-y-1.5">
-      <Field label="Node Type" value="ISP" />
+      <Field label="Node Type" value="ISP / Provider" />
       <Field label="Organisation" value={isp.org} />
       <Field label="ASN" value={isp.asn ? `AS${isp.asn}` : "—"} mono />
-      <Field label="Endpoints" value={String(isp.peers.size)} />
       <Field
         label="Countries"
         value={Array.from(isp.countries).sort().join(", ") || "—"}
       />
+
+      <SectionHeading>Connections</SectionHeading>
+      <Field label="Total" value={String(totalConns)} mono />
+      <Field label="Endpoints" value={String(peers.length)} mono />
+      <Field label="Processes" value={String(procs.length)} mono />
+      <Field
+        label="Remote ports"
+        value={ports.length ? ports.slice(0, 12).join(", ") : "—"}
+        mono
+      />
+
+      {procs.length > 0 && (
+        <>
+          <SectionHeading>Processes touching this provider</SectionHeading>
+          <RowList
+            rows={procs.map((r) => ({
+              key: r.key,
+              label: r.label,
+              sub: r.sub,
+              count: r.count,
+              onClick: () => onSelectId(`proc:${r.key}`),
+            }))}
+          />
+        </>
+      )}
+
+      {peers.length > 0 && (
+        <>
+          <SectionHeading>Endpoints in this provider</SectionHeading>
+          <RowList
+            rows={peers.slice(0, 8).map((p) => ({
+              key: `${p.direction}:${p.ip}`,
+              label: p.host || p.ip,
+              sub: p.city
+                ? `${p.city}${p.countryIso ? `, ${p.countryIso}` : ""}`
+                : p.countryIso,
+              count: p.totalConns,
+              onClick: () => onSelectId(`ep:${p.direction}:${p.ip}`),
+            }))}
+          />
+          {peers.length > 8 && (
+            <div className="pt-0.5 text-right text-[10px] text-slate-500">
+              + {peers.length - 8} more
+            </div>
+          )}
+        </>
+      )}
     </dl>
   );
+}
+
+// ---- Detail-panel subcomponents shared across kinds -----------
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="pt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+      {children}
+    </div>
+  );
+}
+
+interface RowListItem {
+  key: string;
+  label: string;
+  sub?: string;
+  count: number;
+  countSuffix?: string;
+  onClick?: () => void;
+}
+
+function RowList({ rows }: { rows: RowListItem[] }) {
+  if (rows.length === 0) return null;
+  const max = Math.max(1, ...rows.map((r) => r.count));
+  return (
+    <ul className="space-y-0.5">
+      {rows.map((r) => (
+        <li key={r.key}>
+          <button
+            type="button"
+            onClick={r.onClick}
+            disabled={!r.onClick}
+            className="group relative block w-full overflow-hidden rounded bg-ink-950/60 px-2 py-1 text-left transition hover:bg-ink-800/80 disabled:cursor-default disabled:hover:bg-ink-950/60"
+          >
+            {/* Conn-count bar (background) */}
+            <div
+              className="absolute inset-y-0 left-0 bg-sonar-500/20 transition-[width]"
+              style={{ width: `${(r.count / max) * 100}%` }}
+            />
+            <div className="relative flex items-baseline justify-between gap-2">
+              <div className="min-w-0 flex-1 truncate">
+                <span className="truncate text-[11px] text-slate-200">
+                  {r.label}
+                </span>
+                {r.sub && (
+                  <span className="ml-1 text-[10px] text-slate-500">
+                    · {r.sub}
+                  </span>
+                )}
+              </div>
+              <span className="shrink-0 tabular-nums text-[11px] text-slate-300">
+                {r.count.toLocaleString()}
+                {r.countSuffix ?? ""}
+              </span>
+            </div>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// Collect remote ports (sorted, unique) from a list of PeerCount.
+function portsForProc(rows: PeerCount[]): number[] {
+  const set = new Set<number>();
+  for (const r of rows) for (const p of r.peer.ports ?? []) set.add(p);
+  return Array.from(set).sort((a, b) => a - b);
+}
+
+// Collect remote ports (sorted, unique) from a list of peers.
+function portsForPeers(peers: AgentNetworkPeer[]): number[] {
+  const set = new Set<number>();
+  for (const p of peers) for (const port of p.ports ?? []) set.add(port);
+  return Array.from(set).sort((a, b) => a - b);
 }
 
 function NodeKindIcon({ kind }: { kind: NodeKind }) {
