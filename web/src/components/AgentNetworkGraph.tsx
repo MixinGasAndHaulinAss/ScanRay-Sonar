@@ -20,7 +20,7 @@
 //   the server side) → in-memory tier construction → ForceGraph
 
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import type { AgentNetworkGraph, AgentNetworkPeer } from "../api/types";
@@ -111,19 +111,24 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
   const [size, setSize] = useState({ w: W_DEFAULT, h: H_DEFAULT });
 
   // Watch container size so the SVG fills the available area. We
-  // initialise eagerly with sensible defaults so the first paint
-  // doesn't jump.
-  const wrapRef = (el: HTMLDivElement | null) => {
-    containerRef.current = el;
+  // attach the observer in an effect — an inline ref callback would
+  // be re-invoked on every parent render, leaking observers and
+  // (crucially) causing re-renders on click that would shake the
+  // ForceGraph if any pixel changed.
+  useEffect(() => {
+    const el = containerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const e of entries) {
-        const cr = e.contentRect;
-        setSize({ w: Math.max(640, cr.width), h: Math.max(420, cr.height) });
-      }
-    });
+    const apply = () => {
+      const cr = el.getBoundingClientRect();
+      const w = Math.max(640, Math.round(cr.width));
+      const h = Math.max(420, Math.round(cr.height));
+      setSize((cur) => (cur.w === w && cur.h === h ? cur : { w, h }));
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
     ro.observe(el);
-  };
+    return () => ro.disconnect();
+  }, []);
 
   const filteredPeers = useMemo(() => {
     const list = data?.peers ?? [];
@@ -330,7 +335,7 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
       </div>
 
       {/* Canvas + overlays */}
-      <div ref={wrapRef} className="relative h-[75vh] min-h-[520px] overflow-hidden bg-ink-950">
+      <div ref={containerRef} className="relative h-[75vh] min-h-[520px] overflow-hidden bg-ink-950">
         <ForceGraph<NetNodeData, NetEdgeInput>
           ref={graphRef}
           nodes={nodes}

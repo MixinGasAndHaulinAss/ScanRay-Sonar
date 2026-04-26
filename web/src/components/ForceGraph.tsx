@@ -233,10 +233,15 @@ function ForceGraphInner<
   // or edges). Pure prop-reference change without shape change does
   // NOT cause the layout to reflow — important so that 30s polls of
   // the same data don't shuffle positions while the operator looks.
+  //
+  // We deliberately do NOT include width/height: the simulation
+  // works in world coordinates, and a 1-pixel resize (very common
+  // when the parent re-renders due to a click) should never blow
+  // away the operator's layout.
   const shapeKey = useMemo(
     () =>
-      `${nodes.map((n) => n.id).join("|")}::${edges.map((e) => `${e.from}->${e.to}`).join("|")}::${width}x${height}`,
-    [nodes, edges, width, height],
+      `${nodes.map((n) => n.id).join("|")}::${edges.map((e) => `${e.from}->${e.to}`).join("|")}`,
+    [nodes, edges],
   );
 
   const [sims, setSims] = useState<SimNode<N>[]>([]);
@@ -353,8 +358,9 @@ function ForceGraphInner<
     e.currentTarget.setPointerCapture(e.pointerId);
     dragRef.current = { id, pointerId: e.pointerId };
     movedRef.current = false;
-    sim.fx = sim.x;
-    sim.fy = sim.y;
+    // Do NOT pin yet. We pin only once the pointer actually moves
+    // past the click threshold (handleNodePointerMove). Clicking a
+    // node without dragging should never permanently anchor it.
 
     const loop = () => {
       if (!dragRef.current) {
@@ -386,12 +392,22 @@ function ForceGraphInner<
     const drag = dragRef.current;
     dragRef.current = null;
     const sim = sims.find((s) => s.id === id);
-    if (sim && !sim.data.pinned) {
-      // Leave fx/fy set so the node "sticks" where the operator
-      // dropped it. They can grab it again to move it.
+    if (sim) {
+      if (!movedRef.current) {
+        // Pure click: clear any anchor we might have set so the
+        // node is free to participate in the layout again.
+        sim.fx = undefined;
+        sim.fy = undefined;
+      }
+      // If the operator actually dragged, fx/fy stay set and the
+      // node sticks where they dropped it.
     }
     if (!movedRef.current && drag && onNodeClick && sim) {
       onNodeClick(sim.data);
+      // No relax pass on a pure click — the layout was already
+      // settled, and shaking it post-click is what made the
+      // canvas appear to spin.
+      return;
     }
     startLiveRelax(60);
   };
