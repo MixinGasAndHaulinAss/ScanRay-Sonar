@@ -35,11 +35,17 @@ type Snapshot struct {
 	CaptureMs     int64  `json:"captureMs"` // wall-clock cost of building this snapshot
 
 	Host                Host         `json:"host"`
+	PublicIP            string       `json:"publicIp,omitempty"` // discovered via icanhazip; cached 1h
 	CPU                 CPU          `json:"cpu"`
 	Memory              Memory       `json:"memory"`
 	LoadAvg             *LoadAvg     `json:"loadAvg,omitempty"` // linux/macos only
 	Disks               []Disk       `json:"disks"`
 	NICs                []NIC        `json:"nics"`
+	// Static hardware inventory: collected once per probe lifetime
+	// (refreshed every 6h) and inlined into every snapshot. Optional
+	// — older probe builds and platforms without a collector simply
+	// omit the field. See internal/probe/hardware.go.
+	Hardware *Hardware `json:"hardware,omitempty"`
 	TopByCPU            []ProcessRow `json:"topByCpu"`
 	TopByMem            []ProcessRow `json:"topByMem"`
 	Listeners           []Listener   `json:"listeners"`
@@ -127,13 +133,26 @@ type NIC struct {
 	DropOut    uint64   `json:"dropOut"`
 }
 
+// ProcessRow is one row of the "top processes" tables plus enough
+// stats to make those tables genuinely useful for triage: not just
+// "what's eating CPU" but "is it eating disk too? is it actually
+// talking to the network?". The newer fields (memPct, diskRead/Write,
+// netSent/Recv, openConns) require the deltaTracker (see processes.go)
+// to compare two consecutive snapshots, so they're zero on the first
+// snapshot of a probe lifetime.
 type ProcessRow struct {
-	PID      int32   `json:"pid"`
-	Name     string  `json:"name"`
-	User     string  `json:"user,omitempty"`
-	Cmdline  string  `json:"cmdline,omitempty"`
-	CPUPct   float64 `json:"cpuPct"`
-	RSSBytes uint64  `json:"rssBytes"`
+	PID         int32   `json:"pid"`
+	Name        string  `json:"name"`
+	User        string  `json:"user,omitempty"`
+	Cmdline     string  `json:"cmdline,omitempty"`
+	CPUPct      float64 `json:"cpuPct"`
+	RSSBytes    uint64  `json:"rssBytes"`
+	MemPct      float64 `json:"memPct,omitempty"`
+	DiskReadBps uint64  `json:"diskReadBps,omitempty"`
+	DiskWriteBps uint64 `json:"diskWriteBps,omitempty"`
+	NetSentBps  uint64  `json:"netSentBps,omitempty"`
+	NetRecvBps  uint64  `json:"netRecvBps,omitempty"`
+	OpenConns   int     `json:"openConns,omitempty"`
 }
 
 type Listener struct {
@@ -185,7 +204,7 @@ type ServiceRow struct {
 func CollectSnapshot(ctx context.Context, hostname string) Snapshot {
 	start := time.Now()
 	s := Snapshot{
-		SchemaVersion: 2, // v2 adds Conversations
+		SchemaVersion: 3, // v3 adds Hardware, PublicIP, expanded ProcessRow stats
 		CapturedAt:    start.UTC().Format(time.RFC3339Nano),
 		// Pre-allocate every collection-typed field so JSON always
 		// emits `[]` instead of `null` even when a collector is a
@@ -220,6 +239,10 @@ func CollectSnapshot(ctx context.Context, hostname string) Snapshot {
 		s.warn("host.Info: " + err.Error())
 	}
 
+	if ip := PublicIP(ctx); ip != "" {
+		s.PublicIP = ip
+	}
+
 	collectCPU(ctx, &s)
 	collectMemory(ctx, &s)
 	collectLoad(ctx, &s)
@@ -229,6 +252,10 @@ func CollectSnapshot(ctx context.Context, hostname string) Snapshot {
 	collectSockets(ctx, &s)
 	collectUsers(ctx, &s)
 	collectOSExtras(ctx, &s) // pending reboot + per-OS service/unit lists
+
+	// Hardware inventory: cached once per refreshHardwareEvery, so
+	// after the first snapshot this is just a map read.
+	s.Hardware = snapshotHardware(ctx)
 
 	s.CaptureMs = time.Since(start).Milliseconds()
 	return s
@@ -398,16 +425,32 @@ func contains(haystack []string, needle string) bool {
 
 // collectProcesses populates TopByCPU and TopByMem. We deliberately
 // cap the lists at 10 each: longer lists balloon the snapshot and the
-// long tail is rarely actionable. CPU% comes from gopsutil's internal
-// delta tracking, which needs at least one prior call to be non-zero —
-// so the first snapshot after probe start will show 0% for everything.
+// long tail is rarely actionable.
+//
+// Each row carries a small constellation of per-process stats:
+//   * cpuPct  — gopsutil's internal delta tracking, needs one prior
+//               call to be non-zero (first snapshot shows 0).
+//   * rss / memPct — single-shot syscall.
+//   * diskRead/Write Bps — delta of cumulative I/O bytes between
+//               this snapshot and the last, tracked by procDelta
+//               keyed on (pid, create_time) to defend against pid
+//               reuse. Net rates require platform-specific kernel
+//               support (Linux: cgroup or BPF; Windows: WMI Perf
+//               counters) that gopsutil doesn't surface, so they're
+//               left zero for now and we'll fill them in a later
+//               pass without breaking the wire format.
+//   * openConns — populated post-hoc by collectSockets via
+//               s.applyOpenConns once the socket pass is done.
 func collectProcesses(ctx context.Context, s *Snapshot) {
 	procs, err := process.ProcessesWithContext(ctx)
 	if err != nil {
 		s.warn("process.Processes: " + err.Error())
 		return
 	}
+	now := time.Now()
+	totalMem := float64(s.Memory.TotalBytes)
 	rows := make([]ProcessRow, 0, len(procs))
+	seen := make(map[procKey]struct{}, len(procs))
 	for _, p := range procs {
 		name, _ := p.NameWithContext(ctx)
 		if name == "" {
@@ -425,9 +468,32 @@ func collectProcesses(ctx context.Context, s *Snapshot) {
 		}
 		if mi, err := p.MemoryInfoWithContext(ctx); err == nil && mi != nil {
 			row.RSSBytes = mi.RSS
+			if totalMem > 0 {
+				row.MemPct = roundTo(float64(mi.RSS)/totalMem*100, 1)
+			}
 		}
+		startedMs, _ := p.CreateTimeWithContext(ctx)
+		key := procKey{pid: p.Pid, started: startedMs}
+		seen[key] = struct{}{}
+
+		var counters procCounters
+		counters.at = now
+		if io, err := p.IOCountersWithContext(ctx); err == nil && io != nil {
+			counters.readBytes = io.ReadBytes
+			counters.writeBytes = io.WriteBytes
+		}
+		// Net IO per-process is not portable through gopsutil; leave
+		// the counters at zero so the delta calc returns zero too.
+		readBps, writeBps, netSent, netRecv := procDelta.recordAndDelta(key, counters)
+		row.DiskReadBps = readBps
+		row.DiskWriteBps = writeBps
+		row.NetSentBps = netSent
+		row.NetRecvBps = netRecv
+
 		rows = append(rows, row)
 	}
+	procDelta.reapMissing(seen)
+
 	byCPU := append([]ProcessRow(nil), rows...)
 	sort.Slice(byCPU, func(i, j int) bool { return byCPU[i].CPUPct > byCPU[j].CPUPct })
 	if len(byCPU) > 10 {
@@ -440,6 +506,19 @@ func collectProcesses(ctx context.Context, s *Snapshot) {
 	}
 	s.TopByCPU = byCPU
 	s.TopByMem = byMem
+}
+
+// applyOpenConns counts per-PID active sockets (any state, both
+// listeners and conversations) and writes the count back into the
+// TopBy* tables. Called after collectSockets so we can do this in a
+// single pass — saves a second connections enumeration.
+func (s *Snapshot) applyOpenConns(perPid map[int32]int) {
+	for i := range s.TopByCPU {
+		s.TopByCPU[i].OpenConns = perPid[s.TopByCPU[i].PID]
+	}
+	for i := range s.TopByMem {
+		s.TopByMem[i].OpenConns = perPid[s.TopByMem[i].PID]
+	}
 }
 
 // collectSockets enumerates TCP+UDP sockets via gopsutil/net in a
@@ -469,6 +548,16 @@ func collectSockets(ctx context.Context, s *Snapshot) {
 	if err != nil {
 		s.warn("net.Connections: " + err.Error())
 		return
+	}
+
+	// Per-PID socket count — fed back into the Top* tables so each
+	// process row can show "openConns" alongside CPU/RSS.
+	pidConns := make(map[int32]int, 64)
+	for _, c := range conns {
+		if c.Pid == 0 {
+			continue
+		}
+		pidConns[c.Pid]++
 	}
 
 	pidName := map[int32]string{}
@@ -632,6 +721,7 @@ func collectSockets(ctx context.Context, s *Snapshot) {
 	}
 
 	s.Conversations = convs
+	s.applyOpenConns(pidConns)
 }
 
 // isLoopbackIP returns true for 127.0.0.0/8 and ::1. We strip these

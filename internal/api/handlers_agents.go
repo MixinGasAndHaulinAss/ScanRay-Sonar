@@ -447,6 +447,99 @@ func (s *Server) runAgentHeartbeatTouch(ctx context.Context, agentID uuid.UUID) 
 	}
 }
 
+// updateAgentReq is the PATCH body for /agents/{id}. Sparse fields
+// (omitempty / pointers) leave the corresponding column untouched —
+// the caller can rename, re-tag, or activate independently.
+type updateAgentReq struct {
+	Tags     *[]string `json:"tags,omitempty"`
+	IsActive *bool     `json:"isActive,omitempty"`
+	SiteID   *string   `json:"siteId,omitempty"` // move agent between sites
+}
+
+// handleUpdateAgent applies a partial update to an agent row. Used
+// today for tag editing (Phase 1 of the agent feature pack); also
+// covers occasional reassignment to a different site so the operator
+// can correct a misclick at enrollment time.
+func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "id must be a UUID")
+		return
+	}
+	var req updateAgentReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		return
+	}
+
+	sets := []string{}
+	args := []any{}
+	add := func(col string, v any) {
+		args = append(args, v)
+		sets = append(sets, col+" = $"+itoa(len(args)))
+	}
+
+	if req.Tags != nil {
+		// Normalise tags: trim, lowercase, dedupe, drop empties.
+		// Tags are a UI-facing keyword filter, not free-form text;
+		// keeping them canonicalised stops "Prod" / "prod" / " prod"
+		// from showing up as three separate chips.
+		seen := map[string]bool{}
+		clean := make([]string, 0, len(*req.Tags))
+		for _, t := range *req.Tags {
+			t = strings.ToLower(strings.TrimSpace(t))
+			if t == "" || seen[t] {
+				continue
+			}
+			if len(t) > 64 {
+				writeErr(w, http.StatusBadRequest, "bad_request", "tag exceeds 64 characters")
+				return
+			}
+			seen[t] = true
+			clean = append(clean, t)
+		}
+		add("tags", clean)
+	}
+	if req.IsActive != nil {
+		add("is_active", *req.IsActive)
+	}
+	if req.SiteID != nil {
+		if _, err := uuid.Parse(*req.SiteID); err != nil {
+			writeErr(w, http.StatusBadRequest, "bad_request", "siteId must be a UUID")
+			return
+		}
+		add("site_id", *req.SiteID)
+	}
+	if len(sets) == 0 {
+		writeErr(w, http.StatusBadRequest, "bad_request", "no fields to update")
+		return
+	}
+
+	args = append(args, id)
+	q := "UPDATE agents SET " + join(sets, ", ") + " WHERE id = $" + itoa(len(args)) +
+		` RETURNING id, site_id, hostname, tags, is_active`
+	var (
+		oid, sid, host string
+		tags           []string
+		active         bool
+	)
+	if err := s.pool.QueryRow(r.Context(), q, args...).Scan(&oid, &sid, &host, &tags, &active); err != nil {
+		s.log.Warn("update agent failed", "err", err, "id", id.String())
+		writeErr(w, http.StatusBadRequest, "bad_request", "update failed")
+		return
+	}
+	uid := userIDFromCtx(r.Context())
+	s.store.Audit(r.Context(), "user", "agent.update", &uid, clientIP(r),
+		map[string]any{"agent_id": oid, "fields": sets})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":       oid,
+		"siteId":   sid,
+		"hostname": host,
+		"tags":     tags,
+		"isActive": active,
+	})
+}
+
 func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {

@@ -510,7 +510,9 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	             enrolled_at, last_seen_at, is_active, tags, created_at,
 	             cpu_pct, mem_used_bytes, mem_total_bytes,
 	             root_disk_used_bytes, root_disk_total_bytes,
-	             uptime_seconds, pending_reboot, host(primary_ip),
+	             uptime_seconds, pending_reboot, host(primary_ip), host(public_ip),
+	             geo_country_iso, geo_country_name, geo_subdivision, geo_city,
+	             geo_lat, geo_lon, geo_asn, geo_org,
 	             last_metrics_at
 	      FROM agents`
 	args := []any{}
@@ -541,14 +543,21 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 			rootUsed, rootTotal          *int64
 			uptimeS                      *int64
 			pendingReboot                bool
-			primaryIP                    *string
+			primaryIP, publicIP          *string
+			geoCountryIso, geoCountry    *string
+			geoSubdivision, geoCity      *string
+			geoLat, geoLon               *float64
+			geoASN                       *int
+			geoOrg                       *string
 			lastMetricsAt                *time.Time
 		)
 		if err := rows.Scan(&id, &sid, &host, &fp, &os, &osver, &av,
 			&enrolled, &last, &active, &tags, &created,
 			&cpuPct, &memUsed, &memTotal,
 			&rootUsed, &rootTotal,
-			&uptimeS, &pendingReboot, &primaryIP,
+			&uptimeS, &pendingReboot, &primaryIP, &publicIP,
+			&geoCountryIso, &geoCountry, &geoSubdivision, &geoCity,
+			&geoLat, &geoLon, &geoASN, &geoOrg,
 			&lastMetricsAt); err != nil {
 			writeErr(w, http.StatusInternalServerError, "server_error", "scan failed")
 			return
@@ -574,6 +583,15 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 			"uptimeSeconds":      uptimeS,
 			"pendingReboot":      pendingReboot,
 			"primaryIp":          primaryIP,
+			"publicIp":           publicIP,
+			"geoCountryIso":      geoCountryIso,
+			"geoCountryName":     geoCountry,
+			"geoSubdivision":     geoSubdivision,
+			"geoCity":            geoCity,
+			"geoLat":             geoLat,
+			"geoLon":             geoLon,
+			"geoAsn":             geoASN,
+			"geoOrg":             geoOrg,
 			"lastMetricsAt":      lastMetricsAt,
 		})
 	}

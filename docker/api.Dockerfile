@@ -12,7 +12,12 @@ RUN if grep -q "BEGIN CERTIFICATE" /tmp/local-ca.crt 2>/dev/null; then \
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 WORKDIR /src/web
 COPY web/package*.json ./
-RUN npm ci --no-audit --no-fund
+# Prefer `npm ci` (deterministic) but fall back to `npm install` when
+# package.json adds dependencies before the lockfile catches up. This
+# keeps the build green when the dev workstation has no Node locally
+# (Windows hosts behind corporate IT often don't).
+RUN npm ci --no-audit --no-fund \
+  || npm install --no-audit --no-fund
 COPY web/ ./
 RUN npm run build
 

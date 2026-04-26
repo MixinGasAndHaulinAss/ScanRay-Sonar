@@ -19,6 +19,7 @@ import (
 	"github.com/NCLGISA/ScanRay-Sonar/internal/config"
 	scrypto "github.com/NCLGISA/ScanRay-Sonar/internal/crypto"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/db"
+	"github.com/NCLGISA/ScanRay-Sonar/internal/geoip"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/logging"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/probebins"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/version"
@@ -91,6 +92,22 @@ func run() error {
 		probeRoot = nil
 	}
 
+	// GeoIP databases are optional. Open() returns a usable zero-
+	// reader when neither file is present, so the API still boots
+	// on a fresh install before scripts/refresh-geoip.sh has had a
+	// chance to populate the volume.
+	geo, err := geoip.Open(cfg.GeoIPCityPath, cfg.GeoIPASNPath)
+	if err != nil {
+		log.Warn("geoip open failed; continuing without enrichment",
+			"err", err, "city", cfg.GeoIPCityPath, "asn", cfg.GeoIPASNPath)
+		geo = nil
+	} else if geo.Has() {
+		log.Info("geoip ready", "city", cfg.GeoIPCityPath, "asn", cfg.GeoIPASNPath)
+	} else {
+		log.Info("geoip databases not present; world map will show unknown locations",
+			"city", cfg.GeoIPCityPath, "asn", cfg.GeoIPASNPath)
+	}
+
 	srv := api.New(api.Deps{
 		Config:      cfg,
 		Logger:      log,
@@ -102,6 +119,7 @@ func run() error {
 		OpenAPISpec: api.Spec(),
 		WebFS:       webRoot,
 		ProbeFS:     probeRoot,
+		Geo:         geo,
 	})
 
 	log.Info("ScanRay Sonar API starting",

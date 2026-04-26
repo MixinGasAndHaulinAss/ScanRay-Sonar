@@ -10,22 +10,28 @@
 // /agents/{id}/metrics fetch — no per-cell pulls — so the page is
 // fast even on a slow VPN.
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api } from "../api/client";
+import { ApiError, api } from "../api/client";
 import type {
   AgentDetail,
+  HardwareDisk,
+  HardwareGPU,
+  HardwareMemoryModule,
+  HardwareNIC,
   MetricSeries,
   Site,
   SnapshotConversation,
   SnapshotDisk,
+  SnapshotHardware,
   SnapshotListener,
   SnapshotNIC,
   SnapshotProcess,
   SnapshotSession,
   SnapshotService,
 } from "../api/types";
+import AgentNetworkGraphSection from "../components/AgentNetworkGraph";
 import Sparkline from "../components/Sparkline";
 import {
   formatBytes,
@@ -37,6 +43,7 @@ import {
 
 export default function AgentDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
+  const qc = useQueryClient();
 
   const agent = useQuery({
     queryKey: ["agent", id],
@@ -51,6 +58,23 @@ export default function AgentDetailPage() {
     enabled: !!id,
   });
   const sites = useQuery({ queryKey: ["sites"], queryFn: () => api.get<Site[]>("/sites") });
+  // Pull all agents for tag autocomplete: small payload, already
+  // cached by the Agents list page so this is usually a no-op.
+  const allAgents = useQuery({
+    queryKey: ["agents"],
+    queryFn: () => api.get<AgentDetail[]>("/agents"),
+  });
+
+  const updateTags = useMutation({
+    mutationFn: (tags: string[]) =>
+      api.patch<AgentDetail>(`/agents/${id}`, { tags }),
+    onSuccess: (updated) => {
+      qc.setQueryData(["agent", id], (prev: AgentDetail | undefined) =>
+        prev ? { ...prev, tags: updated.tags } : prev,
+      );
+      qc.invalidateQueries({ queryKey: ["agents"] });
+    },
+  });
 
   const snap = agent.data?.lastMetrics ?? null;
 
@@ -98,8 +122,8 @@ export default function AgentDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4">
-        <div>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0 flex-1 space-y-2">
           <Link to="/agents" className="text-xs text-sonar-400 hover:underline">
             ← All agents
           </Link>
@@ -107,7 +131,37 @@ export default function AgentDetailPage() {
           <p className="text-sm text-slate-400">
             {siteName} · {a.os} {a.osVersion} · agent {a.agentVersion || "?"}
             {a.primaryIp && <> · {a.primaryIp}</>}
+            {a.publicIp && (
+              <>
+                {" · "}
+                <span className="text-slate-300">public {a.publicIp}</span>
+                {(a.geoCity || a.geoCountryName) && (
+                  <span className="text-slate-500">
+                    {" "}
+                    ({[a.geoCity, a.geoSubdivision, a.geoCountryIso].filter(Boolean).join(", ")})
+                  </span>
+                )}
+                {a.geoOrg && (
+                  <span className="text-slate-500"> via AS{a.geoAsn} {a.geoOrg}</span>
+                )}
+              </>
+            )}
           </p>
+          <TagEditor
+            tags={a.tags ?? []}
+            suggestions={Array.from(
+              new Set((allAgents.data ?? []).flatMap((x) => x.tags ?? [])),
+            ).sort()}
+            saving={updateTags.isPending}
+            error={
+              updateTags.isError
+                ? updateTags.error instanceof ApiError
+                  ? updateTags.error.message
+                  : "Failed to save tags"
+                : null
+            }
+            onChange={(next) => updateTags.mutate(next)}
+          />
         </div>
         <div className="text-right text-xs">
           <div>
@@ -173,6 +227,8 @@ export default function AgentDetailPage() {
 
           <ConversationsTable conversations={snap.conversations ?? []} />
 
+          <AgentNetworkGraphSection agentId={id} />
+
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <SessionsTable sessions={snap.loggedInUsers ?? []} />
             {snap.stoppedAutoServices && snap.stoppedAutoServices.length > 0 && (
@@ -182,6 +238,8 @@ export default function AgentDetailPage() {
               <FailedUnitsTable units={snap.failedUnits} />
             )}
           </div>
+
+          {snap.hardware && <HardwareSection hw={snap.hardware} />}
 
           <HostMeta snap={snap} />
 
@@ -197,6 +255,147 @@ export default function AgentDetailPage() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// ---- Tag editor ----------------------------------------------------------
+//
+// Inline tag editor for an agent. Tags are short, lowercase identifiers
+// — "prod", "edge", "ec2", "k8s-node" — that operators use to filter
+// the Agents list. The editor:
+//   * Accepts comma- or Enter-separated input (with autocomplete from
+//     other hosts' existing tags so spellings stay consistent).
+//   * Removes a tag with click on its × or Backspace on an empty input.
+//   * Sends a PATCH with the next list immediately (optimistic UX is
+//     handled by react-query setQueryData in the parent).
+//
+// Tags are normalized server-side (lower, trimmed, deduped, capped at
+// 32 chars and 32 total) — we just mirror that so the UI doesn't drift
+// from what's persisted.
+
+const MAX_TAG_LEN = 32;
+const MAX_TAG_COUNT = 32;
+
+function normalizeTag(s: string): string {
+  return s.trim().toLowerCase().slice(0, MAX_TAG_LEN);
+}
+
+function TagEditor({
+  tags,
+  suggestions,
+  saving,
+  error,
+  onChange,
+}: {
+  tags: string[];
+  suggestions: string[];
+  saving: boolean;
+  error: string | null;
+  onChange: (next: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const [focused, setFocused] = useState(false);
+
+  // The set of suggestions narrows as the operator types and excludes
+  // tags already on this host so we don't duplicate-suggest.
+  const filteredSuggestions = useMemo(() => {
+    const q = draft.trim().toLowerCase();
+    const own = new Set(tags);
+    return suggestions
+      .filter((s) => !own.has(s) && (q === "" || s.includes(q)))
+      .slice(0, 8);
+  }, [draft, suggestions, tags]);
+
+  const commitDraft = () => {
+    const t = normalizeTag(draft);
+    setDraft("");
+    if (!t) return;
+    if (tags.includes(t)) return;
+    if (tags.length >= MAX_TAG_COUNT) return;
+    onChange([...tags, t]);
+  };
+
+  const removeTag = (t: string) => onChange(tags.filter((x) => x !== t));
+
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[10px] uppercase tracking-wide text-slate-500">Tags</span>
+        {tags.length === 0 && (
+          <span className="text-[11px] italic text-slate-600">none</span>
+        )}
+        {tags.map((t) => (
+          <span
+            key={t}
+            className="group inline-flex items-center gap-1 rounded-full border border-sonar-700/60 bg-sonar-900/30 px-2 py-0.5 text-[11px] text-sonar-100"
+          >
+            {t}
+            <button
+              type="button"
+              onClick={() => removeTag(t)}
+              className="text-sonar-300/60 hover:text-red-300"
+              title={`Remove ${t}`}
+              aria-label={`Remove ${t}`}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        <div className="relative">
+          <input
+            value={draft}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v.endsWith(",")) {
+                setDraft(v.slice(0, -1));
+                setTimeout(commitDraft, 0);
+                return;
+              }
+              setDraft(v);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitDraft();
+              } else if (e.key === "Backspace" && draft === "" && tags.length > 0) {
+                onChange(tags.slice(0, -1));
+              } else if (e.key === "Escape") {
+                setDraft("");
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            onFocus={() => setFocused(true)}
+            onBlur={() => {
+              setTimeout(() => setFocused(false), 120);
+              commitDraft();
+            }}
+            placeholder={tags.length === 0 ? "add tag…" : "+"}
+            disabled={tags.length >= MAX_TAG_COUNT}
+            className="h-6 w-28 rounded-full border border-ink-700 bg-ink-950 px-2 text-[11px] text-slate-100 placeholder:text-slate-600 focus:border-sonar-500 focus:outline-none"
+          />
+          {focused && filteredSuggestions.length > 0 && (
+            <div className="absolute z-20 mt-1 max-h-52 w-44 overflow-auto rounded-md border border-ink-700 bg-ink-950 py-1 text-[11px] shadow-lg">
+              {filteredSuggestions.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setDraft("");
+                    if (!tags.includes(s)) onChange([...tags, s]);
+                  }}
+                  className="block w-full px-2 py-1 text-left text-slate-300 hover:bg-ink-800 hover:text-sonar-100"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {saving && <span className="text-[10px] text-slate-500">saving…</span>}
+      </div>
+      {error && <div className="text-[11px] text-red-300">{error}</div>}
     </div>
   );
 }
@@ -435,13 +634,21 @@ function ProcessTable({
         // honour `truncate` instead of widening the table to fit the
         // cmdline. Without it, long cmdlines push the right-hand metric
         // column off-screen on narrow viewports.
+        //
+        // The two right-hand "stat" columns adapt to the table's
+        // sortBy: when sorted by CPU we lead with CPU% and back it
+        // with RSS; when sorted by mem we lead with RSS and back
+        // with CPU%. The rest of the rich stats (disk/net Bps, open
+        // conns) live in the per-row drawer to keep the visible
+        // table compact on narrow viewports.
         <div className="overflow-hidden">
           <table className="w-full table-fixed text-left text-sm">
             <colgroup>
               <col className="w-6" />
-              <col className="w-16" />
+              <col className="w-14" />
               <col />
-              <col className="w-24" />
+              <col className="w-20" />
+              <col className="w-20" />
               <col className="w-20" />
             </colgroup>
             <thead className="text-xs uppercase tracking-wide text-slate-500">
@@ -449,9 +656,14 @@ function ProcessTable({
                 <th className="px-1 py-1.5" aria-label="Expand" />
                 <th className="px-3 py-1.5">PID</th>
                 <th className="px-3 py-1.5">Name</th>
-                <th className="px-3 py-1.5">User</th>
                 <th className="px-3 py-1.5 text-right">
                   {sortBy === "cpu" ? "CPU%" : "RSS"}
+                </th>
+                <th className="px-3 py-1.5 text-right">
+                  {sortBy === "cpu" ? "RSS" : "CPU%"}
+                </th>
+                <th className="px-3 py-1.5 text-right" title="Disk read+write per second">
+                  Disk/s
                 </th>
               </tr>
             </thead>
@@ -488,8 +700,11 @@ function ProcessRow({
   onToggle: () => void;
   sortBy: "cpu" | "mem";
 }) {
-  const metric =
+  const primary =
     sortBy === "cpu" ? formatPct(row.cpuPct) : formatBytes(row.rssBytes);
+  const secondary =
+    sortBy === "cpu" ? formatBytes(row.rssBytes) : formatPct(row.cpuPct);
+  const diskBps = (row.diskReadBps ?? 0) + (row.diskWriteBps ?? 0);
   return (
     <>
       <tr
@@ -508,21 +723,24 @@ function ProcessRow({
         </td>
         <td className="px-3 py-1.5 align-top text-xs">
           <div className="truncate font-medium">{row.name}</div>
-          {row.cmdline && (
-            <div className="truncate text-[10px] text-slate-500">{row.cmdline}</div>
+          {row.user && (
+            <div className="truncate text-[10px] text-slate-500">{row.user}</div>
           )}
         </td>
-        <td className="px-3 py-1.5 align-top text-xs text-slate-400">
-          <div className="truncate">{row.user || "—"}</div>
-        </td>
         <td className="px-3 py-1.5 align-top text-right text-xs tabular-nums">
-          {metric}
+          {primary}
+        </td>
+        <td className="px-3 py-1.5 align-top text-right text-xs tabular-nums text-slate-400">
+          {secondary}
+        </td>
+        <td className="px-3 py-1.5 align-top text-right text-xs tabular-nums text-slate-400">
+          {diskBps > 0 ? formatBytes(diskBps) + "/s" : "—"}
         </td>
       </tr>
       {open && (
         <tr className="border-t border-ink-800 bg-ink-950/40">
           <td className="px-1 py-3" />
-          <td className="px-3 py-3" colSpan={4}>
+          <td className="px-3 py-3" colSpan={5}>
             <ProcessDetails row={row} />
           </td>
         </tr>
@@ -533,14 +751,30 @@ function ProcessRow({
 
 function ProcessDetails({ row }: { row: SnapshotProcess }) {
   const cmd = row.cmdline?.trim();
+  // The drawer is the only place rich per-process counters surface,
+  // so we lay them out in a 6-up grid with plain text values. We
+  // fall back to "—" for the network rates because the current
+  // probe doesn't yet emit per-process net Bps (gopsutil doesn't
+  // expose it portably) — wiring those in is a separate change and
+  // the UI is already prepared for the field's eventual arrival.
+  const fields: Array<[string, string]> = [
+    ["PID", String(row.pid)],
+    ["Name", row.name],
+    ["User", row.user || "—"],
+    ["CPU", formatPct(row.cpuPct)],
+    ["Memory", row.memPct != null ? `${formatPct(row.memPct)} (${formatBytes(row.rssBytes)})` : formatBytes(row.rssBytes)],
+    ["Open conns", row.openConns != null ? String(row.openConns) : "—"],
+    ["Disk read /s", row.diskReadBps ? formatBytes(row.diskReadBps) + "/s" : "—"],
+    ["Disk write /s", row.diskWriteBps ? formatBytes(row.diskWriteBps) + "/s" : "—"],
+    ["Net sent /s", row.netSentBps ? formatBytes(row.netSentBps) + "/s" : "—"],
+    ["Net recv /s", row.netRecvBps ? formatBytes(row.netRecvBps) + "/s" : "—"],
+  ];
   return (
     <div className="space-y-3 text-xs">
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
-        <Field label="PID" value={String(row.pid)} mono />
-        <Field label="Name" value={row.name} mono />
-        <Field label="User" value={row.user || "—"} />
-        <Field label="CPU" value={formatPct(row.cpuPct)} />
-        <Field label="RSS" value={formatBytes(row.rssBytes)} />
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3 lg:grid-cols-5">
+        {fields.map(([k, v]) => (
+          <Field key={k} label={k} value={v} mono={k === "PID" || k === "Name"} />
+        ))}
       </dl>
       <div>
         <div className="mb-1 flex items-center justify-between">
@@ -832,6 +1066,236 @@ function FailedUnitsTable({ units }: { units: string[] }) {
       </ul>
     </Section>
   );
+}
+
+// ---- Hardware -------------------------------------------------------------
+//
+// "Hardware" is one section but four logical sub-tables: system (the
+// box itself: vendor, BIOS, mobo, chassis), memory modules, storage,
+// and network adapters/GPUs. Probe collects this once per 6h since
+// it doesn't change between snapshots, so the UI doesn't need to
+// re-render anything when it's missing — we just hide the section.
+
+function HardwareSection({ hw }: { hw: SnapshotHardware }) {
+  const empty =
+    !hw.system &&
+    !hw.cpu &&
+    (!hw.memoryModules || hw.memoryModules.length === 0) &&
+    (!hw.storage || hw.storage.length === 0) &&
+    (!hw.networkAdapters || hw.networkAdapters.length === 0) &&
+    (!hw.gpus || hw.gpus.length === 0);
+  if (empty) return null;
+
+  return (
+    <div className="space-y-3 rounded-xl border border-ink-800 bg-ink-900 p-4">
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Hardware
+        </h3>
+        <span className="text-[10px] text-slate-600">
+          collected once per probe lifetime
+        </span>
+      </div>
+
+      {(hw.system || hw.cpu) && <HardwareSystemBlock hw={hw} />}
+
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {hw.memoryModules && hw.memoryModules.length > 0 && (
+          <HardwareMemTable mods={hw.memoryModules} />
+        )}
+        {hw.storage && hw.storage.length > 0 && (
+          <HardwareDiskTable disks={hw.storage} />
+        )}
+        {hw.networkAdapters && hw.networkAdapters.length > 0 && (
+          <HardwareNICTable nics={hw.networkAdapters} />
+        )}
+        {hw.gpus && hw.gpus.length > 0 && <HardwareGPUTable gpus={hw.gpus} />}
+      </div>
+
+      {hw.collectionWarnings && hw.collectionWarnings.length > 0 && (
+        <div className="rounded border border-amber-800/40 bg-amber-950/20 p-2 text-[11px] text-amber-200">
+          <div className="mb-0.5 font-semibold">Hardware collector warnings</div>
+          <ul className="list-inside list-disc space-y-0.5">
+            {hw.collectionWarnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HardwareSystemBlock({ hw }: { hw: SnapshotHardware }) {
+  const sys = hw.system ?? {};
+  const cpu = hw.cpu ?? {};
+  // Lay out the most identity-sensitive fields first so an operator
+  // can confirm "yes this is the box I think it is" at a glance.
+  const items: Array<[string, string | undefined]> = [
+    ["Vendor", sys.manufacturer],
+    ["Product", sys.productName],
+    ["Serial", sys.serialNumber],
+    ["Chassis", joinNonEmpty([sys.chassisType, sys.chassisAssetTag], " · ")],
+    ["BIOS", joinNonEmpty([sys.biosVendor, sys.biosVersion, sys.biosDate], " · ")],
+    ["Board", joinNonEmpty([sys.boardManufacturer, sys.boardProduct], " · ")],
+    ["Board serial", sys.boardSerial],
+    [
+      "CPU",
+      joinNonEmpty(
+        [
+          cpu.model,
+          cpu.cores ? `${cpu.cores} cores` : undefined,
+          cpu.threads ? `${cpu.threads} threads` : undefined,
+          cpu.mhzNominal ? `${cpu.mhzNominal} MHz` : undefined,
+        ],
+        " · ",
+      ),
+    ],
+  ].filter(([, v]) => v && v !== "");
+  if (items.length === 0) return null;
+  return (
+    <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-2 lg:grid-cols-3">
+      {items.map(([k, v]) => (
+        <div key={k} className="flex gap-2">
+          <dt className="w-20 shrink-0 text-[10px] uppercase tracking-wide text-slate-500">
+            {k}
+          </dt>
+          <dd className="min-w-0 truncate font-mono text-slate-200" title={v}>
+            {v}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function HardwareMemTable({ mods }: { mods: HardwareMemoryModule[] }) {
+  // Operators want the at-a-glance answer "how much RAM, what
+  // speed?" before they care about per-DIMM specifics. Provide a
+  // total in the section header.
+  const total = mods.reduce((s, m) => s + (m.sizeBytes ?? 0), 0);
+  const speeds = Array.from(
+    new Set(mods.map((m) => m.speedMhz).filter((n): n is number => !!n)),
+  );
+  return (
+    <Section
+      title={`Memory · ${formatBytes(total)}${speeds.length > 0 ? ` · ${speeds.join("/")} MHz` : ""}`}
+    >
+      <Table head={["Slot", "Size", "Type", "Mfg", "Part #", "Serial"]}>
+        {mods.map((m, i) => (
+          <tr key={i} className="border-t border-ink-800 align-top">
+            <td className="px-3 py-1 font-mono text-[11px] text-slate-300">
+              {m.slot || "—"}
+            </td>
+            <td className="px-3 py-1 text-[11px] tabular-nums">
+              {m.sizeBytes ? formatBytes(m.sizeBytes) : "—"}
+              {m.speedMhz ? <div className="text-[9px] text-slate-500">{m.speedMhz} MHz</div> : null}
+            </td>
+            <td className="px-3 py-1 text-[11px] text-slate-400">
+              {joinNonEmpty([m.type, m.formFactor], " ") || "—"}
+            </td>
+            <td className="px-3 py-1 text-[11px] text-slate-400">
+              {m.manufacturer || "—"}
+            </td>
+            <td className="px-3 py-1 font-mono text-[11px] text-slate-300">
+              {m.partNumber || "—"}
+            </td>
+            <td className="px-3 py-1 font-mono text-[10px] text-slate-500">
+              {m.serialNumber || "—"}
+            </td>
+          </tr>
+        ))}
+      </Table>
+    </Section>
+  );
+}
+
+function HardwareDiskTable({ disks }: { disks: HardwareDisk[] }) {
+  const total = disks.reduce((s, d) => s + (d.sizeBytes ?? 0), 0);
+  return (
+    <Section title={`Storage · ${formatBytes(total)} raw`}>
+      <Table head={["Device", "Model", "Bus", "Size", "Type", "Serial"]}>
+        {disks.map((d, i) => (
+          <tr key={i} className="border-t border-ink-800 align-top">
+            <td className="px-3 py-1 font-mono text-[11px] text-slate-300">
+              {d.device || "—"}
+            </td>
+            <td className="px-3 py-1 text-[11px]">
+              <div>{d.model || "—"}</div>
+              {d.vendor && (
+                <div className="text-[9px] text-slate-500">{d.vendor}</div>
+              )}
+            </td>
+            <td className="px-3 py-1 text-[11px] uppercase text-slate-400">
+              {d.busType || "—"}
+            </td>
+            <td className="px-3 py-1 text-[11px] tabular-nums">
+              {d.sizeBytes ? formatBytes(d.sizeBytes) : "—"}
+            </td>
+            <td className="px-3 py-1 text-[11px] text-slate-400">
+              {d.rotational == null ? "—" : d.rotational ? "HDD" : "SSD"}
+            </td>
+            <td className="px-3 py-1 font-mono text-[10px] text-slate-500">
+              {d.serial || "—"}
+            </td>
+          </tr>
+        ))}
+      </Table>
+    </Section>
+  );
+}
+
+function HardwareNICTable({ nics }: { nics: HardwareNIC[] }) {
+  return (
+    <Section title="Network adapters (hardware)">
+      <Table head={["Name", "Vendor / Product", "Driver", "Speed", "MAC"]}>
+        {nics.map((n, i) => (
+          <tr key={i} className="border-t border-ink-800 align-top">
+            <td className="px-3 py-1 font-mono text-[11px] text-slate-300">
+              {n.name || "—"}
+            </td>
+            <td className="px-3 py-1 text-[11px]">
+              <div>{n.product || "—"}</div>
+              {n.vendor && (
+                <div className="text-[9px] text-slate-500">{n.vendor}</div>
+              )}
+            </td>
+            <td className="px-3 py-1 font-mono text-[11px] text-slate-400">
+              {n.driver || "—"}
+            </td>
+            <td className="px-3 py-1 text-[11px] tabular-nums text-slate-400">
+              {n.speedMbps ? `${n.speedMbps} Mbps` : "—"}
+            </td>
+            <td className="px-3 py-1 font-mono text-[10px] text-slate-500">
+              {n.mac || "—"}
+            </td>
+          </tr>
+        ))}
+      </Table>
+    </Section>
+  );
+}
+
+function HardwareGPUTable({ gpus }: { gpus: HardwareGPU[] }) {
+  return (
+    <Section title="GPUs">
+      <Table head={["Vendor", "Product", "Driver"]}>
+        {gpus.map((g, i) => (
+          <tr key={i} className="border-t border-ink-800 align-top">
+            <td className="px-3 py-1 text-[11px] text-slate-400">{g.vendor || "—"}</td>
+            <td className="px-3 py-1 text-[11px]">{g.product || "—"}</td>
+            <td className="px-3 py-1 font-mono text-[11px] text-slate-400">
+              {g.driver || "—"}
+            </td>
+          </tr>
+        ))}
+      </Table>
+    </Section>
+  );
+}
+
+function joinNonEmpty(parts: Array<string | number | undefined | null>, sep: string): string {
+  return parts.filter((p) => p != null && p !== "").join(sep);
 }
 
 // ---- Host meta ------------------------------------------------------------

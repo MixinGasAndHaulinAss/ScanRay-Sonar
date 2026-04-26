@@ -46,6 +46,20 @@ export interface Agent {
   pendingReboot?: boolean;
   primaryIp?: string | null;
   lastMetricsAt?: string | null;
+
+  // GeoIP enrichment from Phase 0 of the agent feature pack. Server
+  // resolves the public IP via icanhazip + bundled MaxMind mmdb on
+  // ingest; nullable until the first metrics frame arrives or when
+  // the API has no GeoIP databases loaded.
+  publicIp?: string | null;
+  geoCountryIso?: string | null;
+  geoCountryName?: string | null;
+  geoSubdivision?: string | null;
+  geoCity?: string | null;
+  geoLat?: number | null;
+  geoLon?: number | null;
+  geoAsn?: number | null;
+  geoOrg?: string | null;
 }
 
 // AgentDetail is the /agents/{id} response — same as Agent plus the
@@ -63,11 +77,16 @@ export interface Snapshot {
   capturedAt: string;
   captureMs: number;
   host: SnapshotHost;
+  /** Schema v3+: discovered via icanhazip; cached 1h on the probe. */
+  publicIp?: string;
   cpu: SnapshotCPU;
   memory: SnapshotMemory;
   loadAvg?: { load1: number; load5: number; load15: number };
   disks: SnapshotDisk[];
   nics: SnapshotNIC[];
+  /** Schema v3+: collected once at probe startup; nil if the
+   *  collector failed (no DMI on this host, no permission, etc.). */
+  hardware?: SnapshotHardware;
   topByCpu: SnapshotProcess[];
   topByMem: SnapshotProcess[];
   listeners: SnapshotListener[];
@@ -141,6 +160,78 @@ export interface SnapshotProcess {
   cmdline?: string;
   cpuPct: number;
   rssBytes: number;
+  /** Schema v3+: percent of physical memory used. */
+  memPct?: number;
+  /** Schema v3+: bytes/second; nil on platforms where the probe
+   *  can't read per-process I/O counters (notably containerised hosts
+   *  without CAP_SYS_PTRACE). */
+  diskReadBps?: number;
+  diskWriteBps?: number;
+  netSentBps?: number;
+  netRecvBps?: number;
+  /** Open TCP/UDP sockets owned by this process. */
+  openConns?: number;
+}
+
+// SnapshotHardware mirrors internal/probe/hardware.go. Optional —
+// older probes (schema v2) don't send this section. Every sub-field
+// is optional too: a hypervisor will lack DMI, a server may not
+// expose GPU, etc.
+export interface SnapshotHardware {
+  system?: {
+    manufacturer?: string;
+    productName?: string;
+    serialNumber?: string;
+    chassisType?: string;
+    chassisAssetTag?: string;
+    biosVendor?: string;
+    biosVersion?: string;
+    biosDate?: string;
+    boardManufacturer?: string;
+    boardProduct?: string;
+    boardSerial?: string;
+  };
+  cpu?: { model?: string; cores?: number; threads?: number; mhzNominal?: number };
+  memoryModules?: HardwareMemoryModule[];
+  storage?: HardwareDisk[];
+  networkAdapters?: HardwareNIC[];
+  gpus?: HardwareGPU[];
+  collectionWarnings?: string[];
+}
+export interface HardwareMemoryModule {
+  slot?: string;
+  manufacturer?: string;
+  partNumber?: string;
+  serialNumber?: string;
+  speedMhz?: number;
+  type?: string;
+  formFactor?: string;
+  sizeBytes?: number;
+}
+export interface HardwareDisk {
+  device?: string;
+  model?: string;
+  serial?: string;
+  vendor?: string;
+  busType?: string;
+  formFactor?: string;
+  sizeBytes?: number;
+  rotational?: boolean;
+}
+export interface HardwareNIC {
+  name?: string;
+  vendor?: string;
+  product?: string;
+  driver?: string;
+  busInfo?: string;
+  mac?: string;
+  speedMbps?: number;
+}
+export interface HardwareGPU {
+  vendor?: string;
+  product?: string;
+  driver?: string;
+  busInfo?: string;
 }
 export interface SnapshotListener {
   proto: "tcp" | "udp";
@@ -372,6 +463,44 @@ export interface NewEnrollmentToken {
     linux: string;
     windows: string;
   };
+}
+
+// AgentNetworkGraph is the /agents/{id}/network-graph response. It's
+// the conversations + listeners pulled out of the latest snapshot,
+// aggregated by remote IP and enriched with GeoIP/ASN data.
+export interface AgentNetworkGraph {
+  agent: {
+    id: string;
+    hostname: string;
+    publicIp?: string | null;
+    primaryIp?: string | null;
+    countryIso?: string | null;
+    city?: string | null;
+    lat?: number | null;
+    lon?: number | null;
+    asn?: number | null;
+    org?: string | null;
+  };
+  capturedAt?: string | null;
+  peers: AgentNetworkPeer[];
+  processes: string[];
+}
+
+export interface AgentNetworkPeer {
+  ip: string;
+  host?: string;
+  asn?: number;
+  org?: string;
+  countryIso?: string;
+  countryName?: string;
+  city?: string;
+  lat?: number;
+  lon?: number;
+  direction: "inbound" | "outbound" | "local";
+  isPrivate?: boolean;
+  totalConns: number;
+  ports?: number[];
+  processes: { name: string; pid?: number; count: number }[];
 }
 
 export interface VersionInfo {

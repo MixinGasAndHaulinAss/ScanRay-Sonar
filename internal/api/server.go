@@ -27,6 +27,7 @@ import (
 	"github.com/NCLGISA/ScanRay-Sonar/internal/config"
 	scrypto "github.com/NCLGISA/ScanRay-Sonar/internal/crypto"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/db"
+	"github.com/NCLGISA/ScanRay-Sonar/internal/geoip"
 )
 
 // Server is the long-lived HTTP/WS service. Construct once via New and
@@ -39,6 +40,7 @@ type Server struct {
 	iss    *auth.Issuer
 	sealer *scrypto.Sealer
 	nats   *nats.Conn
+	geo    *geoip.Reader
 
 	agentHub *Hub
 	uiHub    *Hub
@@ -64,6 +66,11 @@ type Deps struct {
 	// "linux/amd64/sonar-probe", "linux/arm64/sonar-probe", etc. May be nil
 	// in dev builds; the /probe/download endpoint returns 404 when so.
 	ProbeFS fs.FS
+	// Geo is the optional MaxMind GeoLite2 reader used to enrich
+	// agent telemetry with country/city/ASN data. May be nil; in
+	// that case GeoIP-driven UI (world map, network topology
+	// provider labels) gracefully degrades.
+	Geo *geoip.Reader
 }
 
 func New(d Deps) *Server {
@@ -75,6 +82,7 @@ func New(d Deps) *Server {
 		iss:         d.Issuer,
 		sealer:      d.Sealer,
 		nats:        d.NATS,
+		geo:         d.Geo,
 		agentHub:    NewHub(d.Logger.With(slog.String("hub", "agent"))),
 		uiHub:       NewHub(d.Logger.With(slog.String("hub", "ui"))),
 		openAPISpec: d.OpenAPISpec,
@@ -143,6 +151,8 @@ func (s *Server) Routes() http.Handler {
 			// even though both look like "/agents/<something>".
 			r.Get("/agents/{id}", s.handleGetAgent)
 			r.Get("/agents/{id}/metrics", s.handleAgentMetrics)
+			r.Get("/agents/{id}/network-graph", s.handleAgentNetworkGraph)
+			r.With(requireRole(auth.RoleSiteAdmin)).Patch("/agents/{id}", s.handleUpdateAgent)
 			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/agents/{id}", s.handleDeleteAgent)
 			r.With(requireRole(auth.RoleSiteAdmin)).Get("/agents/enrollment-tokens", s.handleListEnrollmentTokens)
 			r.With(requireRole(auth.RoleSiteAdmin)).Post("/agents/enrollment-tokens", s.handleCreateEnrollmentToken)

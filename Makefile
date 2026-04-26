@@ -9,7 +9,7 @@ LDFLAGS    := -s -w \
               -X github.com/NCLGISA/ScanRay-Sonar/internal/version.Commit=$(COMMIT) \
               -X github.com/NCLGISA/ScanRay-Sonar/internal/version.BuildTime=$(BUILD_TIME)
 
-.PHONY: all build api poller probe web test fmt vet tidy compose-up compose-down clean
+.PHONY: all build api poller probe web test fmt vet tidy compose-up compose-down clean refresh-geoip
 
 all: build
 
@@ -50,3 +50,6 @@ compose-down:
 
 clean:
 	rm -rf bin/ dist/ web/dist/assets web/dist/index-*.js web/dist/index-*.css
+
+refresh-geoip:
+	bash scripts/refresh-geoip.sh

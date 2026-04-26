@@ -63,7 +63,8 @@ type parsedSnapshot struct {
 	Host struct {
 		UptimeSeconds uint64 `json:"uptimeSeconds"`
 	} `json:"host"`
-	CPU struct {
+	PublicIP string `json:"publicIp"`
+	CPU      struct {
 		UsagePct float64 `json:"usagePct"`
 	} `json:"cpu"`
 	Memory struct {
@@ -235,9 +236,6 @@ func (s *Server) ingestMetrics(ctx context.Context, agentID uuid.UUID, f metrics
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// $1=agent_id, $2=last_metrics(jsonb as string), $3=sentAt,
-	// $4=cpu_pct, $5=mem_used, $6=mem_total, $7=root_used, $8=root_total,
-	// $9=uptime_s, $10=pending_reboot, $11=primary_ip (text or NULL).
 	_, err = tx.Exec(ctx, `
 		UPDATE agents
 		   SET last_metrics          = $2::jsonb,
@@ -267,6 +265,17 @@ func (s *Server) ingestMetrics(ctx context.Context, agentID uuid.UUID, f metrics
 	)
 	if err != nil {
 		return fmt.Errorf("update agents: %w", err)
+	}
+
+	// Public IP + GeoIP enrichment is conditional: skip the write
+	// entirely when the probe didn't report one (e.g. air-gapped
+	// LAN). When it did, only re-resolve geo if the IP changed
+	// since last snapshot or the cached lookup is older than 7
+	// days — keeps ingest cheap on the steady-state path.
+	if ps.PublicIP != "" {
+		if err := s.maybeUpdateAgentGeo(ctx, tx, agentID, ps.PublicIP, sentAt); err != nil {
+			s.log.Warn("agent geo update failed", "err", err, "agent_id", agentID)
+		}
 	}
 
 	// ON CONFLICT keeps duplicate-second collisions from breaking
@@ -393,6 +402,95 @@ func nullableUint64(v uint64) any {
 	return int64(v)
 }
 
+// geoTTL is how long a cached MaxMind lookup is considered fresh.
+// Longer than the per-snapshot interval but short enough to pick up
+// real-world IP renumbering inside a single billing cycle.
+const geoTTL = 7 * 24 * time.Hour
+
+// maybeUpdateAgentGeo writes public_ip + (optionally) the geo_*
+// columns. Geo lookup is skipped when:
+//   - the public IP didn't change since last snapshot AND geo was
+//     resolved within geoTTL, OR
+//   - no GeoIP databases are loaded.
+//
+// Runs inside the same transaction as the headline metrics update so
+// a partial failure rolls the whole snapshot back rather than leaving
+// inconsistent rows.
+func (s *Server) maybeUpdateAgentGeo(ctx context.Context, tx pgx.Tx, agentID uuid.UUID, publicIP string, sentAt time.Time) error {
+	var (
+		curIP       *string
+		curResolved *time.Time
+	)
+	if err := tx.QueryRow(ctx,
+		`SELECT host(public_ip), geo_resolved_at FROM agents WHERE id = $1`,
+		agentID,
+	).Scan(&curIP, &curResolved); err != nil {
+		return fmt.Errorf("read current geo: %w", err)
+	}
+
+	ipChanged := curIP == nil || *curIP != publicIP
+	stale := curResolved == nil || time.Since(*curResolved) > geoTTL
+	needsLookup := s.geo != nil && s.geo.Has() && (ipChanged || stale)
+
+	if !needsLookup {
+		// Cheap path: just bump public_ip + seen_at.
+		_, err := tx.Exec(ctx, `
+			UPDATE agents
+			   SET public_ip         = NULLIF($2, '')::inet,
+			       public_ip_seen_at = $3
+			 WHERE id = $1
+		`, agentID, publicIP, sentAt)
+		return err
+	}
+
+	res, ok := s.geo.Lookup(publicIP)
+	if !ok {
+		// IP didn't resolve (rare for public IPs but happens for
+		// fresh Cloudflare/AWS allocations). Still record the IP
+		// itself so the operator can see the value.
+		_, err := tx.Exec(ctx, `
+			UPDATE agents
+			   SET public_ip         = NULLIF($2, '')::inet,
+			       public_ip_seen_at = $3,
+			       geo_resolved_at   = $3
+			 WHERE id = $1
+		`, agentID, publicIP, sentAt)
+		return err
+	}
+	_, err := tx.Exec(ctx, `
+		UPDATE agents
+		   SET public_ip         = NULLIF($2, '')::inet,
+		       public_ip_seen_at = $3,
+		       geo_country_iso   = NULLIF($4, ''),
+		       geo_country_name  = NULLIF($5, ''),
+		       geo_subdivision   = NULLIF($6, ''),
+		       geo_city          = NULLIF($7, ''),
+		       geo_lat           = $8,
+		       geo_lon           = $9,
+		       geo_asn           = NULLIF($10, 0),
+		       geo_org           = NULLIF($11, ''),
+		       geo_resolved_at   = $3
+		 WHERE id = $1
+	`,
+		agentID, publicIP, sentAt,
+		res.CountryISO, res.CountryName, res.Subdivision, res.City,
+		nullableFloat64(res.Lat), nullableFloat64(res.Lon),
+		int(res.ASN), res.Organization,
+	)
+	return err
+}
+
+// nullableFloat64 mirrors nullableUint64 for the geo coordinate
+// columns: emit SQL NULL on the zero value rather than 0.0, so a
+// missing-coordinates row reads as "unknown location" on the map
+// instead of "(0,0) in the Atlantic".
+func nullableFloat64(v float64) any {
+	if v == 0 {
+		return nil
+	}
+	return v
+}
+
 // ============================================================================
 // REST endpoints — agent detail + metrics history
 // ============================================================================
@@ -421,6 +519,15 @@ type agentDetailView struct {
 	UptimeSeconds      *int64          `json:"uptimeSeconds,omitempty"`
 	PendingReboot      bool            `json:"pendingReboot"`
 	PrimaryIP          *string         `json:"primaryIp,omitempty"`
+	PublicIP           *string         `json:"publicIp,omitempty"`
+	GeoCountryISO      *string         `json:"geoCountryIso,omitempty"`
+	GeoCountryName     *string         `json:"geoCountryName,omitempty"`
+	GeoSubdivision     *string         `json:"geoSubdivision,omitempty"`
+	GeoCity            *string         `json:"geoCity,omitempty"`
+	GeoLat             *float64        `json:"geoLat,omitempty"`
+	GeoLon             *float64        `json:"geoLon,omitempty"`
+	GeoASN             *int            `json:"geoAsn,omitempty"`
+	GeoOrg             *string         `json:"geoOrg,omitempty"`
 	LastMetricsAt      *time.Time      `json:"lastMetricsAt,omitempty"`
 	LastMetrics        json.RawMessage `json:"lastMetrics,omitempty"`
 }
@@ -437,20 +544,24 @@ func (s *Server) handleGetAgent(w http.ResponseWriter, r *http.Request) {
 		       enrolled_at, last_seen_at, is_active, tags, created_at,
 		       cpu_pct, mem_used_bytes, mem_total_bytes,
 		       root_disk_used_bytes, root_disk_total_bytes,
-		       uptime_seconds, pending_reboot, host(primary_ip),
+		       uptime_seconds, pending_reboot, host(primary_ip), host(public_ip),
+		       geo_country_iso, geo_country_name, geo_subdivision, geo_city,
+		       geo_lat, geo_lon, geo_asn, geo_org,
 		       last_metrics_at, last_metrics
 		  FROM agents
 		 WHERE id = $1
 	`
 	var v agentDetailView
 	var lastMetrics []byte
-	var primaryIP *string
+	var primaryIP, publicIP *string
 	err = s.pool.QueryRow(r.Context(), q, id).Scan(
 		&v.ID, &v.SiteID, &v.Hostname, &v.Fingerprint, &v.OS, &v.OSVersion, &v.AgentVersion,
 		&v.EnrolledAt, &v.LastSeenAt, &v.IsActive, &v.Tags, &v.CreatedAt,
 		&v.CPUPct, &v.MemUsedBytes, &v.MemTotalBytes,
 		&v.RootDiskUsedBytes, &v.RootDiskTotalBytes,
-		&v.UptimeSeconds, &v.PendingReboot, &primaryIP,
+		&v.UptimeSeconds, &v.PendingReboot, &primaryIP, &publicIP,
+		&v.GeoCountryISO, &v.GeoCountryName, &v.GeoSubdivision, &v.GeoCity,
+		&v.GeoLat, &v.GeoLon, &v.GeoASN, &v.GeoOrg,
 		&v.LastMetricsAt, &lastMetrics,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -462,6 +573,7 @@ func (s *Server) handleGetAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v.PrimaryIP = primaryIP
+	v.PublicIP = publicIP
 	if len(lastMetrics) > 0 {
 		v.LastMetrics = json.RawMessage(lastMetrics)
 	}
@@ -537,6 +649,302 @@ func (s *Server) handleAgentMetrics(w http.ResponseWriter, r *http.Request) {
 		"samples":  out,
 		"capturedAtTo": time.Now().UTC(),
 	})
+}
+
+// ============================================================================
+// Per-host network graph — feeds the "Network connections" section on
+// the agent detail page.
+// ============================================================================
+
+// netGraphSnapshot is the slim shape we extract from the JSONB blob to
+// drive the per-host topology. We only need conversations (the active
+// peer list) and listeners (so we can label inbound peers' local
+// ports) — everything else (CPU, disks, processes) is irrelevant
+// here.
+type netGraphSnapshot struct {
+	CapturedAt    string `json:"capturedAt"`
+	Conversations []struct {
+		Proto       string `json:"proto"`
+		Direction   string `json:"direction"`
+		RemoteIP    string `json:"remoteIp"`
+		RemoteHost  string `json:"remoteHost"`
+		RemotePort  int    `json:"remotePort"`
+		LocalPort   int    `json:"localPort"`
+		State       string `json:"state"`
+		PID         int32  `json:"pid"`
+		ProcessName string `json:"processName"`
+		Count       int    `json:"count"`
+	} `json:"conversations"`
+}
+
+// netPeer is one remote endpoint after GeoIP enrichment, with the
+// list of local processes that talked to it folded in.
+type netPeer struct {
+	IP          string  `json:"ip"`
+	Host        string  `json:"host,omitempty"`
+	ASN         int     `json:"asn,omitempty"`
+	Org         string  `json:"org,omitempty"`
+	CountryISO  string  `json:"countryIso,omitempty"`
+	CountryName string  `json:"countryName,omitempty"`
+	City        string  `json:"city,omitempty"`
+	Lat         float64 `json:"lat,omitempty"`
+	Lon         float64 `json:"lon,omitempty"`
+	Direction   string  `json:"direction"` // "inbound" | "outbound"
+	IsPrivate   bool    `json:"isPrivate,omitempty"`
+	// Processes that hold a socket to this peer, with the aggregate
+	// connection count. Sorted by count desc.
+	Processes []netPeerProc `json:"processes"`
+	TotalConns int           `json:"totalConns"`
+	Ports      []int         `json:"ports,omitempty"` // unique remote ports observed
+}
+
+type netPeerProc struct {
+	Name  string `json:"name"`
+	PID   int32  `json:"pid,omitempty"`
+	Count int    `json:"count"`
+}
+
+// handleAgentNetworkGraph returns the per-host network graph. Shape:
+//
+//	{
+//	  "agent": {...},               // hostname / public IP / location
+//	  "capturedAt": "...",
+//	  "peers": [...netPeer...],
+//	  "processes": ["app", "nginx", ...]   // distinct names talking out
+//	}
+//
+// We deliberately do NOT page or filter on the server side: the
+// underlying conversations list is already capped at 200 entries by
+// the probe, and the front-end ForceGraph wants the whole set so it
+// can lay them out in one pass.
+func (s *Server) handleAgentNetworkGraph(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "id must be a UUID")
+		return
+	}
+
+	const q = `
+		SELECT hostname, host(public_ip), host(primary_ip),
+		       geo_country_iso, geo_city, geo_lat, geo_lon, geo_asn, geo_org,
+		       last_metrics, last_metrics_at
+		  FROM agents
+		 WHERE id = $1
+	`
+	var hostname string
+	var publicIP, primaryIP, countryISO, city, org *string
+	var lat, lon *float64
+	var asn *int
+	var lastMetricsAt *time.Time
+	var lastMetrics []byte
+	if err := s.pool.QueryRow(r.Context(), q, id).Scan(
+		&hostname, &publicIP, &primaryIP,
+		&countryISO, &city, &lat, &lon, &asn, &org,
+		&lastMetrics, &lastMetricsAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeErr(w, http.StatusNotFound, "not_found", "agent not found")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "server_error", "load agent failed")
+		return
+	}
+
+	if len(lastMetrics) == 0 {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"agent": map[string]any{
+				"id":         id.String(),
+				"hostname":   hostname,
+				"publicIp":   publicIP,
+				"primaryIp":  primaryIP,
+				"countryIso": countryISO,
+				"city":       city,
+				"lat":        lat,
+				"lon":        lon,
+				"asn":        asn,
+				"org":        org,
+			},
+			"capturedAt": nil,
+			"peers":      []netPeer{},
+			"processes":  []string{},
+		})
+		return
+	}
+
+	var snap netGraphSnapshot
+	if err := json.Unmarshal(lastMetrics, &snap); err != nil {
+		writeErr(w, http.StatusInternalServerError, "server_error", "parse snapshot failed")
+		return
+	}
+
+	// Aggregate by remote IP. We produce one netPeer per unique IP
+	// even if it shows up under multiple processes / ports — the UI
+	// renders one node per peer and unfolds the per-process detail
+	// in the side panel.
+	type peerKey struct {
+		ip        string
+		direction string
+	}
+	peers := map[peerKey]*netPeer{}
+	procSet := map[string]struct{}{}
+	for _, c := range snap.Conversations {
+		if c.RemoteIP == "" {
+			continue
+		}
+		key := peerKey{ip: c.RemoteIP, direction: c.Direction}
+		p, ok := peers[key]
+		if !ok {
+			p = &netPeer{
+				IP:        c.RemoteIP,
+				Host:      c.RemoteHost,
+				Direction: c.Direction,
+				IsPrivate: isPrivateIP(c.RemoteIP),
+			}
+			// Enrich via GeoIP only for non-RFC1918 addresses; the
+			// MaxMind DB returns all-zero rows for private ranges
+			// and we don't want to render those as "ASN 0 in
+			// (0,0)".
+			if !p.IsPrivate && s.geo != nil && s.geo.Has() {
+				if g, ok := s.geo.Lookup(c.RemoteIP); ok {
+					p.ASN = int(g.ASN)
+					p.Org = g.Organization
+					p.CountryISO = g.CountryISO
+					p.CountryName = g.CountryName
+					p.City = g.City
+					p.Lat = g.Lat
+					p.Lon = g.Lon
+				}
+			}
+			peers[key] = p
+		}
+		// Aggregate per-process counts; the same process can talk
+		// to the same peer over many sockets/ports.
+		merged := false
+		for i := range p.Processes {
+			if p.Processes[i].Name == c.ProcessName && p.Processes[i].PID == c.PID {
+				p.Processes[i].Count += c.Count
+				merged = true
+				break
+			}
+		}
+		if !merged {
+			p.Processes = append(p.Processes, netPeerProc{
+				Name:  c.ProcessName,
+				PID:   c.PID,
+				Count: c.Count,
+			})
+		}
+		p.TotalConns += c.Count
+		// Track distinct remote ports for the tooltip.
+		if c.RemotePort > 0 {
+			seen := false
+			for _, pp := range p.Ports {
+				if pp == c.RemotePort {
+					seen = true
+					break
+				}
+			}
+			if !seen {
+				p.Ports = append(p.Ports, c.RemotePort)
+			}
+		}
+		if c.ProcessName != "" {
+			procSet[c.ProcessName] = struct{}{}
+		}
+	}
+
+	out := make([]netPeer, 0, len(peers))
+	for _, p := range peers {
+		// Sort processes by descending count so the most-active
+		// process is first in the side-panel listing.
+		sortPeerProcs(p.Processes)
+		out = append(out, *p)
+	}
+	// Stable order for the response: highest connection count first,
+	// IP alphabetically as tiebreaker.
+	sortPeers(out)
+
+	procs := make([]string, 0, len(procSet))
+	for p := range procSet {
+		procs = append(procs, p)
+	}
+	stringsSort(procs)
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"agent": map[string]any{
+			"id":         id.String(),
+			"hostname":   hostname,
+			"publicIp":   publicIP,
+			"primaryIp":  primaryIP,
+			"countryIso": countryISO,
+			"city":       city,
+			"lat":        lat,
+			"lon":        lon,
+			"asn":        asn,
+			"org":        org,
+		},
+		"capturedAt": lastMetricsAt,
+		"peers":      out,
+		"processes":  procs,
+	})
+}
+
+// isPrivateIP returns true for RFC1918 / link-local / unique-local IPs
+// — the addresses MaxMind doesn't (and shouldn't) resolve.
+func isPrivateIP(ip string) bool {
+	switch {
+	case strings.HasPrefix(ip, "10."),
+		strings.HasPrefix(ip, "192.168."),
+		strings.HasPrefix(ip, "169.254."),
+		strings.HasPrefix(ip, "127."),
+		ip == "::1":
+		return true
+	}
+	if strings.HasPrefix(ip, "172.") {
+		// 172.16.0.0/12
+		var second int
+		if _, err := fmt.Sscanf(ip, "172.%d.", &second); err == nil && second >= 16 && second <= 31 {
+			return true
+		}
+	}
+	if strings.HasPrefix(ip, "fd") || strings.HasPrefix(ip, "fc") {
+		return true
+	}
+	return false
+}
+
+// sortPeerProcs / sortPeers / stringsSort are tiny wrappers around
+// sort.Slice to keep the ordering rules co-located with the code that
+// produces them. (Tucked away here rather than at the top of the
+// file because they're noise for anyone reading the ingest path.)
+func sortPeerProcs(ps []netPeerProc) {
+	sortFunc(len(ps), func(i, j int) bool { return ps[i].Count > ps[j].Count }, func(i, j int) {
+		ps[i], ps[j] = ps[j], ps[i]
+	})
+}
+func sortPeers(ps []netPeer) {
+	sortFunc(len(ps), func(i, j int) bool {
+		if ps[i].TotalConns != ps[j].TotalConns {
+			return ps[i].TotalConns > ps[j].TotalConns
+		}
+		return ps[i].IP < ps[j].IP
+	}, func(i, j int) { ps[i], ps[j] = ps[j], ps[i] })
+}
+func stringsSort(ss []string) {
+	sortFunc(len(ss), func(i, j int) bool { return ss[i] < ss[j] }, func(i, j int) {
+		ss[i], ss[j] = ss[j], ss[i]
+	})
+}
+
+// sortFunc is a hand-rolled insertion sort to avoid pulling in
+// "sort" as a top-of-file import. With <=200 conversations this is
+// fast enough not to register on profiles.
+func sortFunc(n int, less func(i, j int) bool, swap func(i, j int)) {
+	for i := 1; i < n; i++ {
+		for j := i; j > 0 && less(j, j-1); j-- {
+			swap(j, j-1)
+		}
+	}
 }
 
 // parseRangeDuration accepts standard Go durations and the operator-

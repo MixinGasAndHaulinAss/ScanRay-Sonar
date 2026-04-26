@@ -50,6 +50,15 @@ type Config struct {
 
 	BootstrapAdminEmail    string
 	BootstrapAdminPassword string
+
+	// GeoIPCityPath / GeoIPASNPath point to MaxMind GeoLite2 .mmdb
+	// files mounted into the container (typically under
+	// /var/lib/sonar/geoip via the sonar-geoip volume). Both are
+	// optional: when missing the API simply doesn't enrich snapshots
+	// with geo/ASN data and the world map renders an "unknown"
+	// pin set.
+	GeoIPCityPath string
+	GeoIPASNPath  string
 }
 
 // Load reads the environment, applies defaults, and validates required keys.
@@ -68,6 +77,9 @@ func Load() (*Config, error) {
 
 		BootstrapAdminEmail:    env("SONAR_BOOTSTRAP_ADMIN_EMAIL", ""),
 		BootstrapAdminPassword: env("SONAR_BOOTSTRAP_ADMIN_PASSWORD", ""),
+
+		GeoIPCityPath: env("SONAR_GEOIP_CITY_DB", "/var/lib/sonar/geoip/GeoLite2-City.mmdb"),
+		GeoIPASNPath:  env("SONAR_GEOIP_ASN_DB", "/var/lib/sonar/geoip/GeoLite2-ASN.mmdb"),
 	}
 
 	var errs []string

@@ -82,6 +82,11 @@ services:
       SONAR_NATS_URL: nats://sonar-nats:4222
     ports:
       - "${SONAR_API_BIND:-0.0.0.0}:${SONAR_API_PORT:-6969}:8080"
+    volumes:
+      # MaxMind GeoLite2 databases. The API mounts them read-only at a
+      # fixed path; scripts/refresh-geoip.sh writes the files into the
+      # named volume from a privileged refresh job (cron / Makefile).
+      - sonar-geoip:/var/lib/sonar/geoip:ro
     # No container-level healthcheck: distroless has no shell/curl. The
     # /api/v1/healthz endpoint is exposed for upstream (Cloudflare /
     # external monitoring) probes.
@@ -111,3 +116,5 @@ volumes:
     name: sonar-pgdata
   sonar-natsdata:
     name: sonar-natsdata
+  sonar-geoip:
+    name: sonar-geoip

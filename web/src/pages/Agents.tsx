@@ -1,9 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import type { Agent, EnrollmentToken, NewEnrollmentToken, Site } from "../api/types";
 import { formatBytes, formatPct, formatRelative, pctBarColor } from "../lib/format";
+
+// Persist the tag filter selection across reloads. Operators tend to
+// curate a single saved filter — "production hosts only" — and want
+// it sticky between sessions.
+const TAG_FILTER_KEY = "sonar.agents.tagFilter";
+function loadTagFilter(): string[] {
+  try {
+    const raw = localStorage.getItem(TAG_FILTER_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((t) => typeof t === "string") : [];
+  } catch {
+    return [];
+  }
+}
+function saveTagFilter(tags: string[]) {
+  try {
+    localStorage.setItem(TAG_FILTER_KEY, JSON.stringify(tags));
+  } catch {
+    /* localStorage may be disabled */
+  }
+}
 
 interface TokenForm {
   siteId: string;
@@ -38,6 +60,39 @@ export default function Agents() {
   const [issued, setIssued] = useState<NewEnrollmentToken | null>(null);
   const [issuedOS, setIssuedOS] = useState<"linux" | "windows">("linux");
   const [copied, setCopied] = useState(false);
+
+  // Tag filter — agent rows are AND-matched against every selected
+  // tag (so picking ["prod","critical"] shows hosts tagged with both,
+  // which is the default an operator expects from a "narrow this
+  // list" workflow).
+  const [tagFilter, setTagFilter] = useState<string[]>(loadTagFilter);
+  useEffect(() => saveTagFilter(tagFilter), [tagFilter]);
+  const [search, setSearch] = useState("");
+
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    agents.data?.forEach((a) => a.tags?.forEach((t) => set.add(t)));
+    return Array.from(set).sort();
+  }, [agents.data]);
+
+  const visibleAgents = useMemo(() => {
+    const list = agents.data ?? [];
+    const q = search.trim().toLowerCase();
+    return list.filter((a) => {
+      if (tagFilter.length > 0) {
+        const tags = new Set(a.tags ?? []);
+        for (const t of tagFilter) if (!tags.has(t)) return false;
+      }
+      if (q) {
+        const hay = `${a.hostname} ${a.os} ${a.osVersion} ${a.primaryIp ?? ""} ${a.publicIp ?? ""} ${(a.tags ?? []).join(" ")}`;
+        if (!hay.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }, [agents.data, tagFilter, search]);
+
+  const toggleTagFilter = (tag: string) =>
+    setTagFilter((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
 
   useEffect(() => {
     if (!sites.data) return;
@@ -159,14 +214,59 @@ export default function Agents() {
         </div>
       )}
 
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Hosts</h3>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Hosts</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search hostname / IP / tag…"
+              className="h-8 rounded-md border border-ink-700 bg-ink-950 px-2 text-xs text-slate-100 placeholder:text-slate-600"
+            />
+            <span className="text-xs tabular-nums text-slate-500">
+              {visibleAgents.length} / {agents.data?.length ?? 0}
+            </span>
+          </div>
+        </div>
+        {allTags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wide text-slate-500">Filter:</span>
+            {allTags.map((t) => {
+              const on = tagFilter.includes(t);
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => toggleTagFilter(t)}
+                  className={
+                    "rounded-full border px-2 py-0.5 text-[10px] transition " +
+                    (on
+                      ? "border-sonar-500 bg-sonar-700/40 text-sonar-100"
+                      : "border-ink-700 bg-ink-900 text-slate-400 hover:border-sonar-700 hover:text-sonar-200")
+                  }
+                >
+                  {t}
+                </button>
+              );
+            })}
+            {tagFilter.length > 0 && (
+              <button
+                onClick={() => setTagFilter([])}
+                className="ml-1 text-[10px] text-slate-500 hover:text-slate-300 hover:underline"
+              >
+                clear
+              </button>
+            )}
+          </div>
+        )}
         <div className="overflow-hidden rounded-xl border border-ink-800 bg-ink-900">
           <table className="w-full text-left text-sm">
             <thead className="bg-ink-800/60 text-xs uppercase tracking-wide text-slate-400">
               <tr>
                 <th className="px-4 py-2">Hostname</th>
                 <th className="px-4 py-2">Site</th>
+                <th className="px-4 py-2">Tags</th>
                 <th className="px-4 py-2">OS</th>
                 <th className="px-4 py-2">CPU</th>
                 <th className="px-4 py-2">Memory</th>
@@ -180,20 +280,21 @@ export default function Agents() {
             <tbody>
               {agents.isLoading && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-6 text-center text-slate-500">
+                  <td colSpan={11} className="px-4 py-6 text-center text-slate-500">
                     Loading…
                   </td>
                 </tr>
               )}
-              {agents.data?.length === 0 && (
+              {!agents.isLoading && visibleAgents.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-6 text-center text-slate-500">
-                    No agents enrolled yet. Click <strong>Add agent</strong> for an install
-                    one-liner.
+                  <td colSpan={11} className="px-4 py-6 text-center text-slate-500">
+                    {agents.data?.length === 0
+                      ? "No agents enrolled yet. Click Add agent for an install one-liner."
+                      : "No agents match the current filter."}
                   </td>
                 </tr>
               )}
-              {agents.data?.map((a) => {
+              {visibleAgents.map((a) => {
                 const online =
                   a.lastSeenAt && Date.now() - new Date(a.lastSeenAt).getTime() < 5 * 60_000;
                 const memPct =
@@ -225,6 +326,32 @@ export default function Agents() {
                       )}
                     </td>
                     <td className="px-4 py-2 text-slate-400">{siteName(a.siteId)}</td>
+                    <td className="px-4 py-2">
+                      {a.tags && a.tags.length > 0 ? (
+                        <div className="flex max-w-[14rem] flex-wrap gap-1">
+                          {a.tags.map((t) => (
+                            <button
+                              key={t}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                toggleTagFilter(t);
+                              }}
+                              className={
+                                "rounded-full border px-1.5 py-0.5 text-[10px] " +
+                                (tagFilter.includes(t)
+                                  ? "border-sonar-500 bg-sonar-700/40 text-sonar-100"
+                                  : "border-ink-700 bg-ink-950/40 text-slate-400 hover:border-sonar-700 hover:text-sonar-200")
+                              }
+                              title={`Filter by ${t}`}
+                            >
+                              {t}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-slate-600">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-slate-400">
                       <div>
                         {a.os} {a.osVersion}
