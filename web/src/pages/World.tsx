@@ -386,9 +386,9 @@ export default function World() {
       {totalUnlocated > 0 && (
         <div className="rounded-md border border-ink-800 bg-ink-900 px-3 py-2 text-[11px] text-slate-400">
           {totalUnlocated} agent{totalUnlocated === 1 ? "" : "s"} have no GeoIP
-          fix yet — typical reasons: probe < 2026.4.26.x (no public-IP
-          discovery), MaxMind databases not loaded on the API, or the host's
-          public IP falls into a reserved/anycast block.
+          fix yet — typical reasons: probe older than 2026.4.26.x (no
+          public-IP discovery), MaxMind databases not loaded on the API,
+          or the host's public IP falls into a reserved/anycast block.
         </div>
       )}
     </div>
