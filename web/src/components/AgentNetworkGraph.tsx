@@ -609,12 +609,7 @@ function HostNode({
         stroke={selected ? "#7dd3fc" : "#0284c7"}
         strokeWidth={selected ? 3 : 2}
       />
-      <g
-        transform={`translate(${sim.x - 9}, ${sim.y - 9})`}
-        className="pointer-events-none"
-      >
-        <IconHost className="h-[18px] w-[18px] text-white" />
-      </g>
+      <SvgIconHost x={sim.x - 9} y={sim.y - 9} size={18} color="#ffffff" />
       {showLabel && (
         <>
           <text
@@ -679,9 +674,7 @@ function ProcessPill({
         stroke={selected ? "#0ea5e9" : "#cbd5e1"}
         strokeWidth={selected ? 2 : 1}
       />
-      <g transform={`translate(${x + pad - 2}, ${cy - 7})`} className="pointer-events-none">
-        <IconGear className="h-[14px] w-[14px] text-sonar-600" />
-      </g>
+      <SvgIconGear x={x + pad - 2} y={cy - 7} size={14} color="#2563eb" />
       {showLabel && (
         <text
           x={x + pad + iconW}
@@ -729,12 +722,7 @@ function EndpointPin({
         stroke={ring}
         strokeWidth={selected ? 2 : 1.2}
       />
-      <g
-        transform={`translate(${sim.x - 6}, ${sim.y - 7})`}
-        className="pointer-events-none"
-      >
-        <IconPin className="h-[12px] w-[12px]" style={{ color: ring }} />
-      </g>
+      <SvgIconPin x={sim.x - 6} y={sim.y - 7} size={12} color={ring} />
       {showLabel && (
         <>
           <text
@@ -795,9 +783,7 @@ function IspPill({
         stroke={selected ? "#0ea5e9" : "#94a3b8"}
         strokeWidth={selected ? 2 : 1.2}
       />
-      <g transform={`translate(${x + pad - 4}, ${cy - 8})`} className="pointer-events-none">
-        <IconGlobe className="h-[16px] w-[16px] text-slate-700" />
-      </g>
+      <SvgIconGlobe x={x + pad - 4} y={cy - 8} size={16} color="#334155" />
       {showLabel && (
         <text
           x={x + pad + iconW - 2}
@@ -1108,59 +1094,184 @@ function truncate(s: string, n: number) {
 }
 
 // ===================== ICONS (inline SVG) =====================
+//
+// Two flavours per icon, because nested <svg> inside an outer <svg>
+// has surprising sizing rules across browsers. Using path-only
+// renders that scale via SVG transform="scale(k)" keeps things
+// predictable on the canvas; the wrapped <svg> variant is for HTML
+// contexts (legend popover, header buttons).
 
 interface IconProps {
+  size?: number;
   className?: string;
   style?: React.CSSProperties;
 }
 
-function IconHost({ className, style }: IconProps) {
+// Wrapped <svg> versions — for use in HTML (legend / header).
+
+function IconHost({ size = 16, className, style }: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
-      <rect x="3" y="6" width="18" height="12" rx="2" />
-      <line x1="3" y1="14" x2="21" y2="14" />
-      <line x1="8" y1="18" x2="16" y2="18" />
-      <line x1="12" y1="18" x2="12" y2="22" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <PathHost />
     </svg>
   );
 }
 
-function IconGear({ className, style }: IconProps) {
+function IconGear({ size = 16, className, style }: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <PathGear />
     </svg>
   );
 }
 
-function IconGlobe({ className, style }: IconProps) {
+function IconGlobe({ size = 16, className, style }: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
-      <circle cx="12" cy="12" r="10" />
-      <line x1="2" y1="12" x2="22" y2="12" />
-      <path d="M12 2a15 15 0 0 1 0 20" />
-      <path d="M12 2a15 15 0 0 0 0 20" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <PathGlobe />
     </svg>
   );
 }
 
-function IconPin({ className, style }: IconProps) {
+function IconPin({ size = 16, className, style }: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
-      <path d="M12 22s7-7.5 7-13A7 7 0 0 0 5 9c0 5.5 7 13 7 13z" />
-      <circle cx="12" cy="9" r="2.5" fill="currentColor" stroke="none" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <PathPin />
     </svg>
   );
 }
 
-function IconLegend({ className, style }: IconProps) {
+function IconLegend({ size = 14, className, style }: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
       <rect x="3" y="3" width="7" height="7" />
       <rect x="14" y="3" width="7" height="7" />
       <rect x="3" y="14" width="7" height="7" />
       <rect x="14" y="14" width="7" height="7" />
     </svg>
+  );
+}
+
+// In-canvas (path-only) versions — for use *inside* the outer
+// ForceGraph SVG. Render a <g> with the right transform so the
+// 24×24 source path becomes the requested pixel size.
+
+interface SvgIconProps {
+  x: number;
+  y: number;
+  size: number;
+  color: string;
+  strokeWidth?: number;
+  fillBg?: string;
+}
+
+function SvgIconGear({ x, y, size, color, strokeWidth = 2.2 }: SvgIconProps) {
+  const k = size / 24;
+  return (
+    <g
+      transform={`translate(${x}, ${y}) scale(${k})`}
+      fill="none"
+      stroke={color}
+      strokeWidth={strokeWidth / k}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      pointerEvents="none"
+    >
+      <PathGear />
+    </g>
+  );
+}
+
+function SvgIconGlobe({ x, y, size, color, strokeWidth = 1.8 }: SvgIconProps) {
+  const k = size / 24;
+  return (
+    <g
+      transform={`translate(${x}, ${y}) scale(${k})`}
+      fill="none"
+      stroke={color}
+      strokeWidth={strokeWidth / k}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      pointerEvents="none"
+    >
+      <PathGlobe />
+    </g>
+  );
+}
+
+function SvgIconPin({ x, y, size, color, strokeWidth = 2 }: SvgIconProps) {
+  const k = size / 24;
+  return (
+    <g
+      transform={`translate(${x}, ${y}) scale(${k})`}
+      fill="none"
+      stroke={color}
+      strokeWidth={strokeWidth / k}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      pointerEvents="none"
+    >
+      <PathPin pinFill={color} />
+    </g>
+  );
+}
+
+function SvgIconHost({ x, y, size, color, strokeWidth = 2 }: SvgIconProps) {
+  const k = size / 24;
+  return (
+    <g
+      transform={`translate(${x}, ${y}) scale(${k})`}
+      fill="none"
+      stroke={color}
+      strokeWidth={strokeWidth / k}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      pointerEvents="none"
+    >
+      <PathHost />
+    </g>
+  );
+}
+
+// Path primitives — shared by both the HTML <svg> and in-canvas
+// transform-based renderers.
+
+function PathHost() {
+  return (
+    <>
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <line x1="3" y1="14" x2="21" y2="14" />
+      <line x1="8" y1="18" x2="16" y2="18" />
+      <line x1="12" y1="18" x2="12" y2="22" />
+    </>
+  );
+}
+
+function PathGear() {
+  return (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </>
+  );
+}
+
+function PathGlobe() {
+  return (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15 15 0 0 1 0 20" />
+      <path d="M12 2a15 15 0 0 0 0 20" />
+    </>
+  );
+}
+
+function PathPin({ pinFill }: { pinFill?: string }) {
+  return (
+    <>
+      <path d="M12 22s7-7.5 7-13A7 7 0 0 0 5 9c0 5.5 7 13 7 13z" />
+      <circle cx="12" cy="9" r="2.5" fill={pinFill ?? "currentColor"} stroke="none" />
+    </>
   );
 }
