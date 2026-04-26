@@ -129,6 +129,8 @@ func (s *Server) Routes() http.Handler {
 
 			r.Get("/sites", s.handleListSites)
 			r.With(requireRole(auth.RoleSuperAdmin)).Post("/sites", s.handleCreateSite)
+			r.With(requireRole(auth.RoleSuperAdmin)).Patch("/sites/{id}", s.handleUpdateSite)
+			r.With(requireRole(auth.RoleSuperAdmin)).Delete("/sites/{id}", s.handleDeleteSite)
 
 			r.With(requireRole(auth.RoleSuperAdmin)).Get("/users", s.handleListUsers)
 			r.With(requireRole(auth.RoleSuperAdmin)).Post("/users", s.handleCreateUser)
@@ -151,6 +153,7 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/appliances/{id}", s.handleGetAppliance)
 			r.Get("/appliances/{id}/metrics", s.handleApplianceMetrics)
 			r.Get("/appliances/{id}/interfaces/{ifIndex}/metrics", s.handleApplianceIfaceMetrics)
+			r.With(requireRole(auth.RoleSiteAdmin)).Patch("/appliances/{id}", s.handleUpdateAppliance)
 			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/appliances/{id}", s.handleDeleteAppliance)
 
 			r.Get("/topology", s.handleTopology)

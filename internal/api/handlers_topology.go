@@ -73,8 +73,15 @@ type topologyResp struct {
 //      either back to a managed node or to a synthesized foreign node.
 //      Edges are accumulated into a map keyed by an unordered node-pair
 //      so we don't double-count when both ends report the same link.
+//
+// Query params:
+//   - siteId — restrict to a single site
+//   - includePhones=1 — include IP phones (default suppressed because
+//     a single 48-port access switch can produce a hairball of 30+ phone
+//     leaves that drown out the inter-switch backbone)
 func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 	siteID := r.URL.Query().Get("siteId")
+	includePhones := r.URL.Query().Get("includePhones") == "1"
 
 	q := `SELECT id, site_id, name, vendor, model, host(mgmt_ip),
 	             sys_name, last_polled_at, last_error,
@@ -267,11 +274,17 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, n := range a.snapshot.LLDP {
+			if !includePhones && isLLDPPhone(n) {
+				continue
+			}
 			p := ports[n.LocalIfIndex]
 			addEdge(a.node.ID, fallback(n.LocalPort, p.name), p.operUp,
 				n.RemoteSysName, fallback(n.RemotePortDescr, n.RemotePortID), "", "", "lldp")
 		}
 		for _, n := range a.snapshot.CDP {
+			if !includePhones && isCDPPhone(n) {
+				continue
+			}
 			p := ports[n.LocalIfIndex]
 			addEdge(a.node.ID, p.name, p.operUp,
 				n.RemoteSysName, n.RemotePortID, n.RemotePlatform, n.RemoteAddress, "cdp")
@@ -315,4 +328,58 @@ func fallback(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// isLLDPPhone returns true when an LLDP neighbor row looks like an IP
+// phone (or other VoIP endpoint). The reliable signal is bit 5 of
+// lldpRemSysCapEnabled — the standard "telephone" capability — but
+// older firmware sometimes leaves it unset, so we also pattern-match
+// on the system description string. We err on the side of
+// suppression because a single switch's worth of phones can easily
+// dominate the topology view, and operators who really want them
+// can pass ?includePhones=1.
+func isLLDPPhone(n snmp.LLDP) bool {
+	const telephoneCap = 0x20 // bit 5 of LldpSystemCapabilitiesMap
+	if n.RemoteCaps&telephoneCap != 0 {
+		return true
+	}
+	return looksLikePhoneString(n.RemoteSysName + " " + n.RemoteSysDescr)
+}
+
+// isCDPPhone uses cdpCacheCapabilities + the platform/version strings.
+// The CDP capabilities bitmap encodes "telephone" as bit 7 (0x80) per
+// CISCO-CDP-MIB, but in practice Cisco IP phones are most reliably
+// identified by their platform string ("Cisco IP Phone …") so we
+// check that first.
+func isCDPPhone(n snmp.CDP) bool {
+	const cdpTelephone = 0x80
+	if n.RemoteCaps&cdpTelephone != 0 {
+		return true
+	}
+	return looksLikePhoneString(n.RemotePlatform + " " + n.RemoteSysName + " " + n.RemoteVersion)
+}
+
+// looksLikePhoneString is the string-matching fallback for devices
+// that don't advertise the telephone capability bit. We match on
+// substrings rather than exact equality because vendors are wildly
+// inconsistent ("Cisco IP Phone 8841", "CP-8865", "Cisco DX80",
+// "Polycom VVX 411", etc.).
+func looksLikePhoneString(s string) bool {
+	s = strings.ToLower(s)
+	switch {
+	case strings.Contains(s, "ip phone"),
+		strings.Contains(s, "ip-phone"),
+		strings.Contains(s, "voip phone"),
+		strings.Contains(s, "polycom"),
+		strings.Contains(s, "yealink"),
+		strings.Contains(s, "grandstream"),
+		strings.Contains(s, "snom"),
+		// Cisco endpoint product code prefixes seen in CDP platform
+		strings.Contains(s, "cp-7"),
+		strings.Contains(s, "cp-8"),
+		strings.Contains(s, "cp-9"),
+		strings.Contains(s, "cisco dx"):
+		return true
+	}
+	return false
 }

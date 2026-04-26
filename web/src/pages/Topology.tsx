@@ -140,29 +140,57 @@ function nodeRadius(n: TopologyNode): number {
 // ---------------------------------------------------------------------------
 
 export default function Topology() {
+  // Persist the phone-suppression preference per browser. Most operators
+  // toggle this once and forget about it; storing the choice means a
+  // reload doesn't snap back to "show phones" right when they were
+  // trying to read the backbone.
+  const [includePhones, setIncludePhones] = useState(() => {
+    return localStorage.getItem("sonar.topology.includePhones") === "1";
+  });
+  useEffect(() => {
+    localStorage.setItem("sonar.topology.includePhones", includePhones ? "1" : "0");
+  }, [includePhones]);
+
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ["topology"],
-    queryFn: () => api.get<Topology>("/topology"),
+    queryKey: ["topology", includePhones],
+    queryFn: () =>
+      api.get<Topology>(
+        includePhones ? "/topology?includePhones=1" : "/topology",
+      ),
     refetchInterval: 30_000,
   });
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Topology</h2>
-          <p className="text-xs text-slate-500">
+          <p className="mt-0.5 text-xs text-slate-500">
             Auto-discovered from LLDP and Cisco CDP on each appliance's last poll.
             Refreshes every 30 seconds.
           </p>
         </div>
-        <button
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="rounded-md border border-ink-700 bg-ink-800 px-3 py-1 text-xs text-slate-200 hover:bg-ink-700 disabled:opacity-50"
-        >
-          {isFetching ? "Refreshing…" : "Refresh"}
-        </button>
+        <div className="flex items-center gap-2">
+          <label
+            className="inline-flex cursor-pointer select-none items-center gap-2 rounded-full border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs text-slate-300 hover:border-ink-600"
+            title="By default IP phones are hidden so the inter-switch backbone stays readable."
+          >
+            <input
+              type="checkbox"
+              className="accent-sonar-500"
+              checked={includePhones}
+              onChange={(e) => setIncludePhones(e.target.checked)}
+            />
+            Show IP phones
+          </label>
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="rounded-full border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs text-slate-200 hover:border-ink-600 hover:bg-ink-800 disabled:opacity-50"
+          >
+            {isFetching ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
       </div>
 
       {isLoading && <div className="text-sm text-slate-500">Loading topology…</div>}

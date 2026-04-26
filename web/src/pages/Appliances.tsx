@@ -53,6 +53,11 @@ export default function Appliances() {
   const sites = useQuery({ queryKey: ["sites"], queryFn: () => api.get<Site[]>("/sites") });
 
   const [open, setOpen] = useState(false);
+  // editing is the appliance row being edited, or null when creating new.
+  // We never serialize the existing sealed creds back to the form — the
+  // operator either leaves the cred fields blank (=> backend keeps the
+  // current sealed value) or types a new value (=> backend re-seals).
+  const [editing, setEditing] = useState<Appliance | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [err, setErr] = useState<string | null>(null);
 
@@ -67,10 +72,90 @@ export default function Appliances() {
     onError: (e) => setErr(e instanceof ApiError ? e.message : "Failed to add appliance"),
   });
 
+  // update sends only the fields the operator actually filled in. Empty
+  // cred fields are stripped on the wire so the backend doesn't try to
+  // re-seal an empty community string when the operator was just
+  // renaming the appliance.
+  const update = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: Partial<FormState> }) =>
+      api.patch<Appliance>(`/appliances/${id}`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["appliances"] });
+      setOpen(false);
+      setEditing(null);
+      setForm(EMPTY_FORM);
+      setErr(null);
+    },
+    onError: (e) => setErr(e instanceof ApiError ? e.message : "Failed to update"),
+  });
+
   const del = useMutation({
     mutationFn: (id: string) => api.del<void>(`/appliances/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["appliances"] }),
   });
+
+  function startCreate() {
+    setEditing(null);
+    setForm({ ...EMPTY_FORM, siteId: sites.data?.[0]?.id ?? "" });
+    setErr(null);
+    setOpen(true);
+  }
+  function startEdit(a: Appliance) {
+    setEditing(a);
+    setForm({
+      siteId: a.siteId,
+      name: a.name,
+      vendor: a.vendor,
+      model: a.model ?? "",
+      serial: a.serial ?? "",
+      mgmtIp: a.mgmtIp,
+      snmpVersion: a.snmpVersion,
+      community: "",
+      v3User: "",
+      v3AuthProto: "SHA",
+      v3AuthPass: "",
+      v3PrivProto: "AES",
+      v3PrivPass: "",
+      pollIntervalSeconds: a.pollIntervalSeconds,
+    });
+    setErr(null);
+    setOpen(true);
+  }
+  function submitForm() {
+    if (editing) {
+      const body: Record<string, unknown> = {
+        siteId: form.siteId,
+        name: form.name,
+        vendor: form.vendor,
+        model: form.model,
+        serial: form.serial,
+        mgmtIp: form.mgmtIp,
+        pollIntervalSeconds: form.pollIntervalSeconds,
+      };
+      // Credential rotation is opt-in: only populate the cred slot for
+      // the version the operator selected, and only if they typed
+      // something. This keeps "rename + change IP" PATCHes from
+      // accidentally re-sealing an empty community.
+      if (form.snmpVersion === "v1" || form.snmpVersion === "v2c") {
+        if (form.community) {
+          body.snmpVersion = form.snmpVersion;
+          body.community = form.community;
+        }
+      } else if (form.snmpVersion === "v3") {
+        if (form.v3User || form.v3AuthPass || form.v3PrivPass) {
+          body.snmpVersion = form.snmpVersion;
+          body.v3User = form.v3User;
+          body.v3AuthProto = form.v3AuthProto;
+          body.v3AuthPass = form.v3AuthPass;
+          body.v3PrivProto = form.v3PrivProto;
+          body.v3PrivPass = form.v3PrivPass;
+        }
+      }
+      update.mutate({ id: editing.id, body: body as Partial<FormState> });
+    } else {
+      create.mutate(form);
+    }
+  }
 
   const siteName = (id: string) => sites.data?.find((s) => s.id === id)?.name ?? id.slice(0, 8);
 
@@ -85,12 +170,8 @@ export default function Appliances() {
           </p>
         </div>
         <button
-          className="rounded-md bg-sonar-600 px-3 py-1.5 text-sm font-medium hover:bg-sonar-500"
-          onClick={() => {
-            setForm({ ...EMPTY_FORM, siteId: sites.data?.[0]?.id ?? "" });
-            setErr(null);
-            setOpen(true);
-          }}
+          className="rounded-full bg-sonar-600 px-4 py-1.5 text-sm font-medium shadow-sm hover:bg-sonar-500"
+          onClick={startCreate}
         >
           New appliance
         </button>
@@ -206,14 +287,22 @@ export default function Appliances() {
                   </td>
                   <td className="px-4 py-2 text-slate-500">{formatRelative(a.lastPolledAt)}</td>
                   <td className="px-4 py-2 text-right">
-                    <button
-                      onClick={() => {
-                        if (confirm(`Delete appliance "${a.name}"?`)) del.mutate(a.id);
-                      }}
-                      className="rounded-md border border-ink-700 px-2 py-1 text-xs text-red-300 hover:bg-red-900/30"
-                    >
-                      Delete
-                    </button>
+                    <div className="inline-flex items-center gap-2">
+                      <button
+                        onClick={() => startEdit(a)}
+                        className="rounded-md border border-ink-700 px-2 py-1 text-xs text-slate-200 hover:bg-ink-800"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Delete appliance "${a.name}"?`)) del.mutate(a.id);
+                        }}
+                        className="rounded-md border border-ink-700 px-2 py-1 text-xs text-red-300 hover:bg-red-900/30"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -223,15 +312,23 @@ export default function Appliances() {
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-20 grid place-items-center bg-black/60 px-4">
+        <div className="fixed inset-0 z-20 grid place-items-center bg-black/60 px-4 backdrop-blur-sm">
           <form
-            className="w-full max-w-2xl space-y-3 rounded-xl border border-ink-800 bg-ink-900 p-5"
+            className="w-full max-w-2xl space-y-3 rounded-xl border border-ink-800 bg-ink-900 p-5 shadow-2xl"
             onSubmit={(e) => {
               e.preventDefault();
-              create.mutate(form);
+              submitForm();
             }}
           >
-            <h3 className="text-lg font-semibold">New appliance</h3>
+            <h3 className="text-lg font-semibold">
+              {editing ? `Edit "${editing.name}"` : "New appliance"}
+            </h3>
+            {editing && (
+              <p className="text-xs text-slate-500">
+                Leave SNMP credential fields blank to keep the existing
+                encrypted secret. Fill them in only when rotating credentials.
+              </p>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <label className="text-xs text-slate-400">
@@ -333,13 +430,13 @@ export default function Appliances() {
               <label className="block text-xs text-slate-400">
                 Community string
                 <input
-                  required
+                  required={!editing}
                   type="password"
                   className="mt-1 w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 font-mono text-sm"
                   value={form.community}
                   onChange={(e) => setForm({ ...form, community: e.target.value })}
                   autoComplete="new-password"
-                  placeholder="public"
+                  placeholder={editing ? "(leave blank to keep)" : "public"}
                 />
               </label>
             )}
@@ -353,10 +450,11 @@ export default function Appliances() {
                   <label className="text-xs text-slate-400">
                     User
                     <input
-                      required
+                      required={!editing}
                       className="mt-1 w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm"
                       value={form.v3User}
                       onChange={(e) => setForm({ ...form, v3User: e.target.value })}
+                      placeholder={editing ? "(leave blank to keep)" : ""}
                     />
                   </label>
                   <label className="text-xs text-slate-400">
@@ -375,12 +473,13 @@ export default function Appliances() {
                   <label className="col-span-2 text-xs text-slate-400">
                     Auth passphrase
                     <input
-                      required
+                      required={!editing}
                       type="password"
                       autoComplete="new-password"
                       className="mt-1 w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 font-mono text-sm"
                       value={form.v3AuthPass}
                       onChange={(e) => setForm({ ...form, v3AuthPass: e.target.value })}
+                      placeholder={editing ? "(leave blank to keep)" : ""}
                     />
                   </label>
                   <label className="text-xs text-slate-400">
@@ -414,17 +513,19 @@ export default function Appliances() {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                className="rounded-md border border-ink-700 px-3 py-1.5 text-sm"
+                className="rounded-md border border-ink-700 px-3 py-1.5 text-sm hover:bg-ink-800"
                 onClick={() => setOpen(false)}
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={create.isPending}
-                className="rounded-md bg-sonar-600 px-3 py-1.5 text-sm hover:bg-sonar-500 disabled:opacity-50"
+                disabled={create.isPending || update.isPending}
+                className="rounded-md bg-sonar-600 px-3 py-1.5 text-sm font-medium hover:bg-sonar-500 disabled:opacity-50"
               >
-                {create.isPending ? "Saving…" : "Add appliance"}
+                {(create.isPending || update.isPending)
+                  ? "Saving…"
+                  : editing ? "Save changes" : "Add appliance"}
               </button>
             </div>
           </form>

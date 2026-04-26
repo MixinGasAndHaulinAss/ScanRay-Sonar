@@ -42,12 +42,49 @@ export default function Login() {
   }
 
   return (
-    <div className="grid min-h-screen place-items-center px-4">
+    <div className="relative grid min-h-screen place-items-center bg-ink-950 px-4 text-slate-100">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-70"
+        style={{
+          backgroundImage:
+            "radial-gradient(800px 500px at 50% 10%, rgba(59,130,246,0.12), transparent 60%), radial-gradient(700px 500px at 50% 100%, rgba(99,102,241,0.08), transparent 60%)",
+        }}
+      />
       <form
         onSubmit={submit}
-        className="w-full max-w-sm space-y-4 rounded-xl border border-ink-800 bg-ink-900 p-6 shadow-xl"
+        className="relative z-10 w-full max-w-sm space-y-4 rounded-2xl border border-ink-800 bg-ink-900/90 p-7 shadow-2xl backdrop-blur"
       >
-        <div className="space-y-1 text-center">
+        <div className="space-y-2 text-center">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-sonar-500/15 text-sonar-300">
+            <svg viewBox="0 0 32 32" width="24" height="24" aria-hidden>
+              <circle cx="16" cy="16" r="2" fill="currentColor" />
+              <path
+                d="M9 16a7 7 0 0114 0"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                opacity="0.85"
+              />
+              <path
+                d="M5 16a11 11 0 0122 0"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                opacity="0.55"
+              />
+              <path
+                d="M1 16a15 15 0 0130 0"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+                opacity="0.3"
+              />
+            </svg>
+          </div>
           <h1 className="text-xl font-semibold">
             <span className="text-sonar-400">ScanRay</span> Sonar
           </h1>

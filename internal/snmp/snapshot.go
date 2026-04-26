@@ -129,6 +129,12 @@ type LLDP struct {
 	RemotePortID  string `json:"remotePortId,omitempty"`
 	RemotePortDescr string `json:"remotePortDescr,omitempty"`
 	RemoteChassisID string `json:"remoteChassisId,omitempty"`
+
+	// RemoteCaps is the lldpRemSysCapEnabled bitmap when the device
+	// reported it. Bit 5 (0x20) = telephone, bit 1 (0x02) = bridge,
+	// bit 2 (0x04) = router. The topology view uses this to filter
+	// out IP phones by default.
+	RemoteCaps int32 `json:"remoteCapabilities,omitempty"`
 }
 
 // CDP is one neighbor row from CISCO-CDP-MIB::cdpCacheTable. Cisco gear

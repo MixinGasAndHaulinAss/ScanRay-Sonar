@@ -464,6 +464,9 @@ const (
 	oidLldpRemPortDescr    = "1.0.8802.1.1.2.1.4.1.1.8"
 	oidLldpRemSysName      = "1.0.8802.1.1.2.1.4.1.1.9"
 	oidLldpRemSysDescr     = "1.0.8802.1.1.2.1.4.1.1.10"
+	// lldpRemSysCapEnabled — bitmask of capabilities actively in use.
+	// Bit 5 = telephone (RFC2922 LldpSystemCapabilitiesMap).
+	oidLldpRemSysCapEnabled = "1.0.8802.1.1.2.1.4.1.1.12"
 )
 
 // CollectLLDP walks the standard lldpRemTable. The index format is
@@ -504,6 +507,16 @@ func CollectLLDP(_ context.Context, c *Client) ([]LLDP, error) {
 	walk(oidLldpRemPortID, func(k key, v Value) { row(k).RemotePortID = v.String() })
 	walk(oidLldpRemPortDescr, func(k key, v Value) { row(k).RemotePortDescr = v.String() })
 	walk(oidLldpRemChassisID, func(k key, v Value) { row(k).RemoteChassisID = formatMAC(v.Bytes()) })
+	walk(oidLldpRemSysCapEnabled, func(k key, v Value) {
+		// LldpSystemCapabilitiesMap is encoded as a packed bit-string
+		// OctetString (1–2 bytes), not an integer. Big-endian bit 5
+		// (0x20 of the first byte) = telephone.
+		if b := v.Bytes(); len(b) > 0 {
+			row(k).RemoteCaps = int32(b[0])
+		} else if n, ok := v.Int64(); ok {
+			row(k).RemoteCaps = int32(n)
+		}
+	})
 
 	out := make([]LLDP, 0, len(rows))
 	for _, r := range rows {

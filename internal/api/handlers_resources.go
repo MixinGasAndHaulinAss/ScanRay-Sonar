@@ -84,6 +84,120 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, v)
 }
 
+type updateSiteReq struct {
+	Slug        *string `json:"slug,omitempty"`
+	Name        *string `json:"name,omitempty"`
+	Timezone    *string `json:"timezone,omitempty"`
+	Description *string `json:"description,omitempty"`
+}
+
+// handleUpdateSite is a true partial PATCH: any field that is omitted
+// (or sent as null) is left untouched. Slug is validated against the
+// same regex used at create time.
+func (s *Server) handleUpdateSite(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "id must be a UUID")
+		return
+	}
+	var req updateSiteReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		return
+	}
+
+	sets := []string{}
+	args := []any{}
+	add := func(col string, val any) {
+		args = append(args, val)
+		sets = append(sets, col+" = $"+itoa(len(args)))
+	}
+	if req.Slug != nil {
+		if !slugRE.MatchString(*req.Slug) {
+			writeErr(w, http.StatusBadRequest, "bad_request", "slug must match ^[a-z0-9-]+$")
+			return
+		}
+		add("slug", *req.Slug)
+	}
+	if req.Name != nil {
+		if *req.Name == "" {
+			writeErr(w, http.StatusBadRequest, "bad_request", "name cannot be empty")
+			return
+		}
+		add("name", *req.Name)
+	}
+	if req.Timezone != nil {
+		add("timezone", *req.Timezone)
+	}
+	if req.Description != nil {
+		// Empty-string description normalizes to NULL so the column
+		// stays consistent with the create handler's NULLIF behavior.
+		if *req.Description == "" {
+			sets = append(sets, "description = NULL")
+		} else {
+			add("description", *req.Description)
+		}
+	}
+	if len(sets) == 0 {
+		writeErr(w, http.StatusBadRequest, "bad_request", "no fields to update")
+		return
+	}
+
+	args = append(args, id)
+	q := "UPDATE sites SET " + join(sets, ", ") + " WHERE id = $" + itoa(len(args)) +
+		" RETURNING id, slug, name, timezone, description, created_at"
+	var v siteView
+	if err := s.pool.QueryRow(r.Context(), q, args...).
+		Scan(&v.ID, &v.Slug, &v.Name, &v.Timezone, &v.Description, &v.CreatedAt); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "update failed (slug conflict?)")
+		return
+	}
+	uid := userIDFromCtx(r.Context())
+	s.store.Audit(r.Context(), "user", "site.update", &uid, clientIP(r),
+		map[string]any{"site_id": v.ID})
+	writeJSON(w, http.StatusOK, v)
+}
+
+// handleDeleteSite refuses to remove a site that still has appliances
+// or agents attached — those cascade-deleting silently would be a
+// huge gun pointed at the foot. The operator must reassign or remove
+// the children first, at which point the row deletes cleanly.
+func (s *Server) handleDeleteSite(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "id must be a UUID")
+		return
+	}
+
+	var appCount, agCount int
+	if err := s.pool.QueryRow(r.Context(),
+		`SELECT (SELECT COUNT(*) FROM appliances WHERE site_id = $1),
+		        (SELECT COUNT(*) FROM agents WHERE site_id = $1)`, id).
+		Scan(&appCount, &agCount); err != nil {
+		writeErr(w, http.StatusInternalServerError, "server_error", "child count failed")
+		return
+	}
+	if appCount > 0 || agCount > 0 {
+		writeErr(w, http.StatusConflict, "site_not_empty",
+			"site still has appliances or agents; remove or reassign them first")
+		return
+	}
+
+	tag, err := s.pool.Exec(r.Context(), `DELETE FROM sites WHERE id = $1`, id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "server_error", "delete failed")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		writeErr(w, http.StatusNotFound, "not_found", "site not found")
+		return
+	}
+	uid := userIDFromCtx(r.Context())
+	s.store.Audit(r.Context(), "user", "site.delete", &uid, clientIP(r),
+		map[string]any{"site_id": id.String()})
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // ---- Users ---------------------------------------------------------------
 
 func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
