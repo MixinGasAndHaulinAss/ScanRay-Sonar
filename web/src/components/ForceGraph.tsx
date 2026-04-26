@@ -1,8 +1,11 @@
 // ForceGraph — a tiny, dependency-free force-directed graph that
-// supports drag-to-reposition. Used by:
+// supports drag-to-reposition, optional pan/zoom, and a programmatic
+// view handle (centerOn / fit / zoomBy) used by the per-agent
+// network topology canvas to drive the +/- buttons and Reset view.
 //
+// Used by:
 //   * Topology.tsx — switch fabric (LLDP/CDP)
-//   * AgentDetail.tsx — per-host process→peer network graph
+//   * AgentNetworkGraph.tsx — per-host process→peer network graph
 //
 // Why a custom widget rather than d3-force / react-flow / vis-network:
 //   * For ≤ ~200 nodes the math is dirt-cheap (<1 ms per tick with the
@@ -22,8 +25,23 @@
 //     animation frame, with the dragged node pinned (fx/fy) so its
 //     neighbors flow around it. Releasing the node un-pins and lets
 //     the system relax for a few more ticks before settling.
+//
+// Pan/zoom (when enableZoomPan is true):
+//   * Wheel anywhere on the SVG: zoom about the cursor.
+//   * Drag empty space: pan.
+//   * Pointer events on nodes still drag-the-node, because the
+//     background hit area is a single transparent <rect> placed
+//     under the node group.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 export interface ForceNodeInput {
   id: string;
@@ -55,6 +73,17 @@ export interface SimNode<N extends ForceNodeInput> {
   data: N;
 }
 
+export interface ForceGraphHandle {
+  /** Reset the pan/zoom view to identity (1×, no translation). */
+  resetView(): void;
+  /** Multiply the zoom factor by k about the canvas center. */
+  zoomBy(k: number): void;
+  /** Center the view on a node by id (no zoom change). */
+  centerOn(id: string): void;
+  /** Fit all nodes inside the viewport with margin. */
+  fit(margin?: number): void;
+}
+
 interface Props<N extends ForceNodeInput, E extends ForceEdgeInput> {
   nodes: N[];
   edges: E[];
@@ -70,9 +99,15 @@ interface Props<N extends ForceNodeInput, E extends ForceEdgeInput> {
   onNodeClick?: (node: N) => void;
   /** Optional callback when the user hovers a node. Pass null on leave. */
   onNodeHover?: (id: string | null) => void;
+  /** Optional callback when the user clicks empty space (cancels selection). */
+  onBackgroundClick?: () => void;
   /** Optional radius of the rendered node. Used to size the drag hit
    *  region; defaults to 22. */
   nodeRadius?: (node: N) => number;
+  /** When true, the wheel zooms and dragging the empty background pans. */
+  enableZoomPan?: boolean;
+  /** SVG-coordinate margin to enforce around node positions. Defaults 40. */
+  worldPadding?: number;
 }
 
 const REPULSE = 22000;
@@ -82,6 +117,8 @@ const CENTER = 0.012;
 const DAMP = 0.82;
 const PRELAYOUT_TICKS = 280;
 const LIVE_TICKS_PER_FRAME = 6;
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 4;
 
 function hashCode(s: string): number {
   let h = 2166136261;
@@ -113,6 +150,7 @@ function tick<N extends ForceNodeInput, E extends ForceEdgeInput>(
   edges: E[],
   w: number,
   h: number,
+  pad: number,
 ) {
   const idx = new Map<string, SimNode<N>>();
   sims.forEach((s) => idx.set(s.id, s));
@@ -167,24 +205,30 @@ function tick<N extends ForceNodeInput, E extends ForceEdgeInput>(
     n.vy *= DAMP;
     n.x += n.vx;
     n.y += n.vy;
-    n.x = Math.max(40, Math.min(w - 40, n.x));
-    n.y = Math.max(40, Math.min(h - 40, n.y));
+    n.x = Math.max(pad, Math.min(w - pad, n.x));
+    n.y = Math.max(pad, Math.min(h - pad, n.y));
   }
 }
 
-export default function ForceGraph<
+function ForceGraphInner<
   N extends ForceNodeInput,
   E extends ForceEdgeInput,
->({
-  nodes,
-  edges,
-  width,
-  height,
-  renderNode,
-  renderEdge,
-  onNodeClick,
-  onNodeHover,
-}: Props<N, E>) {
+>(
+  {
+    nodes,
+    edges,
+    width,
+    height,
+    renderNode,
+    renderEdge,
+    onNodeClick,
+    onNodeHover,
+    onBackgroundClick,
+    enableZoomPan = false,
+    worldPadding = 40,
+  }: Props<N, E>,
+  ref: React.Ref<ForceGraphHandle>,
+) {
   // Re-seed when the *shape* of the input changes (different node IDs
   // or edges). Pure prop-reference change without shape change does
   // NOT cause the layout to reflow — important so that 30s polls of
@@ -201,9 +245,15 @@ export default function ForceGraph<
   // re-renders to a counter is cheaper than copying the sims array.
   const [tickN, setTickN] = useState(0);
 
+  // View transform for pan/zoom (only used when enableZoomPan).
+  const [view, setView] = useState({ tx: 0, ty: 0, k: 1 });
+
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const groupRef = useRef<SVGGElement | null>(null);
+
   useEffect(() => {
     const fresh = nodes.map((n) => seededInit(n, width, height));
-    for (let i = 0; i < PRELAYOUT_TICKS; i++) tick(fresh, edges, width, height);
+    for (let i = 0; i < PRELAYOUT_TICKS; i++) tick(fresh, edges, width, height, worldPadding);
     setSims(fresh);
     setTickN((n) => n + 1);
     // We deliberately depend ONLY on shapeKey: it already encodes
@@ -215,6 +265,7 @@ export default function ForceGraph<
   }, [shapeKey]);
 
   const dragRef = useRef<{ id: string; pointerId: number } | null>(null);
+  const panRef = useRef<{ pointerId: number; sx: number; sy: number; tx0: number; ty0: number } | null>(null);
   const rafRef = useRef<number | null>(null);
   const movedRef = useRef<boolean>(false);
 
@@ -237,7 +288,7 @@ export default function ForceGraph<
           return;
         }
         for (let i = 0; i < LIVE_TICKS_PER_FRAME; i++) {
-          tick(sims, edges, width, height);
+          tick(sims, edges, width, height, worldPadding);
         }
         remaining -= LIVE_TICKS_PER_FRAME;
         setTickN((n) => n + 1);
@@ -246,32 +297,72 @@ export default function ForceGraph<
       stopRAF();
       rafRef.current = requestAnimationFrame(step);
     },
-    [sims, edges, width, height, stopRAF],
+    [sims, edges, width, height, worldPadding, stopRAF],
   );
 
-  // Continuous live ticks while a drag is active.
   useEffect(() => {
     return () => stopRAF();
   }, [stopRAF]);
 
-  const handlePointerDown = (e: React.PointerEvent, id: string) => {
+  // Wheel zoom about cursor. We attach a non-passive listener so we
+  // can preventDefault page scroll; React's synthetic onWheel is
+  // passive in modern browsers and would warn.
+  useEffect(() => {
+    if (!enableZoomPan) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+    const handler = (ev: WheelEvent) => {
+      ev.preventDefault();
+      const rect = svg.getBoundingClientRect();
+      const cx = ev.clientX - rect.left;
+      const cy = ev.clientY - rect.top;
+      setView((v) => {
+        const factor = Math.pow(1.0018, -ev.deltaY);
+        const k1 = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, v.k * factor));
+        // Maintain cursor as zoom anchor: world point under cursor must stay put.
+        const wx = (cx - v.tx) / v.k;
+        const wy = (cy - v.ty) / v.k;
+        return { tx: cx - wx * k1, ty: cy - wy * k1, k: k1 };
+      });
+    };
+    svg.addEventListener("wheel", handler, { passive: false });
+    return () => svg.removeEventListener("wheel", handler);
+  }, [enableZoomPan]);
+
+  // Convert a screen-space pointer event into world (untransformed)
+  // SVG coords. Uses the inner group's CTM so it accounts for the
+  // pan/zoom transform automatically.
+  const screenToWorld = useCallback((e: React.PointerEvent | PointerEvent) => {
+    const g = groupRef.current;
+    const svg = svgRef.current;
+    if (!g || !svg) return { x: 0, y: 0 };
+    const ctm = g.getScreenCTM();
+    if (!ctm) return { x: 0, y: 0 };
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const local = pt.matrixTransform(ctm.inverse());
+    return { x: local.x, y: local.y };
+  }, []);
+
+  const handleNodePointerDown = (e: React.PointerEvent, id: string) => {
     const sim = sims.find((s) => s.id === id);
     if (!sim) return;
-    if (sim.data.pinned) return; // can't move pinned nodes
+    if (sim.data.pinned) return;
+    e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
     dragRef.current = { id, pointerId: e.pointerId };
     movedRef.current = false;
     sim.fx = sim.x;
     sim.fy = sim.y;
 
-    // Begin a continuous-tick loop while dragging.
     const loop = () => {
       if (!dragRef.current) {
         rafRef.current = null;
         return;
       }
       for (let i = 0; i < LIVE_TICKS_PER_FRAME; i++) {
-        tick(sims, edges, width, height);
+        tick(sims, edges, width, height, worldPadding);
       }
       setTickN((n) => n + 1);
       rafRef.current = requestAnimationFrame(loop);
@@ -280,32 +371,24 @@ export default function ForceGraph<
     rafRef.current = requestAnimationFrame(loop);
   };
 
-  const handlePointerMove = (e: React.PointerEvent) => {
+  const handleNodePointerMove = (e: React.PointerEvent) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== e.pointerId) return;
     const sim = sims.find((s) => s.id === drag.id);
     if (!sim) return;
-    const svg = (e.currentTarget as SVGElement).ownerSVGElement;
-    if (!svg) return;
-    const pt = svg.createSVGPoint();
-    pt.x = e.clientX;
-    pt.y = e.clientY;
-    const ctm = svg.getScreenCTM();
-    if (!ctm) return;
-    const local = pt.matrixTransform(ctm.inverse());
-    sim.fx = Math.max(40, Math.min(width - 40, local.x));
-    sim.fy = Math.max(40, Math.min(height - 40, local.y));
+    const w = screenToWorld(e);
+    sim.fx = Math.max(worldPadding, Math.min(width - worldPadding, w.x));
+    sim.fy = Math.max(worldPadding, Math.min(height - worldPadding, w.y));
     movedRef.current = true;
   };
 
-  const handlePointerUp = (_e: React.PointerEvent, id: string) => {
+  const handleNodePointerUp = (_e: React.PointerEvent, id: string) => {
     const drag = dragRef.current;
     dragRef.current = null;
     const sim = sims.find((s) => s.id === id);
     if (sim && !sim.data.pinned) {
       // Leave fx/fy set so the node "sticks" where the operator
-      // dropped it. They can grab it again to move it. Setting
-      // them to undefined would let the layout drift it back.
+      // dropped it. They can grab it again to move it.
     }
     if (!movedRef.current && drag && onNodeClick && sim) {
       onNodeClick(sim.data);
@@ -313,8 +396,103 @@ export default function ForceGraph<
     startLiveRelax(60);
   };
 
+  // Background pan handlers (only meaningful when enableZoomPan).
+  const handleBgPointerDown = (e: React.PointerEvent) => {
+    if (!enableZoomPan) {
+      // Even without pan, an empty-space click should clear selection.
+      onBackgroundClick?.();
+      return;
+    }
+    if (dragRef.current) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    panRef.current = {
+      pointerId: e.pointerId,
+      sx: e.clientX,
+      sy: e.clientY,
+      tx0: view.tx,
+      ty0: view.ty,
+    };
+    movedRef.current = false;
+  };
+
+  const handleBgPointerMove = (e: React.PointerEvent) => {
+    const p = panRef.current;
+    if (!p || p.pointerId !== e.pointerId) return;
+    const dx = e.clientX - p.sx;
+    const dy = e.clientY - p.sy;
+    if (Math.abs(dx) + Math.abs(dy) > 2) movedRef.current = true;
+    setView((v) => ({ ...v, tx: p.tx0 + dx, ty: p.ty0 + dy }));
+  };
+
+  const handleBgPointerUp = (e: React.PointerEvent) => {
+    const p = panRef.current;
+    if (p && p.pointerId === e.pointerId) {
+      panRef.current = null;
+      if (!movedRef.current) onBackgroundClick?.();
+    }
+  };
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      resetView() {
+        setView({ tx: 0, ty: 0, k: 1 });
+      },
+      zoomBy(k) {
+        setView((v) => {
+          const k1 = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, v.k * k));
+          // Zoom about the canvas center so +/- buttons feel stable.
+          const cx = width / 2;
+          const cy = height / 2;
+          const wx = (cx - v.tx) / v.k;
+          const wy = (cy - v.ty) / v.k;
+          return { tx: cx - wx * k1, ty: cy - wy * k1, k: k1 };
+        });
+      },
+      centerOn(id) {
+        const s = sims.find((x) => x.id === id);
+        if (!s) return;
+        setView((v) => ({
+          k: v.k,
+          tx: width / 2 - s.x * v.k,
+          ty: height / 2 - s.y * v.k,
+        }));
+      },
+      fit(margin = 60) {
+        if (sims.length === 0) return;
+        const xs = sims.map((s) => s.x);
+        const ys = sims.map((s) => s.y);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        const bw = Math.max(1, maxX - minX);
+        const bh = Math.max(1, maxY - minY);
+        const k = Math.min(
+          (width - margin * 2) / bw,
+          (height - margin * 2) / bh,
+          MAX_ZOOM,
+        );
+        const cx = (minX + maxX) / 2;
+        const cy = (minY + maxY) / 2;
+        setView({
+          k,
+          tx: width / 2 - cx * k,
+          ty: height / 2 - cy * k,
+        });
+      },
+    }),
+    [sims, width, height],
+  );
+
   return (
-    <svg width={width} height={height} className="block touch-none">
+    <svg
+      ref={svgRef}
+      width={width}
+      height={height}
+      className="block touch-none"
+      style={{ cursor: enableZoomPan ? (panRef.current ? "grabbing" : "grab") : "default" }}
+    >
       <defs>
         <marker
           id="fg-arrow"
@@ -329,11 +507,34 @@ export default function ForceGraph<
         </marker>
       </defs>
 
+      {/* Background hit area: catches empty-space clicks for both
+          panning and clearing selection. The transparent rect lives
+          in screen-space so it's always full-bleed. */}
+      <rect
+        x={0}
+        y={0}
+        width={width}
+        height={height}
+        fill="transparent"
+        onPointerDown={handleBgPointerDown}
+        onPointerMove={handleBgPointerMove}
+        onPointerUp={handleBgPointerUp}
+        onPointerCancel={handleBgPointerUp}
+      />
+
       {/* tickN is read here so React re-renders when the simulation
           ticks; we deliberately do NOT re-key the wrapper, which
           would unmount the children mid-drag and drop the SVG's
           pointer capture. */}
-      <g data-tick={tickN}>
+      <g
+        ref={groupRef}
+        data-tick={tickN}
+        transform={
+          enableZoomPan
+            ? `translate(${view.tx}, ${view.ty}) scale(${view.k})`
+            : undefined
+        }
+      >
         {edges.map((e) => {
           const a = sims.find((s) => s.id === e.from);
           const b = sims.find((s) => s.id === e.to);
@@ -355,10 +556,10 @@ export default function ForceGraph<
         {sims.map((s) => (
           <g
             key={s.id}
-            onPointerDown={(e) => handlePointerDown(e, s.id)}
-            onPointerMove={handlePointerMove}
-            onPointerUp={(e) => handlePointerUp(e, s.id)}
-            onPointerCancel={(e) => handlePointerUp(e, s.id)}
+            onPointerDown={(e) => handleNodePointerDown(e, s.id)}
+            onPointerMove={handleNodePointerMove}
+            onPointerUp={(e) => handleNodePointerUp(e, s.id)}
+            onPointerCancel={(e) => handleNodePointerUp(e, s.id)}
             onMouseEnter={() => onNodeHover?.(s.id)}
             onMouseLeave={() => onNodeHover?.(null)}
             style={{ cursor: s.data.pinned ? "default" : "grab" }}
@@ -370,3 +571,14 @@ export default function ForceGraph<
     </svg>
   );
 }
+
+// Type-preserving forwardRef wrapper so callers can pass a ref while
+// keeping the generic node/edge types intact.
+const ForceGraph = forwardRef(ForceGraphInner) as <
+  N extends ForceNodeInput,
+  E extends ForceEdgeInput,
+>(
+  props: Props<N, E> & { ref?: React.Ref<ForceGraphHandle> },
+) => ReturnType<typeof ForceGraphInner>;
+
+export default ForceGraph;

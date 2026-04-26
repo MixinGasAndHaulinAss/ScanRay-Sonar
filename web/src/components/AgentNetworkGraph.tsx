@@ -1,39 +1,95 @@
-// AgentNetworkGraph — the "Network connections" section on the
-// agent detail page. Renders a force-directed graph centered on the
-// host, with one outer node per remote peer (after aggregation by
-// remote IP). The host is pinned in the middle so the layout reads
-// like a star/sun rather than a generic blob.
+// AgentNetworkGraph — the "Network Topology" canvas on the agent
+// detail page. Renders a four-tier force-directed graph:
 //
-// Data shape comes straight from /agents/{id}/network-graph:
-//   * agent: hostname + GeoIP/public IP for the center label
-//   * peers: aggregated remote endpoints with process attribution
+//     host  →  process  →  endpoint  →  ISP
 //
-// The component owns:
-//   * Filter row (direction toggle + "private only/public only" + a
-//     small process-name search; useful when a chatty box has
-//     hundreds of peers from a single TLS scanner).
-//   * Side panel that shows the selected peer's full detail —
-//     processes, ports, ASN/Org — without leaving the graph view.
+// Inspired by ThousandEyes / Auvik-style endpoint graphs: process
+// nodes are gear-icon pills, endpoint nodes are small location
+// pins, ISP nodes are globe-icon pills (one per organisation/ASN).
+//
+// The canvas is big (fills the right column of the agent page),
+// pannable by dragging empty space, and zoomable with the mouse
+// wheel or the +/- buttons. A floating "Display options" panel on
+// the left toggles which tiers and labels are visible; a floating
+// "Node details" panel on the right reveals all known facts about
+// the selected node.
+//
+// Data flow:
+//   useQuery → api.get<AgentNetworkGraph>("/agents/{id}/network-graph")
+//   peer list (already aggregated by remote IP, GeoIP-enriched on
+//   the server side) → in-memory tier construction → ForceGraph
 
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import type { AgentNetworkGraph, AgentNetworkPeer } from "../api/types";
 import ForceGraph, {
   type ForceEdgeInput,
+  type ForceGraphHandle,
   type ForceNodeInput,
   type SimNode,
 } from "./ForceGraph";
 
+type NodeKind = "host" | "process" | "endpoint" | "isp";
+
+interface ProcessAgg {
+  key: string;
+  name: string;
+  pid?: number;
+  peers: Set<string>;
+  totalConns: number;
+}
+
+interface IspAgg {
+  key: string;
+  org: string;
+  asn?: number;
+  peers: Set<string>;
+  countries: Set<string>;
+}
+
 interface NetNodeData extends ForceNodeInput {
-  kind: "host" | "peer";
+  kind: NodeKind;
   label: string;
   sub?: string;
-  peer?: AgentNetworkPeer;
+  /** for "host" */
+  host?: AgentNetworkGraph["agent"];
+  /** for "process" */
+  process?: ProcessAgg;
+  /** for "endpoint" */
+  endpoint?: AgentNetworkPeer;
+  /** for "isp" */
+  isp?: IspAgg;
+}
+
+interface NetEdgeInput extends ForceEdgeInput {
+  tier: "h-p" | "p-e" | "e-i";
 }
 
 const DIRECTIONS: Array<"all" | "outbound" | "inbound"> = ["all", "outbound", "inbound"];
 const SCOPES: Array<"all" | "public" | "private"> = ["all", "public", "private"];
+
+interface DisplayOptions {
+  showIsp: boolean;
+  uniqueProcesses: boolean;
+  showProcessLabels: boolean;
+  showEndpointLabels: boolean;
+  showIspLabels: boolean;
+  showHostLabel: boolean;
+}
+
+const DEFAULT_OPTIONS: DisplayOptions = {
+  showIsp: true,
+  uniqueProcesses: false,
+  showProcessLabels: true,
+  showEndpointLabels: false,
+  showIspLabels: true,
+  showHostLabel: true,
+};
+
+const W_DEFAULT = 1200;
+const H_DEFAULT = 720;
 
 export default function AgentNetworkGraphSection({ agentId }: { agentId: string }) {
   const { data, isLoading, isError } = useQuery({
@@ -44,12 +100,34 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
 
   const [direction, setDirection] = useState<(typeof DIRECTIONS)[number]>("all");
   const [scope, setScope] = useState<(typeof SCOPES)[number]>("all");
-  const [proc, setProc] = useState("");
+  const [procFilter, setProcFilter] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
+  const [options, setOptions] = useState<DisplayOptions>(DEFAULT_OPTIONS);
+  const [legendOpen, setLegendOpen] = useState(false);
+  const [optionsCollapsed, setOptionsCollapsed] = useState(false);
+
+  const graphRef = useRef<ForceGraphHandle | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [size, setSize] = useState({ w: W_DEFAULT, h: H_DEFAULT });
+
+  // Watch container size so the SVG fills the available area. We
+  // initialise eagerly with sensible defaults so the first paint
+  // doesn't jump.
+  const wrapRef = (el: HTMLDivElement | null) => {
+    containerRef.current = el;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        const cr = e.contentRect;
+        setSize({ w: Math.max(640, cr.width), h: Math.max(420, cr.height) });
+      }
+    });
+    ro.observe(el);
+  };
 
   const filteredPeers = useMemo(() => {
     const list = data?.peers ?? [];
-    const q = proc.trim().toLowerCase();
+    const q = procFilter.trim().toLowerCase();
     return list.filter((p) => {
       if (direction !== "all" && p.direction !== direction) return false;
       if (scope === "public" && p.isPrivate) return false;
@@ -57,7 +135,7 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
       if (q && !p.processes.some((pr) => pr.name.toLowerCase().includes(q))) return false;
       return true;
     });
-  }, [data, direction, scope, proc]);
+  }, [data, direction, scope, procFilter]);
 
   const counts = useMemo(() => {
     let inbound = 0;
@@ -73,295 +151,906 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
     return { inbound, outbound, publicCount, privateCount, total: data?.peers.length ?? 0 };
   }, [data]);
 
-  // Width is fixed-ish at 720; layout is happiest with ample space
-  // in a smaller-than-page canvas because the host is pinned at the
-  // middle.
-  const W = 760;
-  const H = 480;
+  const { nodes, edges } = useMemo(() => {
+    const ns: NetNodeData[] = [];
+    const es: NetEdgeInput[] = [];
+    if (!data) return { nodes: ns, edges: es };
 
-  const nodes = useMemo<NetNodeData[]>(() => {
-    if (!data) return [];
-    const host: NetNodeData = {
-      id: "__host__",
+    const W = size.w;
+    const H = size.h;
+
+    ns.push({
+      id: "host",
       kind: "host",
       label: data.agent.hostname,
-      sub: data.agent.primaryIp ?? undefined,
+      sub: data.agent.primaryIp ?? data.agent.publicIp ?? undefined,
+      host: data.agent,
       pinned: true,
       initialX: W / 2,
       initialY: H / 2,
-    };
-    const peers = filteredPeers.map<NetNodeData>((p) => ({
-      id: "peer:" + p.direction + ":" + p.ip,
-      kind: "peer",
-      label: p.host || p.ip,
-      sub: p.org || (p.isPrivate ? "private" : p.countryIso),
-      peer: p,
-    }));
-    return [host, ...peers];
-  }, [data, filteredPeers]);
+    });
 
-  const edges = useMemo<ForceEdgeInput[]>(
-    () =>
-      filteredPeers.map((p) => ({
-        from: "__host__",
-        to: "peer:" + p.direction + ":" + p.ip,
-        rest: 110 + Math.min(80, Math.log2(p.totalConns + 2) * 14),
-      })),
-    [filteredPeers],
-  );
+    // ---- Process aggregation -------------------------------------
+    const procMap = new Map<string, ProcessAgg>();
+    for (const peer of filteredPeers) {
+      for (const pr of peer.processes) {
+        const key =
+          options.uniqueProcesses && pr.pid != null
+            ? `${pr.name}#${pr.pid}`
+            : pr.name || "(unknown)";
+        let agg = procMap.get(key);
+        if (!agg) {
+          agg = {
+            key,
+            name: pr.name || "(unknown)",
+            pid: options.uniqueProcesses ? pr.pid : undefined,
+            peers: new Set(),
+            totalConns: 0,
+          };
+          procMap.set(key, agg);
+        }
+        agg.peers.add(peer.ip);
+        agg.totalConns += pr.count;
+      }
+    }
+    for (const proc of procMap.values()) {
+      ns.push({
+        id: `proc:${proc.key}`,
+        kind: "process",
+        label: proc.name,
+        sub: proc.pid != null ? `pid ${proc.pid}` : undefined,
+        process: proc,
+      });
+      es.push({ from: "host", to: `proc:${proc.key}`, rest: 130, tier: "h-p" });
+    }
 
-  const selectedPeer = useMemo(() => {
-    if (!selected || !data) return null;
-    if (!selected.startsWith("peer:")) return null;
-    return nodes.find((n) => n.id === selected)?.peer ?? null;
-  }, [selected, data, nodes]);
+    // ---- Endpoint nodes ------------------------------------------
+    for (const peer of filteredPeers) {
+      const epId = `ep:${peer.direction}:${peer.ip}`;
+      ns.push({
+        id: epId,
+        kind: "endpoint",
+        label: peer.host || peer.ip,
+        sub: peer.org || (peer.isPrivate ? "private" : peer.countryIso ?? undefined),
+        endpoint: peer,
+      });
+      for (const pr of peer.processes) {
+        const key =
+          options.uniqueProcesses && pr.pid != null
+            ? `${pr.name}#${pr.pid}`
+            : pr.name || "(unknown)";
+        es.push({
+          from: `proc:${key}`,
+          to: epId,
+          rest: 130 + Math.min(60, Math.log2(peer.totalConns + 2) * 8),
+          tier: "p-e",
+        });
+      }
+    }
+
+    // ---- ISP aggregation -----------------------------------------
+    if (options.showIsp) {
+      const ispMap = new Map<string, IspAgg>();
+      for (const peer of filteredPeers) {
+        const org = peer.org || (peer.isPrivate ? "Private network" : peer.countryName || "Unknown");
+        const key = peer.asn ? `AS${peer.asn}` : org;
+        let agg = ispMap.get(key);
+        if (!agg) {
+          agg = { key, org, asn: peer.asn, peers: new Set(), countries: new Set() };
+          ispMap.set(key, agg);
+        }
+        agg.peers.add(peer.ip);
+        if (peer.countryIso) agg.countries.add(peer.countryIso);
+      }
+      for (const isp of ispMap.values()) {
+        ns.push({
+          id: `isp:${isp.key}`,
+          kind: "isp",
+          label: isp.org,
+          sub: isp.asn ? `AS${isp.asn}` : undefined,
+          isp,
+        });
+      }
+      for (const peer of filteredPeers) {
+        const org = peer.org || (peer.isPrivate ? "Private network" : peer.countryName || "Unknown");
+        const key = peer.asn ? `AS${peer.asn}` : org;
+        es.push({
+          from: `ep:${peer.direction}:${peer.ip}`,
+          to: `isp:${key}`,
+          rest: 110,
+          tier: "e-i",
+        });
+      }
+    }
+
+    return { nodes: ns, edges: es };
+  }, [data, filteredPeers, size, options.showIsp, options.uniqueProcesses]);
+
+  const selectedNode = useMemo(() => {
+    if (!selected) return null;
+    return nodes.find((n) => n.id === selected) ?? null;
+  }, [nodes, selected]);
 
   if (isLoading) {
     return (
-      <Section title="Network connections">
-        <div className="text-xs text-slate-500">Loading peer graph…</div>
-      </Section>
+      <SectionShell>
+        <div className="p-6 text-xs text-slate-500">Loading peer graph…</div>
+      </SectionShell>
     );
   }
   if (isError || !data) {
     return (
-      <Section title="Network connections">
-        <div className="text-xs text-red-300">Failed to load network graph.</div>
-      </Section>
+      <SectionShell>
+        <div className="p-6 text-xs text-red-300">Failed to load network graph.</div>
+      </SectionShell>
     );
   }
   if (data.peers.length === 0) {
     return (
-      <Section title="Network connections">
-        <div className="text-xs text-slate-500">
+      <SectionShell>
+        <div className="p-6 text-xs text-slate-500">
           No active peers at last snapshot. The probe needs at least one
-          ESTABLISHED conversation outside loopback to populate this
-          graph.
+          ESTABLISHED conversation outside loopback to populate this graph.
         </div>
-      </Section>
+      </SectionShell>
     );
   }
 
   return (
-    <Section title={`Network connections (${counts.total} peers · ${counts.outbound} out · ${counts.inbound} in · ${counts.publicCount} public)`}>
-      <div className="flex flex-wrap items-center gap-2 pb-2">
-        <Pill
-          label="Direction"
-          values={DIRECTIONS}
-          value={direction}
-          onChange={setDirection}
-        />
-        <Pill label="Scope" values={SCOPES} value={scope} onChange={setScope} />
-        <input
-          value={proc}
-          onChange={(e) => setProc(e.target.value)}
-          placeholder="Filter by process name…"
-          className="h-7 w-56 rounded-md border border-ink-700 bg-ink-950 px-2 text-xs text-slate-200 placeholder:text-slate-600 focus:border-sonar-500 focus:outline-none"
-        />
+    <div className="rounded-xl border border-ink-800 bg-ink-900">
+      {/* Header / filters bar */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-ink-800 px-3 py-2">
+        <h3 className="text-sm font-semibold text-slate-200">Network Topology</h3>
         <span className="text-[11px] text-slate-500">
-          showing {filteredPeers.length} of {counts.total}
+          {counts.total} peers · {counts.outbound} out · {counts.inbound} in · {counts.publicCount} public
         </span>
-        <span className="ml-auto text-[10px] uppercase tracking-wide text-slate-500">
-          drag a peer to reposition · click for details
-        </span>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Pill label="Direction" values={DIRECTIONS} value={direction} onChange={setDirection} />
+          <Pill label="Scope" values={SCOPES} value={scope} onChange={setScope} />
+          <input
+            value={procFilter}
+            onChange={(e) => setProcFilter(e.target.value)}
+            placeholder="Filter by process…"
+            className="h-7 w-44 rounded-md border border-ink-700 bg-ink-950 px-2 text-xs text-slate-200 placeholder:text-slate-600 focus:border-sonar-500 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => setLegendOpen((v) => !v)}
+            className={
+              "rounded-md border px-2 py-1 text-[11px] " +
+              (legendOpen
+                ? "border-sonar-500 bg-sonar-500/10 text-sonar-400"
+                : "border-ink-700 bg-ink-900 text-slate-300 hover:border-ink-600")
+            }
+            title="Show legend"
+          >
+            <IconLegend className="mr-1 inline-block h-3.5 w-3.5 -translate-y-px" /> Map Legend
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_18rem]">
-        <div className="rounded-lg border border-ink-800 bg-ink-950/40">
-          <ForceGraph<NetNodeData, ForceEdgeInput>
-            nodes={nodes}
-            edges={edges}
-            width={W}
-            height={H}
-            renderEdge={(_e, a, b) => {
-              const isSel = selected != null && (a.id === selected || b.id === selected);
-              return (
-                <line
-                  key={a.id + "->" + b.id}
-                  x1={a.x}
-                  y1={a.y}
-                  x2={b.x}
-                  y2={b.y}
-                  stroke={isSel ? "#0ea5e9" : "#334155"}
-                  strokeWidth={isSel ? 2 : 1.2}
-                  opacity={isSel ? 1 : 0.55}
-                />
-              );
-            }}
-            renderNode={(s) => <NetNode sim={s} selected={selected === s.id} />}
-            onNodeClick={(n) => setSelected((cur) => (cur === n.id ? null : n.id))}
-          />
+      {/* Canvas + overlays */}
+      <div ref={wrapRef} className="relative h-[75vh] min-h-[520px] overflow-hidden bg-ink-950">
+        <ForceGraph<NetNodeData, NetEdgeInput>
+          ref={graphRef}
+          nodes={nodes}
+          edges={edges}
+          width={size.w}
+          height={size.h}
+          enableZoomPan
+          worldPadding={28}
+          renderEdge={(e, a, b) => <NetEdge edge={e} a={a} b={b} selectedId={selected} />}
+          renderNode={(s) => (
+            <NetNode sim={s} selected={selected === s.id} options={options} />
+          )}
+          onNodeClick={(n) => setSelected((cur) => (cur === n.id ? null : n.id))}
+          onBackgroundClick={() => setSelected(null)}
+        />
+
+        {/* Display options (left, collapsible) */}
+        <div className="absolute left-3 top-3 w-64 rounded-lg border border-ink-700 bg-ink-900/95 text-xs shadow-xl backdrop-blur">
+          <button
+            type="button"
+            onClick={() => setOptionsCollapsed((v) => !v)}
+            className="flex w-full items-center justify-between px-3 py-2 text-left"
+          >
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
+              Display options
+            </span>
+            <span className="text-slate-500">{optionsCollapsed ? "+" : "−"}</span>
+          </button>
+          {!optionsCollapsed && (
+            <div className="space-y-2 border-t border-ink-800 px-3 pb-3 pt-2">
+              <div className="text-[10px] uppercase tracking-wider text-slate-500">
+                Entity types
+              </div>
+              <Toggle
+                label="Show ISP"
+                value={options.showIsp}
+                onChange={(v) => setOptions((o) => ({ ...o, showIsp: v }))}
+              />
+              <Toggle
+                label="Unique processes"
+                value={options.uniqueProcesses}
+                onChange={(v) => setOptions((o) => ({ ...o, uniqueProcesses: v }))}
+              />
+              <div className="pt-2 text-[10px] uppercase tracking-wider text-slate-500">
+                Label visibility
+              </div>
+              <Toggle
+                label="Process labels"
+                value={options.showProcessLabels}
+                onChange={(v) => setOptions((o) => ({ ...o, showProcessLabels: v }))}
+              />
+              <Toggle
+                label="Endpoint labels"
+                value={options.showEndpointLabels}
+                onChange={(v) => setOptions((o) => ({ ...o, showEndpointLabels: v }))}
+              />
+              <Toggle
+                label="ISP labels"
+                value={options.showIspLabels}
+                onChange={(v) => setOptions((o) => ({ ...o, showIspLabels: v }))}
+              />
+              <Toggle
+                label="Host label"
+                value={options.showHostLabel}
+                onChange={(v) => setOptions((o) => ({ ...o, showHostLabel: v }))}
+              />
+            </div>
+          )}
         </div>
-        <PeerSidePanel peer={selectedPeer} />
+
+        {/* Legend popover (top-right) */}
+        {legendOpen && (
+          <div className="absolute right-3 top-3 w-60 rounded-lg border border-ink-700 bg-ink-900/95 p-3 text-xs shadow-xl backdrop-blur">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
+                Legend
+              </span>
+              <button
+                onClick={() => setLegendOpen(false)}
+                className="text-slate-500 hover:text-slate-300"
+              >
+                ×
+              </button>
+            </div>
+            <ul className="space-y-1.5 text-slate-300">
+              <li className="flex items-center gap-2">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-sonar-500 text-white">
+                  <IconHost className="h-3 w-3" />
+                </span>
+                Host (this agent)
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-800">
+                  <IconGear className="h-3 w-3 text-sonar-600" />
+                  proc.exe
+                </span>
+                Process
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-sky-500/20 text-sky-300 ring-1 ring-sky-400">
+                  <IconPin className="h-3 w-3" />
+                </span>
+                Endpoint address
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-800">
+                  <IconGlobe className="h-3 w-3 text-slate-700" />
+                  ISP
+                </span>
+                ISP / organisation
+              </li>
+              <li className="pt-2 text-[10px] uppercase tracking-wide text-slate-500">
+                Edges
+              </li>
+              <li className="flex items-center gap-2">
+                <svg width="36" height="6"><line x1="0" y1="3" x2="36" y2="3" stroke="#475569" strokeWidth="1.6" /></svg>
+                Host → process
+              </li>
+              <li className="flex items-center gap-2">
+                <svg width="36" height="6"><line x1="0" y1="3" x2="36" y2="3" stroke="#0ea5e9" strokeWidth="1.4" /></svg>
+                Process → endpoint
+              </li>
+              <li className="flex items-center gap-2">
+                <svg width="36" height="6"><line x1="0" y1="3" x2="36" y2="3" stroke="#64748b" strokeWidth="1.2" strokeDasharray="3 3" /></svg>
+                Endpoint → ISP
+              </li>
+            </ul>
+            <div className="mt-2 border-t border-ink-800 pt-2 text-[10px] text-slate-500">
+              Drag any node to reposition · scroll to zoom · drag empty space to pan.
+            </div>
+          </div>
+        )}
+
+        {/* Zoom controls (bottom-right) */}
+        <div className="absolute bottom-3 right-3 flex flex-col rounded-md border border-ink-700 bg-ink-900/95 text-slate-200 shadow-xl backdrop-blur">
+          <button
+            onClick={() => graphRef.current?.zoomBy(1.25)}
+            className="border-b border-ink-800 px-2 py-1 hover:bg-ink-800"
+            title="Zoom in"
+          >
+            +
+          </button>
+          <button
+            onClick={() => graphRef.current?.zoomBy(0.8)}
+            className="border-b border-ink-800 px-2 py-1 hover:bg-ink-800"
+            title="Zoom out"
+          >
+            −
+          </button>
+          <button
+            onClick={() => graphRef.current?.fit(60)}
+            className="border-b border-ink-800 px-2 py-1 text-[10px] hover:bg-ink-800"
+            title="Fit to view"
+          >
+            ⤢
+          </button>
+          <button
+            onClick={() => graphRef.current?.resetView()}
+            className="px-2 py-1 text-[10px] hover:bg-ink-800"
+            title="Reset view"
+          >
+            ⟳
+          </button>
+        </div>
+
+        {/* Node details (right, only when selected) */}
+        {selectedNode && (
+          <NodeDetailsPanel
+            node={selectedNode}
+            onClose={() => setSelected(null)}
+            onCenter={() => graphRef.current?.centerOn(selectedNode.id)}
+          />
+        )}
       </div>
-    </Section>
+    </div>
   );
 }
+
+// ===================== EDGE RENDERER =========================
+
+function NetEdge({
+  edge,
+  a,
+  b,
+  selectedId,
+}: {
+  edge: NetEdgeInput;
+  a: SimNode<NetNodeData>;
+  b: SimNode<NetNodeData>;
+  selectedId: string | null;
+}) {
+  const isSel =
+    selectedId != null && (a.id === selectedId || b.id === selectedId);
+  let stroke: string;
+  let dash: string | undefined;
+  let width: number;
+  switch (edge.tier) {
+    case "h-p":
+      stroke = isSel ? "#7dd3fc" : "#475569";
+      width = isSel ? 2 : 1.6;
+      break;
+    case "p-e":
+      stroke = isSel ? "#0ea5e9" : "#0ea5e9aa";
+      width = isSel ? 2.2 : 1.3;
+      break;
+    case "e-i":
+      stroke = isSel ? "#94a3b8" : "#475569";
+      width = isSel ? 1.6 : 1.1;
+      dash = "3 4";
+      break;
+  }
+  return (
+    <line
+      key={`${edge.from}->${edge.to}`}
+      x1={a.x}
+      y1={a.y}
+      x2={b.x}
+      y2={b.y}
+      stroke={stroke}
+      strokeWidth={width}
+      strokeDasharray={dash}
+      opacity={isSel ? 1 : 0.7}
+    />
+  );
+}
+
+// ===================== NODE RENDERER =========================
 
 function NetNode({
   sim,
   selected,
+  options,
 }: {
   sim: SimNode<NetNodeData>;
   selected: boolean;
+  options: DisplayOptions;
 }) {
   const n = sim.data;
-  if (n.kind === "host") {
-    return (
-      <>
-        <circle
-          cx={sim.x}
-          cy={sim.y}
-          r={32}
-          fill="#0ea5e9"
-          stroke={selected ? "#7dd3fc" : "#0284c7"}
-          strokeWidth={2.5}
-        />
-        <text
-          x={sim.x}
-          y={sim.y + 4}
-          textAnchor="middle"
-          className="pointer-events-none select-none fill-white text-[10px] font-semibold"
-        >
-          host
-        </text>
-        <text
-          x={sim.x}
-          y={sim.y + 50}
-          textAnchor="middle"
-          className="pointer-events-none select-none fill-slate-100 text-[12px] font-medium"
-        >
-          {n.label}
-        </text>
-        {n.sub && (
-          <text
-            x={sim.x}
-            y={sim.y + 64}
-            textAnchor="middle"
-            className="pointer-events-none select-none fill-slate-400 font-mono text-[9px]"
-          >
-            {n.sub}
-          </text>
-        )}
-      </>
-    );
+  switch (n.kind) {
+    case "host":
+      return <HostNode sim={sim} selected={selected} showLabel={options.showHostLabel} />;
+    case "process":
+      return <ProcessPill sim={sim} selected={selected} showLabel={options.showProcessLabels} />;
+    case "endpoint":
+      return <EndpointPin sim={sim} selected={selected} showLabel={options.showEndpointLabels} />;
+    case "isp":
+      return <IspPill sim={sim} selected={selected} showLabel={options.showIspLabels} />;
   }
-  const peer = n.peer!;
-  const r = 12 + Math.min(16, Math.log2(peer.totalConns + 1) * 3);
-  const fill =
-    peer.direction === "inbound"
-      ? "#22c55e"
-      : peer.isPrivate
-        ? "#64748b"
-        : "#94a3b8";
+}
+
+function HostNode({
+  sim,
+  selected,
+  showLabel,
+}: {
+  sim: SimNode<NetNodeData>;
+  selected: boolean;
+  showLabel: boolean;
+}) {
+  const n = sim.data;
+  const r = 28;
   return (
     <>
       <circle
         cx={sim.x}
         cy={sim.y}
-        r={r + (selected ? 3 : 0)}
-        fill={fill}
-        opacity={0.9}
-        stroke={selected ? "#7dd3fc" : "#0f172a"}
+        r={r + 6}
+        fill="#0ea5e933"
+        stroke="none"
+      />
+      <circle
+        cx={sim.x}
+        cy={sim.y}
+        r={r}
+        fill="#0ea5e9"
+        stroke={selected ? "#7dd3fc" : "#0284c7"}
+        strokeWidth={selected ? 3 : 2}
+      />
+      <g
+        transform={`translate(${sim.x - 9}, ${sim.y - 9})`}
+        className="pointer-events-none"
+      >
+        <IconHost className="h-[18px] w-[18px] text-white" />
+      </g>
+      {showLabel && (
+        <>
+          <text
+            x={sim.x}
+            y={sim.y + r + 16}
+            textAnchor="middle"
+            className="pointer-events-none select-none fill-slate-100 text-[12px] font-semibold"
+          >
+            {truncate(n.label, 28)}
+          </text>
+          {n.sub && (
+            <text
+              x={sim.x}
+              y={sim.y + r + 30}
+              textAnchor="middle"
+              className="pointer-events-none select-none fill-slate-500 font-mono text-[10px]"
+            >
+              {n.sub}
+            </text>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+function ProcessPill({
+  sim,
+  selected,
+  showLabel,
+}: {
+  sim: SimNode<NetNodeData>;
+  selected: boolean;
+  showLabel: boolean;
+}) {
+  const n = sim.data;
+  const proc = n.process!;
+  // Pill width is label-driven; we measure approximate width from
+  // string length — good enough since SVG <text> can't trivially be
+  // measured before render and we don't want to round-trip through
+  // getBBox each frame.
+  const text = proc.name + (proc.pid != null ? ` · ${proc.pid}` : "");
+  const charW = 6.4;
+  const pad = 12;
+  const iconW = 14;
+  const w = showLabel ? Math.max(60, iconW + pad * 2 + text.length * charW) : 28;
+  const h = 22;
+  const cx = sim.x;
+  const cy = sim.y;
+  const x = cx - w / 2;
+  const y = cy - h / 2;
+  return (
+    <>
+      <rect
+        x={x}
+        y={y}
+        width={w}
+        height={h}
+        rx={h / 2}
+        ry={h / 2}
+        fill="#f1f5f9"
+        stroke={selected ? "#0ea5e9" : "#cbd5e1"}
         strokeWidth={selected ? 2 : 1}
       />
-      <text
-        x={sim.x}
-        y={sim.y + r + 12}
-        textAnchor="middle"
-        className="pointer-events-none select-none fill-slate-200 text-[10px]"
-      >
-        {truncate(n.label, 22)}
-      </text>
-      {n.sub && (
+      <g transform={`translate(${x + pad - 2}, ${cy - 7})`} className="pointer-events-none">
+        <IconGear className="h-[14px] w-[14px] text-sonar-600" />
+      </g>
+      {showLabel && (
         <text
-          x={sim.x}
-          y={sim.y + r + 24}
-          textAnchor="middle"
-          className="pointer-events-none select-none fill-slate-500 text-[9px]"
+          x={x + pad + iconW}
+          y={cy + 4}
+          className="pointer-events-none select-none fill-slate-800 text-[11px] font-medium"
         >
-          {truncate(n.sub, 24)}
+          {text}
         </text>
       )}
     </>
   );
 }
 
-function PeerSidePanel({ peer }: { peer: AgentNetworkPeer | null }) {
-  if (!peer) {
-    return (
-      <div className="rounded-lg border border-ink-800 bg-ink-900/60 p-3 text-xs text-slate-500">
-        Click any peer in the graph for details.
-      </div>
-    );
-  }
+function EndpointPin({
+  sim,
+  selected,
+  showLabel,
+}: {
+  sim: SimNode<NetNodeData>;
+  selected: boolean;
+  showLabel: boolean;
+}) {
+  const n = sim.data;
+  const peer = n.endpoint!;
+  const r = 9;
+  const fill =
+    peer.direction === "inbound"
+      ? "#22c55e33"
+      : peer.isPrivate
+        ? "#64748b33"
+        : "#0ea5e933";
+  const ring =
+    peer.direction === "inbound"
+      ? "#22c55e"
+      : peer.isPrivate
+        ? "#94a3b8"
+        : "#38bdf8";
   return (
-    <div className="space-y-2 rounded-lg border border-ink-800 bg-ink-900/60 p-3 text-xs">
-      <div>
-        <div className="text-[10px] uppercase tracking-wide text-slate-500">Peer</div>
-        <div className="font-mono text-sm text-slate-100">{peer.host || peer.ip}</div>
-        {peer.host && (
-          <div className="font-mono text-[10px] text-slate-500">{peer.ip}</div>
-        )}
+    <>
+      <circle
+        cx={sim.x}
+        cy={sim.y}
+        r={r + (selected ? 4 : 2)}
+        fill={selected ? "#0ea5e933" : fill}
+        stroke={ring}
+        strokeWidth={selected ? 2 : 1.2}
+      />
+      <g
+        transform={`translate(${sim.x - 6}, ${sim.y - 7})`}
+        className="pointer-events-none"
+      >
+        <IconPin className="h-[12px] w-[12px]" style={{ color: ring }} />
+      </g>
+      {showLabel && (
+        <>
+          <text
+            x={sim.x}
+            y={sim.y + r + 12}
+            textAnchor="middle"
+            className="pointer-events-none select-none fill-slate-200 text-[10px]"
+          >
+            {truncate(peer.host || peer.ip, 22)}
+          </text>
+          {n.sub && (
+            <text
+              x={sim.x}
+              y={sim.y + r + 24}
+              textAnchor="middle"
+              className="pointer-events-none select-none fill-slate-500 text-[9px]"
+            >
+              {truncate(n.sub, 24)}
+            </text>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+function IspPill({
+  sim,
+  selected,
+  showLabel,
+}: {
+  sim: SimNode<NetNodeData>;
+  selected: boolean;
+  showLabel: boolean;
+}) {
+  const n = sim.data;
+  const isp = n.isp!;
+  const text = isp.org;
+  const charW = 6.6;
+  const pad = 14;
+  const iconW = 16;
+  const w = showLabel ? Math.max(80, iconW + pad * 2 + text.length * charW) : 28;
+  const h = 26;
+  const cx = sim.x;
+  const cy = sim.y;
+  const x = cx - w / 2;
+  const y = cy - h / 2;
+  return (
+    <>
+      <rect
+        x={x}
+        y={y}
+        width={w}
+        height={h}
+        rx={h / 2}
+        ry={h / 2}
+        fill="#f8fafc"
+        stroke={selected ? "#0ea5e9" : "#94a3b8"}
+        strokeWidth={selected ? 2 : 1.2}
+      />
+      <g transform={`translate(${x + pad - 4}, ${cy - 8})`} className="pointer-events-none">
+        <IconGlobe className="h-[16px] w-[16px] text-slate-700" />
+      </g>
+      {showLabel && (
+        <text
+          x={x + pad + iconW - 2}
+          y={cy + 5}
+          className="pointer-events-none select-none fill-slate-800 text-[11px] font-medium"
+        >
+          {truncate(text, 36)}
+        </text>
+      )}
+    </>
+  );
+}
+
+// ===================== NODE DETAILS PANEL ====================
+
+function NodeDetailsPanel({
+  node,
+  onClose,
+  onCenter,
+}: {
+  node: NetNodeData;
+  onClose: () => void;
+  onCenter: () => void;
+}) {
+  return (
+    <div className="absolute right-3 top-3 z-10 max-h-[calc(75vh-1.5rem)] w-80 overflow-auto rounded-lg border border-ink-700 bg-ink-900/95 p-3 text-xs shadow-xl backdrop-blur">
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <NodeKindIcon kind={node.kind} />
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
+            Node Details
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onCenter}
+            className="rounded p-1 text-slate-400 hover:bg-ink-800 hover:text-slate-200"
+            title="Center on this node"
+          >
+            ⌖
+          </button>
+          <button
+            onClick={onClose}
+            className="rounded p-1 text-slate-400 hover:bg-ink-800 hover:text-slate-200"
+            title="Close"
+          >
+            ×
+          </button>
+        </div>
       </div>
-      <div className="grid grid-cols-2 gap-1.5">
-        <Field label="Direction" value={peer.direction} />
-        <Field
-          label="Scope"
-          value={peer.isPrivate ? "private" : "public"}
-        />
-        {peer.asn ? (
-          <Field label="ASN" value={"AS" + peer.asn} />
-        ) : (
-          <Field label="ASN" value="—" />
-        )}
-        <Field label="Org" value={peer.org || "—"} />
-        <Field
-          label="Country"
-          value={
-            peer.countryName
-              ? peer.countryName + (peer.countryIso ? ` (${peer.countryIso})` : "")
-              : peer.countryIso || "—"
-          }
-        />
-        <Field label="City" value={peer.city || "—"} />
-        <Field
-          label="Conns"
-          value={String(peer.totalConns)}
-        />
-        <Field
-          label="Ports"
-          value={(peer.ports ?? []).slice(0, 6).join(", ") || "—"}
-        />
+      {node.kind === "host" && <HostDetails host={node.host!} />}
+      {node.kind === "process" && <ProcessDetails proc={node.process!} />}
+      {node.kind === "endpoint" && <EndpointDetails peer={node.endpoint!} />}
+      {node.kind === "isp" && <IspDetails isp={node.isp!} />}
+    </div>
+  );
+}
+
+function HostDetails({ host }: { host: AgentNetworkGraph["agent"] }) {
+  return (
+    <dl className="space-y-1.5">
+      <Field label="Node Type" value="Host (this agent)" />
+      <Field label="Hostname" value={host.hostname} mono />
+      <Field label="Primary IP" value={host.primaryIp ?? "—"} mono />
+      <Field label="Public IP" value={host.publicIp ?? "—"} mono />
+      <Field
+        label="Location"
+        value={
+          host.city || host.countryIso
+            ? `${host.city ?? ""}${host.city && host.countryIso ? ", " : ""}${host.countryIso ?? ""}`
+            : "—"
+        }
+      />
+      <Field label="ISP" value={host.org ?? "—"} />
+      <Field label="ASN" value={host.asn ? `AS${host.asn}` : "—"} mono />
+      <div className="pt-1">
+        <Link
+          to={`/agents/${host.id}`}
+          className="text-[11px] text-sonar-400 hover:underline"
+        >
+          Open agent detail
+        </Link>
       </div>
-      <div>
-        <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">
-          Processes
+    </dl>
+  );
+}
+
+function ProcessDetails({ proc }: { proc: ProcessAgg }) {
+  return (
+    <dl className="space-y-1.5">
+      <Field label="Node Type" value="Process" />
+      <Field label="Name" value={proc.name} mono />
+      {proc.pid != null && <Field label="PID" value={String(proc.pid)} mono />}
+      <Field label="Endpoints" value={String(proc.peers.size)} />
+      <Field label="Connections" value={String(proc.totalConns)} />
+    </dl>
+  );
+}
+
+function EndpointDetails({ peer }: { peer: AgentNetworkPeer }) {
+  return (
+    <dl className="space-y-1.5">
+      <Field label="Node Type" value="Endpoint Address" />
+      <Field
+        label="Address"
+        value={peer.ip + (peer.ports?.length ? `:${peer.ports.slice(0, 3).join("/")}` : "")}
+        mono
+      />
+      <Field label="DNS Name" value={peer.host || "—"} mono />
+      <Field label="Direction" value={peer.direction} />
+      <Field label="Scope" value={peer.isPrivate ? "private" : "public"} />
+      <Field label="Connections" value={String(peer.totalConns)} />
+      <Field
+        label="Ports"
+        value={(peer.ports ?? []).slice(0, 8).join(", ") || "—"}
+        mono
+      />
+      <Field
+        label="Country"
+        value={
+          peer.countryName
+            ? peer.countryName + (peer.countryIso ? ` (${peer.countryIso})` : "")
+            : peer.countryIso || "—"
+        }
+      />
+      <Field label="City" value={peer.city || "—"} />
+      <Field label="ISP" value={peer.org || "—"} />
+      <Field label="ASN" value={peer.asn ? `AS${peer.asn}` : "—"} mono />
+      <div className="pt-1">
+        <div className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">
+          Processes touching this endpoint
         </div>
         <ul className="space-y-0.5">
           {peer.processes.map((p, i) => (
             <li
               key={i}
-              className="flex items-center justify-between rounded bg-ink-950/50 px-2 py-1"
+              className="flex items-center justify-between rounded bg-ink-950/60 px-2 py-1"
             >
               <span className="font-mono text-slate-200">{p.name || "—"}</span>
-              <span className="tabular-nums text-slate-500">{p.count}×</span>
+              <span className="tabular-nums text-slate-500">
+                {p.pid != null ? `pid ${p.pid} · ` : ""}
+                {p.count}×
+              </span>
             </li>
           ))}
         </ul>
       </div>
+      {/* Fields the reference UI shows that we don't capture yet —
+          rendered transparently with "—" so operators learn the shape
+          of the data model and we can light them up later when the
+          probe collects them. */}
+      <div className="pt-1">
+        <div className="mb-1 text-[10px] uppercase tracking-wider text-slate-500">
+          Performance (probe v-future)
+        </div>
+        <Field label="Upload Rate" value="—" />
+        <Field label="Download Rate" value="—" />
+        <Field label="Avg. Latency" value="—" />
+        <Field label="Max Latency" value="—" />
+        <Field label="Packet Loss" value="—" />
+      </div>
+    </dl>
+  );
+}
+
+function IspDetails({ isp }: { isp: IspAgg }) {
+  return (
+    <dl className="space-y-1.5">
+      <Field label="Node Type" value="ISP" />
+      <Field label="Organisation" value={isp.org} />
+      <Field label="ASN" value={isp.asn ? `AS${isp.asn}` : "—"} mono />
+      <Field label="Endpoints" value={String(isp.peers.size)} />
+      <Field
+        label="Countries"
+        value={Array.from(isp.countries).sort().join(", ") || "—"}
+      />
+    </dl>
+  );
+}
+
+function NodeKindIcon({ kind }: { kind: NodeKind }) {
+  const cls = "h-3.5 w-3.5";
+  switch (kind) {
+    case "host":
+      return <IconHost className={cls + " text-sonar-400"} />;
+    case "process":
+      return <IconGear className={cls + " text-sonar-400"} />;
+    case "endpoint":
+      return <IconPin className={cls + " text-sonar-400"} />;
+    case "isp":
+      return <IconGlobe className={cls + " text-sonar-400"} />;
+  }
+}
+
+function Field({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 border-b border-ink-800/60 py-0.5 last:border-b-0">
+      <dt className="shrink-0 text-[10px] uppercase tracking-wider text-slate-500">
+        {label}
+      </dt>
+      <dd
+        className={
+          "min-w-0 truncate text-right text-[11px] text-slate-200 " +
+          (mono ? "font-mono" : "")
+        }
+        title={value}
+      >
+        {value}
+      </dd>
     </div>
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+// ===================== MISC UI =========================
+
+function Toggle({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
-    <div className="min-w-0">
-      <div className="text-[9px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="truncate text-slate-200" title={value}>
-        {value}
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      className="flex w-full items-center justify-between rounded px-1 py-1 text-left hover:bg-ink-800/60"
+    >
+      <span className="text-slate-300">{label}</span>
+      <span
+        className={
+          "relative inline-flex h-4 w-7 items-center rounded-full transition " +
+          (value ? "bg-sonar-500" : "bg-ink-700")
+        }
+      >
+        <span
+          className={
+            "inline-block h-3 w-3 transform rounded-full bg-white transition " +
+            (value ? "translate-x-3.5" : "translate-x-0.5")
+          }
+        />
+      </span>
+    </button>
   );
 }
 
@@ -381,7 +1070,7 @@ function Pill<T extends string>({
       <span className="text-[10px] uppercase tracking-wide text-slate-500">
         {label}
       </span>
-      <div className="flex overflow-hidden rounded-md border border-ink-800 text-[11px]">
+      <div className="flex overflow-hidden rounded-md border border-ink-700 text-[11px]">
         {values.map((v) => (
           <button
             key={v}
@@ -390,7 +1079,7 @@ function Pill<T extends string>({
             className={
               "px-2 py-0.5 transition " +
               (value === v
-                ? "bg-sonar-700/40 text-sonar-200"
+                ? "bg-sonar-500/20 text-sonar-400"
                 : "bg-ink-900 text-slate-400 hover:bg-ink-800")
             }
           >
@@ -402,12 +1091,12 @@ function Pill<T extends string>({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function SectionShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-ink-800 bg-ink-900 p-4">
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-        {title}
-      </h3>
+    <div className="rounded-xl border border-ink-800 bg-ink-900">
+      <div className="border-b border-ink-800 px-3 py-2 text-sm font-semibold text-slate-200">
+        Network Topology
+      </div>
       {children}
     </div>
   );
@@ -416,4 +1105,62 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function truncate(s: string, n: number) {
   if (!s) return "";
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+
+// ===================== ICONS (inline SVG) =====================
+
+interface IconProps {
+  className?: string;
+  style?: React.CSSProperties;
+}
+
+function IconHost({ className, style }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <line x1="3" y1="14" x2="21" y2="14" />
+      <line x1="8" y1="18" x2="16" y2="18" />
+      <line x1="12" y1="18" x2="12" y2="22" />
+    </svg>
+  );
+}
+
+function IconGear({ className, style }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function IconGlobe({ className, style }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15 15 0 0 1 0 20" />
+      <path d="M12 2a15 15 0 0 0 0 20" />
+    </svg>
+  );
+}
+
+function IconPin({ className, style }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <path d="M12 22s7-7.5 7-13A7 7 0 0 0 5 9c0 5.5 7 13 7 13z" />
+      <circle cx="12" cy="9" r="2.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function IconLegend({ className, style }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+      <rect x="3" y="3" width="7" height="7" />
+      <rect x="14" y="3" width="7" height="7" />
+      <rect x="3" y="14" width="7" height="7" />
+      <rect x="14" y="14" width="7" height="7" />
+    </svg>
+  );
 }
