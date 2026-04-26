@@ -398,6 +398,15 @@ function NicsTable({ nics }: { nics: SnapshotNIC[] }) {
 }
 
 // ---- Processes ------------------------------------------------------------
+//
+// Process rows are click-to-expand. We keep a compact summary line in the
+// table (so a couple-dozen procs fit on screen) and tuck the noisy bits
+// — the full cmdline, every available field, and a copy button — into a
+// details drawer that opens beneath the row. This fixes two earlier UX
+// bugs at once:
+//   * Long cmdlines were overflowing the column on narrow viewports.
+//   * The `title=` tooltip was the only way to read them, which is
+//     undiscoverable and unselectable.
 
 function ProcessTable({
   title,
@@ -408,32 +417,201 @@ function ProcessTable({
   rows: SnapshotProcess[];
   sortBy: "cpu" | "mem";
 }) {
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggle = (key: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
   return (
     <Section title={title}>
       {rows.length === 0 ? (
         <Empty>No processes to show.</Empty>
       ) : (
-        <Table head={["PID", "Name", "User", sortBy === "cpu" ? "CPU%" : "RSS"]}>
-          {rows.map((r) => (
-            <tr key={`${r.pid}-${r.name}`} className="border-t border-ink-800">
-              <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{r.pid}</td>
-              <td className="px-3 py-1.5 text-xs">
-                <div className="font-medium">{r.name}</div>
-                {r.cmdline && (
-                  <div className="truncate text-[10px] text-slate-500" title={r.cmdline}>
-                    {r.cmdline}
-                  </div>
-                )}
-              </td>
-              <td className="px-3 py-1.5 text-xs text-slate-400">{r.user || "—"}</td>
-              <td className="px-3 py-1.5 text-right text-xs tabular-nums">
-                {sortBy === "cpu" ? formatPct(r.cpuPct) : formatBytes(r.rssBytes)}
-              </td>
-            </tr>
-          ))}
-        </Table>
+        // table-fixed + per-column widths makes the Name column actually
+        // honour `truncate` instead of widening the table to fit the
+        // cmdline. Without it, long cmdlines push the right-hand metric
+        // column off-screen on narrow viewports.
+        <div className="overflow-hidden">
+          <table className="w-full table-fixed text-left text-sm">
+            <colgroup>
+              <col className="w-6" />
+              <col className="w-16" />
+              <col />
+              <col className="w-24" />
+              <col className="w-20" />
+            </colgroup>
+            <thead className="text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-1 py-1.5" aria-label="Expand" />
+                <th className="px-3 py-1.5">PID</th>
+                <th className="px-3 py-1.5">Name</th>
+                <th className="px-3 py-1.5">User</th>
+                <th className="px-3 py-1.5 text-right">
+                  {sortBy === "cpu" ? "CPU%" : "RSS"}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const key = `${r.pid}-${r.name}`;
+                const open = expanded.has(key);
+                return (
+                  <ProcessRow
+                    key={key}
+                    row={r}
+                    open={open}
+                    onToggle={() => toggle(key)}
+                    sortBy={sortBy}
+                  />
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </Section>
+  );
+}
+
+function ProcessRow({
+  row,
+  open,
+  onToggle,
+  sortBy,
+}: {
+  row: SnapshotProcess;
+  open: boolean;
+  onToggle: () => void;
+  sortBy: "cpu" | "mem";
+}) {
+  const metric =
+    sortBy === "cpu" ? formatPct(row.cpuPct) : formatBytes(row.rssBytes);
+  return (
+    <>
+      <tr
+        className={
+          "cursor-pointer border-t border-ink-800 transition hover:bg-ink-800/40 " +
+          (open ? "bg-ink-800/30" : "")
+        }
+        onClick={onToggle}
+        aria-expanded={open}
+      >
+        <td className="px-1 py-1.5 align-top">
+          <Chevron open={open} />
+        </td>
+        <td className="px-3 py-1.5 align-top font-mono text-xs text-slate-500">
+          {row.pid}
+        </td>
+        <td className="px-3 py-1.5 align-top text-xs">
+          <div className="truncate font-medium">{row.name}</div>
+          {row.cmdline && (
+            <div className="truncate text-[10px] text-slate-500">{row.cmdline}</div>
+          )}
+        </td>
+        <td className="px-3 py-1.5 align-top text-xs text-slate-400">
+          <div className="truncate">{row.user || "—"}</div>
+        </td>
+        <td className="px-3 py-1.5 align-top text-right text-xs tabular-nums">
+          {metric}
+        </td>
+      </tr>
+      {open && (
+        <tr className="border-t border-ink-800 bg-ink-950/40">
+          <td className="px-1 py-3" />
+          <td className="px-3 py-3" colSpan={4}>
+            <ProcessDetails row={row} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function ProcessDetails({ row }: { row: SnapshotProcess }) {
+  const cmd = row.cmdline?.trim();
+  return (
+    <div className="space-y-3 text-xs">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
+        <Field label="PID" value={String(row.pid)} mono />
+        <Field label="Name" value={row.name} mono />
+        <Field label="User" value={row.user || "—"} />
+        <Field label="CPU" value={formatPct(row.cpuPct)} />
+        <Field label="RSS" value={formatBytes(row.rssBytes)} />
+      </dl>
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-[10px] uppercase tracking-wide text-slate-500">
+            Command line
+          </span>
+          {cmd && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard?.writeText(cmd).catch(() => {});
+              }}
+              className="rounded border border-ink-800 bg-ink-900 px-2 py-0.5 text-[10px] text-slate-400 transition hover:border-sonar-700 hover:text-sonar-200"
+            >
+              Copy
+            </button>
+          )}
+        </div>
+        <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-md border border-ink-800 bg-ink-950 px-3 py-2 font-mono text-[11px] leading-snug text-slate-300">
+          {cmd || "(no cmdline reported)"}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[10px] uppercase tracking-wide text-slate-500">{label}</dt>
+      <dd
+        className={
+          "truncate text-slate-200 " + (mono ? "font-mono text-[11px]" : "text-xs")
+        }
+        title={value}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      className={
+        "transition-transform text-slate-500 " + (open ? "rotate-90 text-sonar-300" : "")
+      }
+      aria-hidden="true"
+    >
+      <path
+        d="M4 2 L8 6 L4 10"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
