@@ -175,16 +175,20 @@ func makeEchoBody(id, seq int) []byte {
 	return buf
 }
 
-// TraceICMP performs a TTL-ramp ICMP traceroute to addr and returns
+// traceICMPRamp performs a TTL-ramp ICMP traceroute to addr and returns
 // the number of distinct hops observed before the echo reply arrives
 // (or maxTTL is exhausted). It does not return per-hop addresses
 // because the dashboards only care about the path length right now.
 //
-// Wall-clock cost is bounded at ~ maxTTL * 1.2 s. We expect ~10-20
-// hops on a typical office to 8.8.8.8, so the total cost is a few
-// seconds — fine inside the 5-minute health loop. Privileges are the
+// Wall-clock cost is bounded at ~ maxTTL * 1.2 s. Privileges are the
 // same as ProbeICMP (raw ICMP socket).
-func TraceICMP(ctx context.Context, addr string, maxTTL int) (int, error) {
+//
+// IMPORTANT: Windows raw ICMP sockets do not honor IP_TTL via the
+// standard golang.org/x/net/ipv4 SetTTL path — every packet goes out
+// at the system default TTL regardless of what we request. This
+// function is therefore only used on Linux/macOS; Windows falls back
+// to traceroute_windows.go which shells out to tracert.exe.
+func traceICMPRamp(ctx context.Context, addr string, maxTTL int) (int, error) {
 	if maxTTL <= 0 || maxTTL > 64 {
 		maxTTL = 30
 	}

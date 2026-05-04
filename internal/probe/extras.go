@@ -161,7 +161,7 @@ func runHealthLoop(ctx context.Context, log *slog.Logger) {
 		// of typical length). We share the 5-minute cadence with the
 		// rest of HealthSignals because per-minute traces add no
 		// value on stable corporate networks.
-		if hops, err := TraceICMP(hCtx, "8.8.8.8", 30); err == nil && hops > 0 {
+		if hops, err := TraceHopCount(hCtx, "8.8.8.8", 30); err == nil && hops > 0 {
 			h.TracerouteHops = &hops
 		} else if err != nil {
 			log.Debug("traceroute failed", "err", err)
