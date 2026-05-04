@@ -1,0 +1,37 @@
+# =============================================================================
+# docker-compose.registry.yml — Phase 2 pull-only deploy overlay.
+#
+# This file replaces the `build:` keys on sonar-api and sonar-poller
+# with `image:` references that point at the GLCR-published images
+# from the GitLab CI pipeline. Once the first pipeline goes green and
+# images exist at:
+#
+#   glcr.nclgisa.org:443/striketeam/scanray-sonar/api:<tag>
+#   glcr.nclgisa.org:443/striketeam/scanray-sonar/poller:<tag>
+#
+# the dev host can be cut over from `git pull && docker compose up
+# --build` to the much faster, more secure pull-only flow:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.registry.yml pull
+#   docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d
+#
+# IMAGE_TAG defaults to `latest` (master HEAD) but can pin to any GLCR
+# tag — :<short-sha>, :<VERSION>, or a release tag — for rollbacks or
+# version freezing. Persist the pin by adding `IMAGE_TAG=2026.5.5.8`
+# (or whichever) to /opt/scanraysonar/.env on the deploy host.
+#
+# In Phase 1 (current) this file is committed but unused. dev still
+# runs the build-on-host scripts/deploy.sh.
+# =============================================================================
+
+services:
+  sonar-api:
+    image: glcr.nclgisa.org:443/striketeam/scanray-sonar/api:${IMAGE_TAG:-latest}
+    # Wipe the build: stanza from docker-compose.yml so `docker compose
+    # pull` doesn't try to rebuild from source. `!reset` is the compose
+    # spec's idiom for "ignore the value from a lower-precedence file."
+    build: !reset null
+
+  sonar-poller:
+    image: glcr.nclgisa.org:443/striketeam/scanray-sonar/poller:${IMAGE_TAG:-latest}
+    build: !reset null

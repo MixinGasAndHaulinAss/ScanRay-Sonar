@@ -1,0 +1,46 @@
+# =============================================================================
+# .gitleaks.toml — Secret-scanner allowlist for ScanRay Sonar.
+#
+# gitleaks runs on every pipeline (the `secrets-scan` job) over the
+# full repo history. It uses its built-in default rule set; this file
+# only narrows that set with project-specific allowlists for documented
+# false positives.
+#
+# Policy: real secret findings must be ROTATED + filter-repo'd, never
+# allowlisted. Add an entry here only when the matched value is a
+# placeholder, an example, or a well-known public constant — and
+# always include a justification comment.
+# =============================================================================
+
+[allowlist]
+description = "ScanRay Sonar known false positives"
+
+paths = [
+    # Example env file. Contains placeholder values like
+    # SONAR_DB_PASSWORD=changeme and template URLs ending in
+    # example.com. None of these are real credentials.
+    '''^\.env\.example$''',
+
+    # Optional corporate CA bundle. The committed file is empty; an
+    # operator populates it via scripts/inject-host-ca.sh and the
+    # populated form is `--skip-worktree`'d so it can never be pushed.
+    # If gitleaks ever flags content here it's a false positive against
+    # the in-tree placeholder.
+    '''^docker/local-ca\.crt$''',
+
+    # npm lockfile contains integrity hashes and registry URLs that
+    # gitleaks' generic-secret detector occasionally over-matches on.
+    # No real secrets ever land here.
+    '''^web/package-lock\.json$''',
+
+    # Generated test fixtures or vendor bundles in node_modules during
+    # a local run; never reach git, but be defensive.
+    '''^web/node_modules/.*''',
+]
+
+regexes = [
+    # The string "changeme" is the documented placeholder password in
+    # .env.example. Match only the exact word so we don't suppress
+    # anything more interesting.
+    '''(?i)\bchangeme\b''',
+]

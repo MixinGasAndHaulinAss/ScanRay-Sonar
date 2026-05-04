@@ -5,8 +5,16 @@
 #   cd /opt/scanraysonar
 #   ./scripts/deploy.sh
 #
-# This is a thin wrapper around docker compose pull + up. The host's
-# cloudflared service (NOT in this stack) routes:
+# Phase 1 (current): build-on-host. `docker compose up -d --build`
+# rebuilds sonar-api + sonar-poller from source on the dev host.
+#
+# Phase 2 (pull-only, after first green GitLab pipeline): replace the
+# build with a pull from GLCR using docker-compose.registry.yml — see
+# the "Phase 2: pull-only deploy on dev" section in README.md. Two-line
+# diff once the operator has logged in to glcr.nclgisa.org:443 and
+# repointed the origin remote at GitLab.
+#
+# The host's cloudflared service (NOT in this stack) routes:
 #
 #   sonar.<domain>  -> http://127.0.0.1:8080
 #   ingest.<domain> -> http://127.0.0.1:8080  (path /agent/ws)

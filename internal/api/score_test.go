@@ -88,10 +88,10 @@ func TestComputeScore_BatteryInverted(t *testing.T) {
 
 func TestComputeScore_LatencyAndLossStack(t *testing.T) {
 	in := ScoreInputs{
-		LatencyAvgMs: floatPtr(150), // halfway through 50→250 → 0.75 of 1.5 = 1.125
+		LatencyAvgMs: floatPtr(150), // halfway through 50→250 → 0.5 of 1.5 = 0.75
 		LossPct:      floatPtr(10),  // 10/25 of 1 → 0.4
 	}
-	want := 10.0 - 0.75*1.5 - 0.4
+	want := 10.0 - 0.5*1.5 - 0.4
 	got := ComputeScore(in)
 	if math.Abs(got-math.Round(want*10)/10) > 0.06 {
 		t.Fatalf("got %.2f, want ~%.2f", got, want)

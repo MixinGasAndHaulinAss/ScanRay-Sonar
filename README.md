@@ -204,8 +204,13 @@ SELECT hypertable_name, chunk_name, is_compressed
 │   │                             #   ApplianceDetail, Sites, Topology, Users, World
 │   ├── src/lib/                  # format helpers
 │   └── dist/                     # built artifacts — embed target for sonar-api
-├── .github/workflows/            # ci.yml, release.yml
+├── ci/
+│   └── smart_build.sh            # per-service smart-rebuild helper for the build stage
+├── .gitlab-ci.yml                # canonical CI/CD pipeline (gitlab.nclgisa.org)
+├── .hadolint.yaml                # Dockerfile lint allowlist (justified)
+├── .gitleaks.toml                # secrets-scan allowlist (false positives only)
 ├── docker-compose.yml
+├── docker-compose.registry.yml   # Phase 2 pull-only overlay (uses GLCR images)
 ├── Makefile
 ├── VERSION                       # CalVer source of truth
 └── README.md
@@ -339,7 +344,103 @@ $v | Set-Content -NoNewline VERSION
 git tag "v$v" && git push --tags
 ```
 
-The tag push triggers `.github/workflows/release.yml`, which builds + signs container images to GHCR and uploads probe binaries to the GitHub Release.
+The tag push triggers the GitLab `release` flow described in [CI/CD Pipeline](#cicd-pipeline) below.
+
+---
+
+## CI/CD Pipeline
+
+ScanRay Sonar's canonical source of truth is **`gitlab.nclgisa.org/StrikeTeam/Scanray-Sonar`**. GitHub at `MixinGasAndHaulinAss/ScanRay-Sonar` is a one-way mirror, refreshed by the `mirror:github` job on every successful master/tag pipeline. Day-to-day pushes target GitLab.
+
+### Stages
+
+```mermaid
+flowchart LR
+  validate --> test --> build --> scan --> package --> sync
+```
+
+| Stage | Jobs | Blocks pipeline? |
+|---|---|---|
+| `validate` | `lint:go` (gofmt + go vet), `lint:web` (`tsc --noEmit`), `lint:dockerfiles` (hadolint), `secrets-scan` (gitleaks full-history, `--redact`'d log + 30-day artifact), `vuln-scan-fs` (trivy fs, HIGH/CRITICAL fixed CVEs) | yes |
+| `test` | `test:go` (`go test ./... -race -count=1`), `test:web` (`npm run build`), `test:probe-windows` (`GOOS=windows go vet ./...`), `test:probe-darwin` (`GOOS=darwin go vet ./...`), `vuln-scan:govulncheck` (reachable-CVE) | yes |
+| `build` | `build:api`, `build:poller` — both delegate to [`ci/smart_build.sh`](ci/smart_build.sh) which decides per-service whether to do a real `docker build` or just retag the previous SHA's image as the current SHA based on a watched-paths diff | yes |
+| `scan` | `scan:trivy-images` rescans the `:$CI_COMMIT_SHORT_SHA` images that the build stage just pushed, blocks on HIGH/CRITICAL fixed CVEs | yes |
+| `package` | `package:api`, `package:poller` — alias the SHA tag as `:latest`, `:$VERSION`, and (on tag pipelines) `:$CI_COMMIT_TAG` | master + tag only |
+| `sync` | `mirror:github` — push master/tag to `MixinGasAndHaulinAss/ScanRay-Sonar` | master + tag only |
+
+No `allow_failure: true` anywhere. Every check is a hard gate.
+
+### `FORCE_RUN_ALL=true` switch
+
+To force every per-component job to fire regardless of changed paths (e.g. after a base-image bump or security advisory), trigger a manual pipeline with the variable `FORCE_RUN_ALL=true`. This is the "secure baseline" lever — every check ran, every image rebuilt fresh.
+
+### Image registry (GLCR)
+
+Two repositories are published per pipeline:
+
+| Repository | Purpose |
+|---|---|
+| `glcr.nclgisa.org:443/striketeam/scanray-sonar/api` | sonar-api + embedded UI + cross-compiled probe binaries |
+| `glcr.nclgisa.org:443/striketeam/scanray-sonar/poller` | sonar-poller |
+
+Tag flavors on each:
+
+| Tag | Source | When |
+|---|---|---|
+| `:$CI_COMMIT_SHORT_SHA` | git short SHA | every master / tag pipeline |
+| `:latest` | aliased to current SHA | master only |
+| `:$VERSION` | top-level [`VERSION`](VERSION) file | master only |
+| `:$CI_COMMIT_TAG` | git tag (e.g. `v2026.5.5.8`) | tag pipelines only |
+
+Probe binaries stay embedded in the API image via the `probebuild` stage in [`docker/api.Dockerfile`](docker/api.Dockerfile); no separate distribution path. Operators download per-OS probes from `https://<sonar>/api/v1/probe/download/{os}/{arch}` regardless of how they install.
+
+### Security findings policy
+
+When CI flags a finding, fix the underlying cause — never silently allowlist a real issue:
+
+- **Trivy fs / image CVE in a Go dep** — bump the dep (`go get module@vX.Y.Z && go mod tidy`); bump `GO_IMAGE` in [.gitlab-ci.yml](.gitlab-ci.yml) and the `go` directive in `go.mod` if a newer compiler is required.
+- **Trivy CVE in a base image** — bump the base in the Dockerfile + matching `*_IMAGE` variable in `.gitlab-ci.yml`.
+- **gitleaks finding that's a real example/doc** — add a path or regex allowlist in [`.gitleaks.toml`](.gitleaks.toml) with a justification comment. Don't add open-ended allowlists.
+- **gitleaks finding that's a real secret** — rotate the secret first, `git filter-repo` the commit out, then force-push. Never allowlist real secrets.
+- **govulncheck "no vulnerabilities found"** is the win condition; if it flags reachable code, fix the call site or bump the dep.
+- **hadolint warning for a documented exception** — add the rule code to [`.hadolint.yaml`](.hadolint.yaml) `ignored:` with a comment explaining the call site.
+
+### Phase 2: pull-only deploy on dev
+
+Today the dev host runs `git pull && docker compose up --build` (build-on-host). After the first GitLab pipeline goes green end-to-end, dev cuts over to pull-only via the [`docker-compose.registry.yml`](docker-compose.registry.yml) overlay:
+
+```bash
+echo "$DEPLOY_TOKEN" | docker login glcr.nclgisa.org:443 -u sonar-read --password-stdin
+git remote set-url origin "https://sonar-read:$DEPLOY_TOKEN@gitlab.nclgisa.org/StrikeTeam/Scanray-Sonar.git"
+echo "IMAGE_TAG=latest" >> /opt/scanraysonar/.env
+
+# Replace deploy.sh contents with:
+git pull origin master
+docker compose -f docker-compose.yml -f docker-compose.registry.yml pull
+docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d
+```
+
+This shrinks deploys from ~3 min to ~10 seconds and removes the build toolchain from the deploy host. Pin a specific version for rollback by setting `IMAGE_TAG=2026.5.5.8` (or `:<short-sha>`) in `/opt/scanraysonar/.env`.
+
+### Deploy token rotation (`sonar-read`)
+
+The dev host pulls GLCR images using a project-scoped GitLab deploy token named `sonar-read` (scopes `read_repository` + `read_registry`). The same token authenticates `git pull` from GitLab on dev.
+
+To rotate (compromise, expiry, scope change):
+
+1. GitLab UI → `StrikeTeam/Scanray-Sonar` → **Settings → Repository → Deploy tokens**. Revoke the current token; create a new one with the same name + same scopes.
+2. On dev: `docker logout glcr.nclgisa.org:443 && echo "<new>" | docker login glcr.nclgisa.org:443 -u sonar-read --password-stdin`
+3. On dev: `git remote set-url origin "https://sonar-read:<new>@gitlab.nclgisa.org/StrikeTeam/Scanray-Sonar.git"`
+4. Run a deploy to confirm the new token works before revoking the old one in step 1 (out-of-order if needed; the order above assumes a no-overlap rotation window).
+
+### Required CI/CD variables (configure once on the GitLab project)
+
+| Variable | Scope | Purpose |
+|---|---|---|
+| `GITHUB_MIRROR_TOKEN` | masked + protected | Fine-grained PAT for `MixinGasAndHaulinAss/ScanRay-Sonar` with `contents:write`. Used by `mirror:github`. |
+| `DOCKERHUB_USER` / `DOCKERHUB_TOKEN` | masked | Docker Hub credentials for raised pull rate limits during runner image pulls. |
+
+The runner-side dependency proxy (`${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}`) and the per-job container registry credentials (`$CI_REGISTRY_USER` / `$CI_REGISTRY_PASSWORD`) are populated automatically by GitLab.
 
 ---
 

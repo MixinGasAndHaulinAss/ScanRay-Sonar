@@ -1,0 +1,29 @@
+# =============================================================================
+# .hadolint.yaml — Dockerfile lint allowlist for ScanRay Sonar.
+#
+# Hadolint is run by the `lint:dockerfiles` job in .gitlab-ci.yml against
+# docker/api.Dockerfile, docker/poller.Dockerfile, and docker/probe.Dockerfile.
+# Add entries here only when the rule is a documented, intentional
+# pattern — every disabled rule needs a comment explaining why.
+# =============================================================================
+
+ignored:
+  # DL3018 — "Pin versions in apk add". We use the alpine package
+  # repository for a small list of build-time tooling (git,
+  # ca-certificates) where the latest minor is always desired and
+  # there's no upstream CVE history that would benefit from pinning.
+  # The alpine base image tag is pinned (golang:1.24-alpine) so the
+  # underlying repo snapshot is reproducible at the image-tag level.
+  - DL3018
+
+  # DL3008 — "Pin versions in apt-get install". Inherited as a
+  # precaution; we don't currently use apt anywhere, but keeping this
+  # off avoids the same noise if/when we add a debian-based stage.
+  - DL3008
+
+  # DL3059 — "Multiple consecutive `RUN` instructions". We sometimes
+  # split RUNs intentionally for cache-locality reasons (the optional
+  # CA-injection block needs to run before the build steps so the CA
+  # is in place; folding them into one RUN destroys the layer cache
+  # for every build that doesn't need to refresh the CA).
+  - DL3059
