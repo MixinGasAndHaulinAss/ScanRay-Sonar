@@ -91,6 +91,76 @@ The web UI is **built once** with Vite and **embedded into `sonar-api`** via `go
 
 ---
 
+## Storage & Retention
+
+Time-series data is the dominant storage cost in Sonar. The schema follows TimescaleDB best practice: dual-shape per source (latest-snapshot JSONB on the parent row + narrow append-only hypertable for history), one-day chunks, automated drop policies, and native columnar compression on cold chunks.
+
+### Hypertables
+
+| Hypertable                 | Source         | Cadence           | `segmentby`               | Retention | Compress after |
+| -------------------------- | -------------- | ----------------- | ------------------------- | --------- | -------------- |
+| `agent_metric_samples`     | probe          | 60 s              | `agent_id`                | 30 days   | 1 day          |
+| `agent_network_samples`    | probe          | 60 s              | `agent_id`                | 30 days   | 1 day          |
+| `agent_latency_samples`    | probe (ICMP)   | 60 s × 2 targets  | `agent_id, target`        | 30 days   | 1 day          |
+| `appliance_metric_samples` | poller         | poll-interval     | `appliance_id`            | 30 days   | 1 day          |
+| `appliance_iface_samples`  | poller         | poll-interval × N ports | `appliance_id, if_index` | 30 days   | 1 day          |
+
+The `segmentby` columns are picked from the actual `WHERE` clauses in `internal/api/handlers_*.go` so each query touches only the columnar segments it needs — no decompression of unrelated rows.
+
+### Compression
+
+Migration [0008_compression](internal/db/migrations/0008_compression.up.sql) turns on **TimescaleDB native columnar compression** for every hypertable. Chunks older than 1 day get rewritten from row-oriented heap into per-column compressed arrays (delta-of-delta for timestamps, Gorilla for floats, dictionary for low-cardinality text). Reads are transparent — the planner decompresses on the fly. Typical ratio on this kind of repetitive numeric data is **8–12×**, with the largest table (`appliance_iface_samples`) reliably hitting the high end.
+
+The 1-day delay matches the 24 h hot-read window every UI page uses, so the most recent chunk stays uncompressed (fast inserts, mutable) and the most common queries never pay decompression cost.
+
+A one-shot backfill in the same migration walks every existing chunk older than 1 day and compresses inline, so the savings appear the moment `migrate up` returns rather than waiting for the daily background policy job.
+
+### Capacity planning
+
+Per-unit storage at 30-day retention, with compression enabled:
+
+| Source                                | ~30-day footprint |
+| ------------------------------------- | ----------------- |
+| One agent (metrics + network + latency) | ~3 MB           |
+| One 24-port appliance                 | ~30 MB            |
+| One 48-port appliance                 | ~60 MB            |
+| One 128-port chassis                  | ~150 MB           |
+
+Fleet projections (steady state, 30-day retention):
+
+| Fleet                          | DB size   |
+| ------------------------------ | --------- |
+| 6 agents / 3 appliances        | ~250 MB   |
+| 50 agents / 5 appliances       | ~1 GB     |
+| 250 agents / 10 appliances     | ~3 GB     |
+| 500 agents / 20 appliances     | ~7 GB     |
+
+Without compression these numbers are roughly 10× larger; the migration is the difference between a 25 GB database and a 2.5 GB database at the 250-agent scale.
+
+### Verifying compression after deploy
+
+```sql
+-- per-hypertable ratio
+SELECT hypertable_name,
+       pg_size_pretty(before_compression_total_bytes) AS before,
+       pg_size_pretty(after_compression_total_bytes)  AS after,
+       round((before_compression_total_bytes::numeric
+              / NULLIF(after_compression_total_bytes,0)), 1) AS ratio
+  FROM hypertable_compression_stats('appliance_iface_samples');
+
+-- which chunks are compressed
+SELECT hypertable_name, chunk_name, is_compressed
+  FROM timescaledb_information.chunks
+ ORDER BY hypertable_name, range_start DESC;
+```
+
+### Future levers (not yet wired)
+
+- **Continuous aggregates** — hourly rollups of `appliance_iface_samples` would let us keep raw data at 7 days and aggregated trend data at 1 year for ~5 % the cost. Add when an operator actually wants long-range trend charts; premature otherwise.
+- **Tiered storage** — `move_chunk(...)` can park old chunks on a slower tablespace if disk pressure ever appears at the 1+ year horizon.
+
+---
+
 ## Repository Layout
 
 ```
@@ -112,7 +182,7 @@ The web UI is **built once** with Vite and **embedded into `sonar-api`** via `go
 │   ├── config/                   # SONAR_* environment loader
 │   ├── crypto/                   # AES-256-GCM envelope encryption + tests
 │   ├── db/
-│   │   └── migrations/           # versioned SQL migrations (0001 … 0006)
+│   │   └── migrations/           # versioned SQL migrations (0001 … 0008)
 │   ├── geoip/                    # MaxMind .mmdb readers (City + ASN), offline lookups
 │   ├── logging/                  # slog JSON setup
 │   ├── poller/                   # per-appliance scheduler, rate calc, persistence
