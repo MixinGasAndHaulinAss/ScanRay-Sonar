@@ -14,6 +14,7 @@ import { useMemo } from "react";
 import { api } from "../../api/client";
 import type { OverviewDevicesPerformanceResponse } from "../../api/types";
 import LineChart from "../../components/LineChart";
+import OverviewMiniMap from "../../components/OverviewMiniMap";
 import { Card, EmptyHint, ErrorHint, KPITile } from "./common";
 
 export default function DevicesPerformance() {
@@ -102,19 +103,7 @@ export default function DevicesPerformance() {
               <code> /var/lib/sonar-geoip</code>.
             </div>
           ) : (
-            <ul className="space-y-1 text-xs">
-              {map.slice(0, 8).map((m) => (
-                <li key={m.id} className="flex items-baseline justify-between">
-                  <span className="truncate text-slate-200">{m.hostname}</span>
-                  <span className="tabular-nums text-slate-500">
-                    {m.lat.toFixed(2)}, {m.lon.toFixed(2)} · {m.score.toFixed(1)}
-                  </span>
-                </li>
-              ))}
-              {map.length > 8 && (
-                <li className="text-[10px] text-slate-600">…{map.length - 8} more</li>
-              )}
-            </ul>
+            <OverviewMiniMap hosts={map} height={220} />
           )}
         </Card>
       </div>

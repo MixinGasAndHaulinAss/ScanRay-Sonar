@@ -449,7 +449,7 @@ export interface OverviewNetworkLatencyResponse {
   latencyByISP: OverviewISPRow[];
   topISPs: OverviewISPRow[];
   wifiSignalAvgPct: number;
-  longestTracerouteHops: { hostname: string; hops: number }[];
+  longestTracerouteHops: OverviewTopRow[];
   asOf: string;
 }
 
@@ -479,6 +479,17 @@ export interface OverviewUserExperienceResponse {
   worst: { id: string; hostname: string; score: number }[];
   best: { id: string; hostname: string; score: number }[];
   deviceCount: number;
+  top: {
+    mostReboots: OverviewTopRow[];
+    mostBSODs: OverviewTopRow[];
+    highestCPU: OverviewTopRow[];
+    longestUptimeDays: OverviewTopRow[];
+    longestLogonAvg: OverviewTopRow[];
+    longestLogonMax: OverviewTopRow[];
+    longestTraceHops: OverviewTopRow[];
+    longestAppLaunch: OverviewTopRow[];
+    avgInputDelay: OverviewTopRow[];
+  };
   asOf: string;
 }
 

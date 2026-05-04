@@ -9,6 +9,7 @@
 //     (a follow-up of Phase 1.5 in the plan).
 
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 import type { OverviewNetworkLatencyResponse } from "../../api/types";
 import { Card, EmptyHint, ErrorHint, TopList } from "./common";
@@ -31,7 +32,7 @@ export default function NetworkLatency() {
         <TopList rows={latencyByDevice} unit=" ms" emptyHint="No latency samples yet." />
       </Card>
 
-      <Card title="Latency by ISP" subtitle="avg ms">
+      <Card title="ISP latency to 8.8.8.8" subtitle="avg ms · per ISP">
         {latencyByISP.length === 0 ? (
           <EmptyHint>No ISP-classified hosts. The API needs the GeoIP ASN database.</EmptyHint>
         ) : (
@@ -71,18 +72,26 @@ export default function NetworkLatency() {
         <WiFiGauge pct={wifiSignalAvgPct} />
       </Card>
 
-      <Card title="Longest traceroute hops" subtitle="coming soon">
+      <Card title="Longest traceroute hops" subtitle="hops to 8.8.8.8">
         {longestTracerouteHops.length === 0 ? (
           <EmptyHint>
-            Traceroute is deferred to a Phase&nbsp;1.5 follow-up. The probe currently only
-            measures end-to-end ICMP RTT.
+            Probe traceroutes are collected once every 5 minutes by the new Windows
+            probe (2026.5.5+). Hosts on older builds will not appear here until
+            their next probe upgrade.
           </EmptyHint>
         ) : (
           <ul className="divide-y divide-ink-800/60 text-sm">
             {longestTracerouteHops.map((h) => (
-              <li key={h.hostname} className="flex items-baseline justify-between py-1.5">
-                <span className="truncate text-slate-200">{h.hostname}</span>
-                <span className="ml-3 shrink-0 tabular-nums text-slate-300">{h.hops}</span>
+              <li key={h.id} className="flex items-baseline justify-between py-1.5">
+                <Link
+                  to={`/agents/${h.id}`}
+                  className="truncate text-sonar-300 hover:underline"
+                >
+                  {h.hostname}
+                </Link>
+                <span className="ml-3 shrink-0 tabular-nums text-slate-300">
+                  {h.value}
+                </span>
               </li>
             ))}
           </ul>

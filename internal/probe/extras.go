@@ -146,15 +146,27 @@ func runLatencyLoop(ctx context.Context, log *slog.Logger, target string) {
 
 // runHealthLoop refreshes HealthSignals on a 5-minute cadence.
 // CollectHealthSignals is implemented per-OS in
-// health_{windows,linux,other}.go.
+// health_{windows,linux,other}.go. After collecting the per-OS signals
+// we also do one TTL-ramp traceroute to the primary latency target so
+// the Network · Latency dashboard can rank hosts by path length.
 func runHealthLoop(ctx context.Context, log *slog.Logger) {
 	tick := func() {
-		hCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+		hCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
 		defer cancel()
 		h := CollectHealthSignals(hCtx)
-		if h != nil {
-			extras.setHealth(h)
+		if h == nil {
+			h = &HealthSignals{}
 		}
+		// Traceroute is comparatively expensive (~10-30 s for a path
+		// of typical length). We share the 5-minute cadence with the
+		// rest of HealthSignals because per-minute traces add no
+		// value on stable corporate networks.
+		if hops, err := TraceICMP(hCtx, "8.8.8.8", 30); err == nil && hops > 0 {
+			h.TracerouteHops = &hops
+		} else if err != nil {
+			log.Debug("traceroute failed", "err", err)
+		}
+		extras.setHealth(h)
 	}
 	tick()
 	t := time.NewTicker(5 * time.Minute)

@@ -71,6 +71,11 @@ type overviewAgent struct {
 	HighloadCPUIncidents24h *int
 	WiFiSignalPct           *int
 	WiFiSSID                *string
+	LogonAvgMs              *float64
+	LogonMaxMs              *float64
+	AppLaunchMaxMs          *float64
+	InputDelayAvgMs         *float64
+	TracerouteHops          *int
 
 	// Pulled from the hardware sub-blob.
 	HardwareModel string
@@ -108,6 +113,11 @@ func loadOverviewAgents(ctx context.Context, pool *pgxpool.Pool) ([]*overviewAge
 		       (a.last_metrics->'health'->>'highloadCpuIncidents24h')::int,
 		       (a.last_metrics->'health'->>'wifiSignalPct')::int,
 		        a.last_metrics->'health'->>'wifiSsid',
+		       (a.last_metrics->'health'->>'logonAvgMs')::float8,
+		       (a.last_metrics->'health'->>'logonMaxMs')::float8,
+		       (a.last_metrics->'health'->>'appLaunchMaxMs')::float8,
+		       (a.last_metrics->'health'->>'inputDelayAvgMs')::float8,
+		       (a.last_metrics->'health'->>'tracerouteHops')::int,
 		        coalesce(
 		          a.last_metrics->'hardware'->'system'->>'model',
 		          a.last_metrics->'hardware'->>'model',
@@ -146,6 +156,11 @@ func loadOverviewAgents(ctx context.Context, pool *pgxpool.Pool) ([]*overviewAge
 			&a.HighloadCPUIncidents24h,
 			&a.WiFiSignalPct,
 			&a.WiFiSSID,
+			&a.LogonAvgMs,
+			&a.LogonMaxMs,
+			&a.AppLaunchMaxMs,
+			&a.InputDelayAvgMs,
+			&a.TracerouteHops,
 			&a.HardwareModel,
 			&a.AdapterType,
 		); err != nil {
@@ -698,14 +713,20 @@ func (s *Server) handleOverviewNetworkLatency(w http.ResponseWriter, r *http.Req
 		wifiSignal = totalRSSI / rssiCount
 	}
 
+	longestTraceHops := pickTopN(agents, 5, true, func(a *overviewAgent) *float64 {
+		if a.TracerouteHops == nil {
+			return nil
+		}
+		v := float64(*a.TracerouteHops)
+		return &v
+	})
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"latencyByDevice": latencyByDevice,
-		"latencyByISP":    latencyByISP,
-		"topISPs":         topISPs,
-		"wifiSignalAvgPct": wifiSignal,
-		// Traceroute longest hops is deferred (see plan); the UI
-		// renders a stub when this is empty.
-		"longestTracerouteHops": []map[string]any{},
+		"latencyByDevice":       latencyByDevice,
+		"latencyByISP":          latencyByISP,
+		"topISPs":               topISPs,
+		"wifiSignalAvgPct":      wifiSignal,
+		"longestTracerouteHops": longestTraceHops,
 		"asOf":                  time.Now().UTC(),
 	})
 }
@@ -958,7 +979,12 @@ func (s *Server) handleOverviewApplicationsPerformance(w http.ResponseWriter, r 
 }
 
 // handleOverviewUserExperience — composite scores per-host plus a
-// distribution histogram (10 buckets, 0–10 score).
+// distribution histogram (10 buckets, 0–10 score) and a series of
+// ranked top-N cards covering the operator-facing UX questions:
+// reboot frequency, BSOD count, peak CPU, longest uptime, longest
+// logon, longest traceroute hops. App-launch time and input-delay
+// fields are reserved for a future probe collector and currently
+// always return empty rows; the dashboard renders a placeholder.
 func (s *Server) handleOverviewUserExperience(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	agents, err := loadOverviewAgents(ctx, s.pool)
@@ -1008,13 +1034,63 @@ func (s *Server) handleOverviewUserExperience(w http.ResponseWriter, r *http.Req
 		best = best[:10]
 	}
 
+	// Ranked top-N lists the dashboard cards consume.
+	mostReboots := pickTopN(agents, 5, true, func(a *overviewAgent) *float64 {
+		if a.UserRebootCount24h == nil {
+			return nil
+		}
+		v := float64(*a.UserRebootCount24h)
+		return &v
+	})
+	mostBSODs := pickTopN(agents, 5, true, func(a *overviewAgent) *float64 {
+		if a.BSODCount24h == nil {
+			return nil
+		}
+		v := float64(*a.BSODCount24h)
+		return &v
+	})
+	highestCPU := pickTopN(agents, 5, true, func(a *overviewAgent) *float64 { return a.CPUPct })
+	longestUptimeDays := pickTopN(agents, 5, true, func(a *overviewAgent) *float64 {
+		if a.UptimeSeconds == nil {
+			return nil
+		}
+		days := float64(*a.UptimeSeconds) / 86400.0
+		days = round1(days)
+		return &days
+	})
+	longestLogonAvg := pickTopN(agents, 5, true, func(a *overviewAgent) *float64 { return a.LogonAvgMs })
+	longestLogonMax := pickTopN(agents, 5, true, func(a *overviewAgent) *float64 { return a.LogonMaxMs })
+	longestTraceHops := pickTopN(agents, 5, true, func(a *overviewAgent) *float64 {
+		if a.TracerouteHops == nil {
+			return nil
+		}
+		v := float64(*a.TracerouteHops)
+		return &v
+	})
+	// App-launch and input-delay fields are reserved (probe collector
+	// not yet implemented) — we intentionally pass them through so
+	// the dashboard's placeholder logic stays in one place.
+	longestAppLaunch := pickTopN(agents, 5, true, func(a *overviewAgent) *float64 { return a.AppLaunchMaxMs })
+	avgInputDelay := pickTopN(agents, 5, true, func(a *overviewAgent) *float64 { return a.InputDelayAvgMs })
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"averageScore": round1(avg),
 		"histogram":    hist,
 		"worst":        worst,
 		"best":         best,
 		"deviceCount":  len(agents),
-		"asOf":         time.Now().UTC(),
+		"top": map[string]any{
+			"mostReboots":       mostReboots,
+			"mostBSODs":         mostBSODs,
+			"highestCPU":        highestCPU,
+			"longestUptimeDays": longestUptimeDays,
+			"longestLogonAvg":   longestLogonAvg,
+			"longestLogonMax":   longestLogonMax,
+			"longestTraceHops":  longestTraceHops,
+			"longestAppLaunch":  longestAppLaunch,
+			"avgInputDelay":     avgInputDelay,
+		},
+		"asOf": time.Now().UTC(),
 	})
 }
 

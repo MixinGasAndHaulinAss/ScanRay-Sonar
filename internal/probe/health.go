@@ -32,6 +32,20 @@ type HealthSignals struct {
 	WiFiSSID                string   `json:"wifiSsid,omitempty"`
 	WiFiRSSIdBm             *int     `json:"wifiRssiDbm,omitempty"`
 	WiFiSignalPct           *int     `json:"wifiSignalPct,omitempty"`
+	// LogonAvgMs / LogonMaxMs aggregate the LogonTime ms property of
+	// Microsoft-Windows-Diagnostics-Performance/Operational events
+	// over the past 7 days. Linux/macOS leave these nil.
+	LogonAvgMs *float64 `json:"logonAvgMs,omitempty"`
+	LogonMaxMs *float64 `json:"logonMaxMs,omitempty"`
+	// AppLaunchMaxMs / InputDelayAvgMs are reserved for future
+	// collectors. Currently always nil; the dashboards render a
+	// "data not yet collected" placeholder.
+	AppLaunchMaxMs   *float64 `json:"appLaunchMaxMs,omitempty"`
+	InputDelayAvgMs  *float64 `json:"inputDelayAvgMs,omitempty"`
+	// TracerouteHops is the count of distinct hops on a TTL-ramp
+	// traceroute to the primary latency target (8.8.8.8 by default).
+	// Set by latency.go after the periodic ICMP run.
+	TracerouteHops *int `json:"tracerouteHops,omitempty"`
 	// ISPName mirrors agents.geo_org so client-side filters can group
 	// without consulting a separate endpoint.
 	ISPName string `json:"ispName,omitempty"`

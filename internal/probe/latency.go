@@ -175,6 +175,97 @@ func makeEchoBody(id, seq int) []byte {
 	return buf
 }
 
+// TraceICMP performs a TTL-ramp ICMP traceroute to addr and returns
+// the number of distinct hops observed before the echo reply arrives
+// (or maxTTL is exhausted). It does not return per-hop addresses
+// because the dashboards only care about the path length right now.
+//
+// Wall-clock cost is bounded at ~ maxTTL * 1.2 s. We expect ~10-20
+// hops on a typical office to 8.8.8.8, so the total cost is a few
+// seconds — fine inside the 5-minute health loop. Privileges are the
+// same as ProbeICMP (raw ICMP socket).
+func TraceICMP(ctx context.Context, addr string, maxTTL int) (int, error) {
+	if maxTTL <= 0 || maxTTL > 64 {
+		maxTTL = 30
+	}
+	ip := net.ParseIP(addr)
+	if ip == nil || ip.To4() == nil {
+		return 0, fmt.Errorf("traceroute: %q is not a valid IPv4 address", addr)
+	}
+	conn, err := openICMPConn()
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+
+	id := os.Getpid() & 0xffff
+	dst := &net.IPAddr{IP: ip}
+	hops := 0
+
+	for ttl := 1; ttl <= maxTTL; ttl++ {
+		if ctx.Err() != nil {
+			return hops, ctx.Err()
+		}
+		// SetTTL on the underlying IPv4 packet conn. The icmp.PacketConn
+		// exposes the IPv4 socket via IPv4PacketConn().
+		pc := conn.IPv4PacketConn()
+		if pc != nil {
+			_ = pc.SetTTL(ttl)
+		}
+
+		seq := ttl
+		body := makeEchoBody(id, seq)
+		msg := icmp.Message{
+			Type: ipv4.ICMPTypeEcho,
+			Code: 0,
+			Body: &icmp.Echo{ID: id, Seq: seq, Data: body},
+		}
+		out, err := msg.Marshal(nil)
+		if err != nil {
+			continue
+		}
+		if _, err := conn.WriteTo(out, dst); err != nil {
+			continue
+		}
+
+		_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		buf := make([]byte, 1500)
+		gotResponse := false
+		reachedTarget := false
+		for !gotResponse && !reachedTarget {
+			n, _, err := conn.ReadFrom(buf)
+			if err != nil {
+				break
+			}
+			parsed, err := icmp.ParseMessage(1, buf[:n])
+			if err != nil {
+				continue
+			}
+			switch parsed.Type {
+			case ipv4.ICMPTypeTimeExceeded:
+				gotResponse = true
+			case ipv4.ICMPTypeEchoReply:
+				echo, ok := parsed.Body.(*icmp.Echo)
+				if !ok {
+					continue
+				}
+				if echo.ID != id {
+					continue
+				}
+				gotResponse = true
+				reachedTarget = true
+			}
+		}
+		if gotResponse {
+			hops++
+		}
+		if reachedTarget {
+			return hops, nil
+		}
+	}
+	return hops, nil
+}
+
 func round1(v float64) float64 {
 	// Round to one decimal place. We avoid math.Round to keep the
 	// import surface small.

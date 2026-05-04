@@ -1,13 +1,28 @@
 // UserExperience — "User Experience" overview.
 //
-// Renders the composite device-score distribution and the worst /
-// best 5 hosts. The score formula lives server-side in
-// internal/api/score.go; we just present the values here.
+// Layout (top to bottom):
+//   * KPI strip — average device score, devices scored, low-score
+//     count.
+//   * Score distribution histogram.
+//   * Worst-5 / Best-5 hosts by composite score.
+//   * Eight ranked top-N cards covering the questions operators most
+//     often ask:
+//       - most reboots (24h)
+//       - average user input delay (placeholder)
+//       - average logon time
+//       - blue-screen counts (24h)
+//       - longest app launch times (placeholder)
+//       - highest CPU load
+//       - longest logon times
+//       - longest uptime in days
+//   * A small inline notice for the placeholder cards explaining the
+//     probe-side collector is not yet implemented (so operators don't
+//     mistake "no rows" for a regression).
 
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
-import type { OverviewUserExperienceResponse } from "../../api/types";
+import type { OverviewTopRow, OverviewUserExperienceResponse } from "../../api/types";
 import { Card, EmptyHint, ErrorHint, KPITile } from "./common";
 
 const HISTOGRAM_BANDS = [
@@ -24,7 +39,7 @@ export default function UserExperience() {
   if (q.isLoading) return <EmptyHint>Loading user-experience dashboard…</EmptyHint>;
   if (q.isError || !q.data) return <ErrorHint>Failed to load User Experience.</ErrorHint>;
 
-  const { averageScore, histogram, worst, best, deviceCount } = q.data;
+  const { averageScore, histogram, worst, best, deviceCount, top } = q.data;
   const histMax = Math.max(1, ...histogram);
 
   return (
@@ -82,7 +97,7 @@ export default function UserExperience() {
             <EmptyHint>No data.</EmptyHint>
           ) : (
             <ul className="divide-y divide-ink-800/60 text-sm">
-              {worst.map((h) => (
+              {worst.slice(0, 5).map((h) => (
                 <li key={h.id} className="flex items-baseline justify-between py-1.5">
                   <Link to={`/agents/${h.id}`} className="truncate text-sonar-300 hover:underline">
                     {h.hostname}
@@ -100,7 +115,7 @@ export default function UserExperience() {
             <EmptyHint>No data.</EmptyHint>
           ) : (
             <ul className="divide-y divide-ink-800/60 text-sm">
-              {best.map((h) => (
+              {best.slice(0, 5).map((h) => (
                 <li key={h.id} className="flex items-baseline justify-between py-1.5">
                   <Link to={`/agents/${h.id}`} className="truncate text-sonar-300 hover:underline">
                     {h.hostname}
@@ -114,6 +129,140 @@ export default function UserExperience() {
           )}
         </Card>
       </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <RankCard
+          title="Most reboots"
+          subtitle="last 24h"
+          rows={top.mostReboots}
+          unit=""
+          tone="amber"
+        />
+        <RankCard
+          title="Avg user input delay"
+          subtitle="ms · not yet collected"
+          rows={top.avgInputDelay}
+          unit=" ms"
+          tone="slate"
+          placeholder={
+            <>
+              The probe does not yet sample the
+              <code className="mx-1 rounded bg-ink-950 px-1 py-0.5 text-[10px]">
+                Microsoft-Windows-DesktopWindowManager
+              </code>
+              input-latency counter. Coming in a follow-up.
+            </>
+          }
+        />
+        <RankCard
+          title="Avg logon time"
+          subtitle="ms · last 7 days"
+          rows={top.longestLogonAvg}
+          unit=" ms"
+          tone="amber"
+        />
+        <RankCard
+          title="Blue-screen count"
+          subtitle="last 24h"
+          rows={top.mostBSODs}
+          unit=""
+          tone="red"
+        />
+        <RankCard
+          title="Longest app launch"
+          subtitle="ms · not yet collected"
+          rows={top.longestAppLaunch}
+          unit=" ms"
+          tone="slate"
+          placeholder={
+            <>
+              Per-app launch latency requires an ETW collector. Reserved
+              for a follow-up; the field is plumbed end-to-end so the card
+              starts populating as soon as the probe ships data.
+            </>
+          }
+        />
+        <RankCard
+          title="Highest CPU load"
+          subtitle="current snapshot"
+          rows={top.highestCPU}
+          unit="%"
+          tone="amber"
+        />
+        <RankCard
+          title="Longest logon time"
+          subtitle="max ms · last 7 days"
+          rows={top.longestLogonMax}
+          unit=" ms"
+          tone="red"
+        />
+        <RankCard
+          title="Longest uptime"
+          subtitle="days since last reboot"
+          rows={top.longestUptimeDays}
+          unit=" d"
+          tone="sky"
+        />
+      </div>
     </div>
   );
+}
+
+type Tone = "amber" | "red" | "sky" | "slate";
+
+const TONE_CLASSES: Record<Tone, string> = {
+  amber: "text-amber-300",
+  red: "text-red-300",
+  sky: "text-sky-300",
+  slate: "text-slate-300",
+};
+
+function RankCard({
+  title,
+  subtitle,
+  rows,
+  unit,
+  tone,
+  placeholder,
+}: {
+  title: string;
+  subtitle?: string;
+  rows: OverviewTopRow[];
+  unit: string;
+  tone: Tone;
+  placeholder?: React.ReactNode;
+}) {
+  return (
+    <Card title={title} subtitle={subtitle}>
+      {rows.length === 0 ? (
+        <EmptyHint>{placeholder ?? "No data yet."}</EmptyHint>
+      ) : (
+        <ul className="divide-y divide-ink-800/60 text-sm">
+          {rows.slice(0, 5).map((r) => (
+            <li key={r.id} className="flex items-baseline justify-between py-1.5">
+              <Link
+                to={`/agents/${r.id}`}
+                className="truncate text-sonar-300 hover:underline"
+                title={r.hostname}
+              >
+                {r.hostname}
+              </Link>
+              <span className={"ml-3 shrink-0 tabular-nums " + TONE_CLASSES[tone]}>
+                {formatValue(r.value, unit)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function formatValue(v: number | null | undefined, unit: string): string {
+  if (v == null) return "—";
+  if (unit === "%") return v.toFixed(1) + "%";
+  if (unit === " d") return v.toFixed(1) + " d";
+  if (unit === " ms") return Math.round(v).toLocaleString() + " ms";
+  if (!unit) return Math.round(v).toString();
+  return v.toFixed(1) + unit;
 }
