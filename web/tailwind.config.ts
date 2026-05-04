@@ -19,9 +19,11 @@ export default {
           800: "rgb(var(--ink-800) / <alpha-value>)",
           700: "rgb(var(--ink-700) / <alpha-value>)",
         },
-        // Override the slate shades the app uses for text. Other slate
-        // shades (50, 700-950) fall through to Tailwind defaults via
-        // the deep merge that `extend.colors` performs.
+        // Slate is fully themed. The 100-600 weights are used as TEXT
+        // and flip dark-on-dark / dark-on-light correctly. The 700-950
+        // weights are used as backgrounds for status pills and panels;
+        // they invert in light mode so a `bg-slate-800` pill becomes
+        // light-grey instead of staying near-black.
         slate: {
           100: "rgb(var(--slate-100) / <alpha-value>)",
           200: "rgb(var(--slate-200) / <alpha-value>)",
@@ -29,6 +31,10 @@ export default {
           400: "rgb(var(--slate-400) / <alpha-value>)",
           500: "rgb(var(--slate-500) / <alpha-value>)",
           600: "rgb(var(--slate-600) / <alpha-value>)",
+          700: "rgb(var(--slate-700) / <alpha-value>)",
+          800: "rgb(var(--slate-800) / <alpha-value>)",
+          900: "rgb(var(--slate-900) / <alpha-value>)",
+          950: "rgb(var(--slate-950) / <alpha-value>)",
         },
         sonar: {
           200: "rgb(var(--sonar-200) / <alpha-value>)",
@@ -43,18 +49,22 @@ export default {
         // light surface they wash out. We CSS-var-back them so light
         // mode swaps in the 700/800 weights of the same hue.
         emerald: {
+          100: "rgb(var(--emerald-100) / <alpha-value>)",
           200: "rgb(var(--emerald-200) / <alpha-value>)",
           300: "rgb(var(--emerald-300) / <alpha-value>)",
         },
         amber: {
+          100: "rgb(var(--amber-100) / <alpha-value>)",
           200: "rgb(var(--amber-200) / <alpha-value>)",
           300: "rgb(var(--amber-300) / <alpha-value>)",
         },
         red: {
+          100: "rgb(var(--red-100) / <alpha-value>)",
           200: "rgb(var(--red-200) / <alpha-value>)",
           300: "rgb(var(--red-300) / <alpha-value>)",
         },
         sky: {
+          100: "rgb(var(--sky-100) / <alpha-value>)",
           200: "rgb(var(--sky-200) / <alpha-value>)",
           300: "rgb(var(--sky-300) / <alpha-value>)",
         },
