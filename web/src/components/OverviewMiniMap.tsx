@@ -84,12 +84,12 @@ export default function OverviewMiniMap({
               <Geography
                 key={g.rsmKey}
                 geography={g}
-                fill="#0f172a"
-                stroke="#1e293b"
+                fill="var(--map-land)"
+                stroke="var(--map-stroke)"
                 strokeWidth={0.35}
                 style={{
                   default: { outline: "none" },
-                  hover: { outline: "none", fill: "#0f172a" },
+                  hover: { outline: "none", fill: "var(--map-hover)" },
                   pressed: { outline: "none" },
                 }}
               />
@@ -110,7 +110,7 @@ export default function OverviewMiniMap({
               {c.members.length > 1 && (
                 <circle r={r * 1.6} fill={fill} opacity={0.22} />
               )}
-              <circle r={r} fill={fill} stroke="#0f172a" strokeWidth={1} />
+              <circle r={r} fill={fill} stroke="var(--map-land)" strokeWidth={1} />
               {c.members.length > 1 && (
                 <text
                   textAnchor="middle"

@@ -299,12 +299,12 @@ export default function World() {
                   <Geography
                     key={geo.rsmKey}
                     geography={geo}
-                    fill="#0f172a"
-                    stroke="#1e293b"
+                    fill="var(--map-land)"
+                    stroke="var(--map-stroke)"
                     strokeWidth={0.4}
                     style={{
                       default: { outline: "none" },
-                      hover: { outline: "none", fill: "#111c33" },
+                      hover: { outline: "none", fill: "var(--map-hover)" },
                       pressed: { outline: "none" },
                     }}
                   />
@@ -340,7 +340,7 @@ export default function World() {
                     <circle
                       r={r}
                       fill={STATUS_COLOR[dominant]}
-                      stroke={isActive ? "#7dd3fc" : "#0f172a"}
+                      stroke={isActive ? "#7dd3fc" : "var(--map-land)"}
                       strokeWidth={isActive ? 2 : 1}
                     />
                     {c.members.length > 1 && (

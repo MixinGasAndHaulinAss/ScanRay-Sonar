@@ -3,11 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { api, tokens } from "../api/client";
 import type { Site, User, VersionInfo } from "../api/types";
 import clsx from "clsx";
+import ThemeToggle from "./ThemeToggle";
 
 // APP_VERSION is just the static fallback shown if /version hasn't
 // returned yet (or fails). The real source of truth is the Go binary's
 // embedded VERSION, fetched below via useQuery.
-const APP_VERSION = "2026.5.5.3";
+const APP_VERSION = "2026.5.5.4";
 
 const navItems: { to: string; label: string; role?: User["role"] }[] = [
   { to: "/", label: "Dashboard" },
@@ -95,6 +96,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <select
               className="rounded-full border border-ink-800 bg-ink-900 px-3 py-1 text-sm text-slate-300 hover:border-ink-700 focus:border-sonar-500 focus:outline-none"
               defaultValue=""
