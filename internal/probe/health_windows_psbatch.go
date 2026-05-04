@@ -68,32 +68,38 @@ $out.eventLogErrorCount24h  = safeCount @{LogName='Application','System'; Level=
 # Detector entries (Event ID 2004 in Microsoft-Windows-Resource-Exhaustion-Detector).
 $out.highloadCpuIncidents24h = safeCount @{LogName='Microsoft-Windows-Resource-Exhaustion-Detector/Operational'; Id=2004; StartTime=$since}
 
-# Logon timings — Microsoft-Windows-Diagnostics-Performance/Operational
-# Event ID 200 fires once per shell load with a numeric LogonTime
-# property (in ms). Sample the last 7 days so a host that gets logged
-# into once a week still contributes a value. Skip unparseable rows.
+# Logon timings — Microsoft-Windows-GroupPolicy/Operational Event ID
+# 8001 fires once per logon with a PolicyElaspedTimeInSeconds data
+# field (yes, Microsoft misspelled "Elapsed" — the field name is
+# normative). It's the time the user spent waiting for Group Policy
+# to apply during login, which is the dominant component of the
+# user-perceived logon delay on most managed workstations.
+#
+# We sample the last 7 days, filter to user (IsMachine=0) events,
+# and convert seconds to ms for consistency with the other timing
+# fields. Hosts without GP (workgroup machines) just emit no rows
+# and we leave the keys absent.
 try {
   $logonSince = (Get-Date).AddDays(-7)
   $events = Get-WinEvent -FilterHashtable @{
-    LogName='Microsoft-Windows-Diagnostics-Performance/Operational';
-    Id=200;
+    LogName='Microsoft-Windows-GroupPolicy/Operational';
+    Id=8001;
     StartTime=$logonSince
   } -ErrorAction Stop
   if ($events) {
-    $logonTimes = @()
+    $logonMs = @()
     foreach ($e in $events) {
       try {
-        # The XML payload exposes a <Data Name="LogonTime"> element on
-        # Win10/Win11. Older builds nested it under EventData/Data[6].
         $xml = [xml]$e.ToXml()
-        $node = $xml.Event.UserData.MonitoringData.LogonTime
-        if (-not $node) { $node = ($xml.Event.EventData.Data | Where-Object { $_.Name -eq 'LogonTime' }).'#text' }
-        if ($node) { $logonTimes += [double]$node }
+        $isMachine = ($xml.Event.EventData.Data | Where-Object { $_.Name -eq 'IsMachine' }).'#text'
+        if ($isMachine -ne '0') { continue }
+        $secs = ($xml.Event.EventData.Data | Where-Object { $_.Name -eq 'PolicyElaspedTimeInSeconds' }).'#text'
+        if ($secs) { $logonMs += [double]$secs * 1000.0 }
       } catch {}
     }
-    if ($logonTimes.Count -gt 0) {
-      $out.logonAvgMs = [math]::Round(($logonTimes | Measure-Object -Average).Average, 0)
-      $out.logonMaxMs = [math]::Round(($logonTimes | Measure-Object -Maximum).Maximum, 0)
+    if ($logonMs.Count -gt 0) {
+      $out.logonAvgMs = [math]::Round(($logonMs | Measure-Object -Average).Average, 0)
+      $out.logonMaxMs = [math]::Round(($logonMs | Measure-Object -Maximum).Maximum, 0)
     }
   }
 } catch {}
