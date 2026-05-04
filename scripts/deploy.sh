@@ -15,9 +15,6 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-VERSION="$(cat VERSION)"
-echo "Deploying ScanRay Sonar v${VERSION}"
-
 if [[ ! -f .env ]]; then
   echo "ERROR: .env not found. Run scripts/dev-bootstrap.sh or copy .env.example." >&2
   exit 1
@@ -26,6 +23,11 @@ fi
 git fetch --tags --quiet || true
 git pull --ff-only
 
+# Read VERSION *after* the pull so the image label matches the source
+# tree we just fetched. Reading earlier means a release-bumping commit
+# in the same pull would build with the previous image label.
+VERSION="$(cat VERSION)"
+echo "Deploying ScanRay Sonar v${VERSION}"
 export SONAR_VERSION="$VERSION"
 
 docker compose pull --ignore-pull-failures
