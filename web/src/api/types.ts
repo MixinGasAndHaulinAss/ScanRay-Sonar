@@ -92,6 +92,11 @@ export interface Snapshot {
   listeners: SnapshotListener[];
   /** Schema v2+: aggregated active peer conversations. Optional for back-compat. */
   conversations?: SnapshotConversation[];
+  /** Schema v4+: per-target ICMP latency cached on the probe. */
+  latency?: SnapshotLatency[];
+  /** Schema v4+: slow-cadence host-health signals (battery,
+   *  BSOD counts, missing patches, WiFi RSSI, ...). */
+  health?: SnapshotHealth;
   loggedInUsers: SnapshotSession[];
   pendingReboot: boolean;
   pendingRebootReason?: string;
@@ -143,9 +148,16 @@ export interface SnapshotNIC {
   mac?: string;
   mtu?: number;
   up: boolean;
+  /** Schema v4+: classifier-derived adapter type. Drives the
+   *  WiFi-vs-Wired charts and the Network-Performance dashboard. */
+  kind?: "wired" | "wireless" | "virtual" | "loopback";
   addresses?: string[];
   bytesSent: number;
   bytesRecv: number;
+  /** Schema v4+: per-second deltas of bytesSent/bytesRecv. Zero on
+   *  the first snapshot of a probe lifetime. */
+  bytesSentBps?: number;
+  bytesRecvBps?: number;
   pktsSent: number;
   pktsRecv: number;
   errIn: number;
@@ -259,6 +271,48 @@ export interface SnapshotSession {
   tty?: string;
   host?: string;
   started?: string;
+  /** Schema v4+: Windows session state (Active, Disconnected, etc.). */
+  state?: string;
+  /** Schema v4+: connection origin — RDP client name, "console", etc. */
+  source?: string;
+}
+
+/**
+ * SnapshotLatency is one (target, sample) row produced by the probe's
+ * ICMP latency module. Schema v4+. The probe sends two rows by
+ * default: target='8.8.8.8' (the WAN target) and target='gateway'
+ * (the discovered default route). Older probes omit this field.
+ */
+export interface SnapshotLatency {
+  target: string;
+  address?: string;
+  avgMs: number;
+  minMs: number;
+  maxMs: number;
+  lossPct: number;
+}
+
+/**
+ * SnapshotHealth is the slow-cadence host-health snapshot collected
+ * every 5 minutes (extras.runHealthLoop on the probe). All fields
+ * are optional — missing fields render as "—" in the UI rather than
+ * "0", so the absence of a battery on a desktop doesn't show up as
+ * "0% battery health".
+ */
+export interface SnapshotHealth {
+  batteryHealthPct?: number;
+  bsodCount24h?: number;
+  userRebootCount24h?: number;
+  appCrashCount24h?: number;
+  eventLogErrorCount24h?: number;
+  missingPatchCount?: number;
+  cpuQueueLength?: number;
+  diskQueueLength?: number;
+  highloadCpuIncidents24h?: number;
+  wifiSsid?: string;
+  wifiRssiDbm?: number;
+  wifiSignalPct?: number;
+  ispName?: string;
 }
 export interface SnapshotService {
   name: string;
@@ -281,6 +335,151 @@ export interface MetricSeries {
   range: string;
   samples: MetricSample[];
   capturedAtTo: string;
+}
+
+// ---- Network usage + latency series (Phase 4 dashboards) ------------------
+
+export interface NetworkSample {
+  time: string;
+  inBps?: number | null;
+  outBps?: number | null;
+}
+
+export interface NetworkHourly {
+  hour: string;
+  inBytes?: number | null;
+  outBytes?: number | null;
+}
+
+export interface NetworkSeries {
+  agentId: string;
+  range: string;
+  samples: NetworkSample[];
+  hourly: NetworkHourly[];
+  capturedAtTo: string;
+}
+
+export interface LatencySample {
+  time: string;
+  target: string;
+  address?: string | null;
+  avgMs?: number | null;
+  minMs?: number | null;
+  maxMs?: number | null;
+  lossPct?: number | null;
+}
+
+export interface LatencySeries {
+  agentId: string;
+  range: string;
+  target: string;
+  samples: LatencySample[];
+  capturedAtTo: string;
+}
+
+// ---- Overview aggregations -------------------------------------------------
+//
+// Each /agents/overview/* endpoint returns a different shape — the
+// dashboards consume them directly without a generic envelope. Types
+// here match the Go handlers in internal/api/handlers_overview.go.
+
+export interface OverviewTopRow {
+  id: string;
+  hostname: string;
+  value: number;
+}
+
+export interface OverviewTrendPoint {
+  hour: string;
+  value: number;
+}
+
+export interface OverviewDevicesAveragesResponse {
+  top: {
+    worstBatteryHealth: OverviewTopRow[];
+    mostBSODs: OverviewTopRow[];
+    mostAppCrashes: OverviewTopRow[];
+    leastFreeDiskPct: OverviewTopRow[];
+    mostMissingPatches: OverviewTopRow[];
+    mostEventLogErrors: OverviewTopRow[];
+  };
+  trends: {
+    cpuPct: OverviewTrendPoint[];
+    cpuQueueLength: OverviewTrendPoint[];
+    memPct: OverviewTrendPoint[];
+    diskQueueLength: OverviewTrendPoint[];
+    networkMBps: OverviewTrendPoint[];
+    networkHourly: OverviewTrendPoint[];
+  };
+  asOf: string;
+}
+
+export interface OverviewModelRow {
+  model: string;
+  count: number;
+  score: number;
+}
+
+export interface OverviewMapPoint {
+  id: string;
+  hostname: string;
+  lat: number;
+  lon: number;
+  score: number;
+}
+
+export interface OverviewDevicesPerformanceResponse {
+  managedDevicesByOS: Record<string, number>;
+  keyDeviceInsights: Record<string, number>;
+  top5Models: OverviewModelRow[];
+  bottom5Models: OverviewModelRow[];
+  map: OverviewMapPoint[];
+  scoreTrend: { hour: string; score: number }[];
+  asOf: string;
+}
+
+export interface OverviewISPRow {
+  isp: string;
+  count: number;
+  avgMs: number;
+}
+
+export interface OverviewNetworkLatencyResponse {
+  latencyByDevice: OverviewTopRow[];
+  latencyByISP: OverviewISPRow[];
+  topISPs: OverviewISPRow[];
+  wifiSignalAvgPct: number;
+  longestTracerouteHops: { hostname: string; hops: number }[];
+  asOf: string;
+}
+
+export interface OverviewNetworkPerformanceResponse {
+  adapterSplit: { wifiBytes24h: number; wiredBytes24h: number; deviceCount: number };
+  hourlyMB: { hour: string; inMB: number; outMB: number }[];
+  highLatencyDevices: number;
+  avgWiredLatencyMs: number;
+  avgWiFiLatencyMs: number;
+  avgWiFiSignalPct: number;
+  latencyByAdapter: { hour: string; wifi?: number; wired?: number }[];
+  topISPsByLatency: OverviewISPRow[];
+  bottomISPsByLatency: OverviewISPRow[];
+  asOf: string;
+}
+
+export interface OverviewApplicationsPerformanceResponse {
+  coverage: { appCrashes: boolean; perAppBreakdown: boolean; appLaunches: boolean };
+  summary: { totalCrashes24h: number; deviceCount: number };
+  mostCrashes: OverviewTopRow[];
+  asOf: string;
+}
+
+export interface OverviewUserExperienceResponse {
+  averageScore: number;
+  histogram: number[];
+  worst: { id: string; hostname: string; score: number }[];
+  best: { id: string; hostname: string; score: number }[];
+  deviceCount: number;
+  asOf: string;
 }
 
 export interface Appliance {

@@ -55,6 +55,36 @@ type metricsFrame struct {
 	Snapshot json.RawMessage `json:"snapshot"`
 }
 
+// parsedDisk / parsedNIC / parsedLatency are lifted into named types
+// so helper functions can accept them by reference without dragging
+// the full Snapshot's anonymous struct literals into their
+// signatures (Go matches anonymous structs by exact field equality;
+// adding a new field to parsedSnapshot.NICs would otherwise require
+// updating every helper call site).
+type parsedDisk struct {
+	Mountpoint string `json:"mountpoint"`
+	TotalBytes uint64 `json:"totalBytes"`
+	UsedBytes  uint64 `json:"usedBytes"`
+}
+
+type parsedNIC struct {
+	Name         string   `json:"name"`
+	Kind         string   `json:"kind"`
+	Up           bool     `json:"up"`
+	Addresses    []string `json:"addresses"`
+	BytesSentBps uint64   `json:"bytesSentBps"`
+	BytesRecvBps uint64   `json:"bytesRecvBps"`
+}
+
+type parsedLatency struct {
+	Target  string  `json:"target"`
+	Address string  `json:"address"`
+	AvgMs   float64 `json:"avgMs"`
+	MinMs   float64 `json:"minMs"`
+	MaxMs   float64 `json:"maxMs"`
+	LossPct float64 `json:"lossPct"`
+}
+
 // parsedSnapshot mirrors just the few fields we lift into typed
 // columns. It intentionally does not duplicate the full Snapshot
 // struct from the probe package — keeping the shapes weakly coupled
@@ -71,17 +101,12 @@ type parsedSnapshot struct {
 		TotalBytes uint64 `json:"totalBytes"`
 		UsedBytes  uint64 `json:"usedBytes"`
 	} `json:"memory"`
-	Disks []struct {
-		Mountpoint string `json:"mountpoint"`
-		TotalBytes uint64 `json:"totalBytes"`
-		UsedBytes  uint64 `json:"usedBytes"`
-	} `json:"disks"`
-	NICs []struct {
-		Name      string   `json:"name"`
-		Up        bool     `json:"up"`
-		Addresses []string `json:"addresses"`
-	} `json:"nics"`
-	PendingReboot bool `json:"pendingReboot"`
+	Disks []parsedDisk `json:"disks"`
+	NICs  []parsedNIC  `json:"nics"`
+	// Latency is the per-target ICMP RTT report (one row per target,
+	// today: "8.8.8.8" + "gateway"). Schema v4+. Older probes omit it.
+	Latency       []parsedLatency `json:"latency"`
+	PendingReboot bool            `json:"pendingReboot"`
 }
 
 // runAgentIngestLoop upgrades the request to a websocket, runs the
@@ -306,10 +331,101 @@ func (s *Server) ingestMetrics(ctx context.Context, agentID uuid.UUID, f metrics
 		return fmt.Errorf("insert sample: %w", err)
 	}
 
+	// Aggregate physical-NIC throughput for the network sample. We
+	// deliberately exclude virtual / loopback adapters so the chart
+	// reflects what actually crossed the wire — Hyper-V / Docker
+	// veth bytes would otherwise double-count host traffic.
+	if inBps, outBps, ok := sumPhysicalNICBps(ps.NICs); ok {
+		_, err = tx.Exec(ctx, `
+			INSERT INTO agent_network_samples
+			  (agent_id, time, in_bps, out_bps)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (agent_id, time) DO UPDATE SET
+			  in_bps  = EXCLUDED.in_bps,
+			  out_bps = EXCLUDED.out_bps
+		`,
+			agentID,
+			sentAt,
+			int64(inBps),
+			int64(outBps),
+		)
+		if err != nil {
+			return fmt.Errorf("insert network sample: %w", err)
+		}
+	}
+
+	// Per-target latency rows. ON CONFLICT keeps a probe restart
+	// from causing duplicate-key failures during a "double snapshot
+	// at the same instant" race.
+	for _, lr := range ps.Latency {
+		if lr.Target == "" {
+			continue
+		}
+		_, err = tx.Exec(ctx, `
+			INSERT INTO agent_latency_samples
+			  (agent_id, time, target, address, avg_ms, min_ms, max_ms, loss_pct)
+			VALUES ($1, $2, $3, NULLIF($4, '')::inet, $5, $6, $7, $8)
+			ON CONFLICT (agent_id, time, target) DO UPDATE SET
+			  address  = EXCLUDED.address,
+			  avg_ms   = EXCLUDED.avg_ms,
+			  min_ms   = EXCLUDED.min_ms,
+			  max_ms   = EXCLUDED.max_ms,
+			  loss_pct = EXCLUDED.loss_pct
+		`,
+			agentID,
+			sentAt,
+			lr.Target,
+			lr.Address,
+			lr.AvgMs,
+			lr.MinMs,
+			lr.MaxMs,
+			lr.LossPct,
+		)
+		if err != nil {
+			return fmt.Errorf("insert latency sample: %w", err)
+		}
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit: %w", err)
 	}
 	return nil
+}
+
+// sumPhysicalNICBps adds up bytesSentBps / bytesRecvBps across NICs
+// the probe classified as "wired" or "wireless". Loopback (lo) and
+// virtual (Hyper-V switch, docker0, vEthernet, tunnel) interfaces
+// are excluded so the aggregate matches what crossed the host's
+// physical link. Returns ok=false when there's no usable NIC at all
+// — older probes (schema v3) didn't populate Kind, so we fall back
+// to "any NIC that's up and has an address" in that case.
+func sumPhysicalNICBps(nics []parsedNIC) (in uint64, out uint64, ok bool) {
+	var hasKind bool
+	for _, n := range nics {
+		if n.Kind != "" {
+			hasKind = true
+			break
+		}
+	}
+	for _, n := range nics {
+		if !n.Up {
+			continue
+		}
+		if hasKind {
+			if n.Kind != "wired" && n.Kind != "wireless" {
+				continue
+			}
+		} else {
+			// v3-fallback: skip loopback by name, count everything else.
+			if strings.EqualFold(n.Name, "lo") || strings.HasPrefix(strings.ToLower(n.Name), "loopback") {
+				continue
+			}
+		}
+		in += n.BytesRecvBps
+		out += n.BytesSentBps
+		ok = true
+	}
+	return in, out, ok
 }
 
 func parseRFC3339OrNow(s string) time.Time {
@@ -326,11 +442,7 @@ func parseRFC3339OrNow(s string) time.Time {
 // as "the system disk". On Linux that's `/`; on Windows it's `C:` /
 // `C:\`. Falls back to the largest volume so we always surface
 // something on exotic layouts.
-func pickRootDisk(disks []struct {
-	Mountpoint string `json:"mountpoint"`
-	TotalBytes uint64 `json:"totalBytes"`
-	UsedBytes  uint64 `json:"usedBytes"`
-}) (used, total uint64) {
+func pickRootDisk(disks []parsedDisk) (used, total uint64) {
 	for _, d := range disks {
 		mp := strings.ToLower(strings.TrimSpace(d.Mountpoint))
 		if mp == "/" || mp == "c:" || mp == "c:\\" || mp == `c:\` {
@@ -351,11 +463,7 @@ func pickRootDisk(disks []struct {
 // address attached to an "up" interface — the value most useful in a
 // list view ("which box is at 10.20.30.40?"). Returns "" when nothing
 // matches; the caller turns that into a SQL NULL.
-func pickPrimaryIP(nics []struct {
-	Name      string   `json:"name"`
-	Up        bool     `json:"up"`
-	Addresses []string `json:"addresses"`
-}) string {
+func pickPrimaryIP(nics []parsedNIC) string {
 	for _, n := range nics {
 		if !n.Up {
 			continue
@@ -647,6 +755,200 @@ func (s *Server) handleAgentMetrics(w http.ResponseWriter, r *http.Request) {
 		"agentId":  id.String(),
 		"range":    dur.String(),
 		"samples":  out,
+		"capturedAtTo": time.Now().UTC(),
+	})
+}
+
+// networkSample is one point on the network usage line chart.
+type networkSample struct {
+	Time   time.Time `json:"time"`
+	InBps  *int64    `json:"inBps,omitempty"`
+	OutBps *int64    `json:"outBps,omitempty"`
+}
+
+// networkHourly is one bar on the hourly bytes-sent / bytes-received
+// chart. Hour is the start of the bucket (UTC); InBytes / OutBytes are
+// totals across the whole hour computed via SUM(bps) * sample_interval
+// / 1 (seconds per second). Since samples are emitted on the same 60s
+// cadence as the snapshot loop, we approximate "bytes in this hour"
+// as `avg(bps) * 3600`.
+type networkHourly struct {
+	Hour     time.Time `json:"hour"`
+	InBytes  *int64    `json:"inBytes,omitempty"`
+	OutBytes *int64    `json:"outBytes,omitempty"`
+}
+
+// handleAgentNetwork returns network bps samples + hourly byte totals.
+// Same range parsing as handleAgentMetrics. The hourly bucket is
+// computed via date_trunc('hour', ...) which works on plain Postgres
+// and TimescaleDB alike (we deliberately don't use time_bucket so the
+// query stays portable for CI without the extension loaded).
+func (s *Server) handleAgentNetwork(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "id must be a UUID")
+		return
+	}
+
+	rng := r.URL.Query().Get("range")
+	if rng == "" {
+		rng = "24h"
+	}
+	dur, err := parseRangeDuration(rng)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	const maxRange = 30 * 24 * time.Hour
+	if dur > maxRange {
+		dur = maxRange
+	}
+
+	intervalSecs := fmt.Sprintf("%d seconds", int64(dur.Seconds()))
+
+	// Per-sample series.
+	rows, err := s.pool.Query(r.Context(), `
+		SELECT time, in_bps, out_bps
+		  FROM agent_network_samples
+		 WHERE agent_id = $1
+		   AND time >= NOW() - $2::interval
+		 ORDER BY time ASC
+	`, id, intervalSecs)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "server_error", "query network samples failed")
+		return
+	}
+	defer rows.Close()
+	samples := []networkSample{}
+	for rows.Next() {
+		var m networkSample
+		if err := rows.Scan(&m.Time, &m.InBps, &m.OutBps); err != nil {
+			writeErr(w, http.StatusInternalServerError, "server_error", "scan network sample failed")
+			return
+		}
+		samples = append(samples, m)
+	}
+	if err := rows.Err(); err != nil {
+		writeErr(w, http.StatusInternalServerError, "server_error", "iter network samples failed")
+		return
+	}
+
+	// Hourly aggregate. AVG(bps) * 3600 ≈ bytes-this-hour. We allow
+	// nulls through so the frontend can render gaps as gaps.
+	hRows, err := s.pool.Query(r.Context(), `
+		SELECT date_trunc('hour', time) AS hour,
+		       AVG(in_bps)::BIGINT  * 3600 AS in_bytes,
+		       AVG(out_bps)::BIGINT * 3600 AS out_bytes
+		  FROM agent_network_samples
+		 WHERE agent_id = $1
+		   AND time >= NOW() - $2::interval
+		 GROUP BY hour
+		 ORDER BY hour ASC
+	`, id, intervalSecs)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "server_error", "query hourly network failed")
+		return
+	}
+	defer hRows.Close()
+	hourly := []networkHourly{}
+	for hRows.Next() {
+		var h networkHourly
+		if err := hRows.Scan(&h.Hour, &h.InBytes, &h.OutBytes); err != nil {
+			writeErr(w, http.StatusInternalServerError, "server_error", "scan hourly network failed")
+			return
+		}
+		hourly = append(hourly, h)
+	}
+	if err := hRows.Err(); err != nil {
+		writeErr(w, http.StatusInternalServerError, "server_error", "iter hourly network failed")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"agentId":      id.String(),
+		"range":        dur.String(),
+		"samples":      samples,
+		"hourly":       hourly,
+		"capturedAtTo": time.Now().UTC(),
+	})
+}
+
+// latencySample is one (target, time) row on the latency chart.
+type latencySample struct {
+	Time    time.Time `json:"time"`
+	Target  string    `json:"target"`
+	Address *string   `json:"address,omitempty"`
+	AvgMs   *float64  `json:"avgMs,omitempty"`
+	MinMs   *float64  `json:"minMs,omitempty"`
+	MaxMs   *float64  `json:"maxMs,omitempty"`
+	LossPct *float64  `json:"lossPct,omitempty"`
+}
+
+// handleAgentLatency returns latency samples filtered by an optional
+// `target=` query parameter ("8.8.8.8", "gateway", or omitted/"both"
+// for everything we have).
+func (s *Server) handleAgentLatency(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "id must be a UUID")
+		return
+	}
+
+	rng := r.URL.Query().Get("range")
+	if rng == "" {
+		rng = "24h"
+	}
+	dur, err := parseRangeDuration(rng)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	const maxRange = 30 * 24 * time.Hour
+	if dur > maxRange {
+		dur = maxRange
+	}
+
+	target := strings.TrimSpace(r.URL.Query().Get("target"))
+	args := []any{id, fmt.Sprintf("%d seconds", int64(dur.Seconds()))}
+	filter := ""
+	if target != "" && target != "both" && target != "all" {
+		filter = "AND target = $3"
+		args = append(args, target)
+	}
+
+	rows, err := s.pool.Query(r.Context(), `
+		SELECT time, target, address::text, avg_ms, min_ms, max_ms, loss_pct
+		  FROM agent_latency_samples
+		 WHERE agent_id = $1
+		   AND time >= NOW() - $2::interval
+		   `+filter+`
+		 ORDER BY time ASC, target ASC
+	`, args...)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "server_error", "query latency failed")
+		return
+	}
+	defer rows.Close()
+
+	out := []latencySample{}
+	for rows.Next() {
+		var m latencySample
+		if err := rows.Scan(&m.Time, &m.Target, &m.Address, &m.AvgMs, &m.MinMs, &m.MaxMs, &m.LossPct); err != nil {
+			writeErr(w, http.StatusInternalServerError, "server_error", "scan latency failed")
+			return
+		}
+		out = append(out, m)
+	}
+	if err := rows.Err(); err != nil {
+		writeErr(w, http.StatusInternalServerError, "server_error", "iter latency failed")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"agentId":      id.String(),
+		"range":        dur.String(),
+		"target":       target,
+		"samples":      out,
 		"capturedAtTo": time.Now().UTC(),
 	})
 }

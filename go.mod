@@ -16,6 +16,7 @@ require (
 	github.com/pquerna/otp v1.4.0
 	github.com/shirou/gopsutil/v4 v4.24.10
 	golang.org/x/crypto v0.27.0
+	golang.org/x/net v0.29.0
 	golang.org/x/sys v0.25.0
 )
 

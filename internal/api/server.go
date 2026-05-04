@@ -146,11 +146,23 @@ func (s *Server) Routes() http.Handler {
 			r.With(requireRole(auth.RoleSuperAdmin)).Delete("/users/{id}", s.handleDeleteUser)
 
 			r.Get("/agents", s.handleListAgents)
+			// Overview aggregation endpoints. Mounted under
+			// /agents/overview so chi resolves them before
+			// /agents/{id} (which would otherwise match
+			// /agents/overview as id=overview).
+			r.Get("/agents/overview/devices-averages", s.handleOverviewDevicesAverages)
+			r.Get("/agents/overview/devices-performance", s.handleOverviewDevicesPerformance)
+			r.Get("/agents/overview/network-latency", s.handleOverviewNetworkLatency)
+			r.Get("/agents/overview/network-performance", s.handleOverviewNetworkPerformance)
+			r.Get("/agents/overview/applications-performance", s.handleOverviewApplicationsPerformance)
+			r.Get("/agents/overview/user-experience", s.handleOverviewUserExperience)
 			// chi matches static segments before wildcards, so the
 			// enrollment-tokens routes below win over /agents/{id}
 			// even though both look like "/agents/<something>".
 			r.Get("/agents/{id}", s.handleGetAgent)
 			r.Get("/agents/{id}/metrics", s.handleAgentMetrics)
+			r.Get("/agents/{id}/network", s.handleAgentNetwork)
+			r.Get("/agents/{id}/latency", s.handleAgentLatency)
 			r.Get("/agents/{id}/network-graph", s.handleAgentNetworkGraph)
 			r.With(requireRole(auth.RoleSiteAdmin)).Patch("/agents/{id}", s.handleUpdateAgent)
 			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/agents/{id}", s.handleDeleteAgent)

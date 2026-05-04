@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.4.26.12"
+  version: "2026.5.3.1"
   license:
     name: MIT
 servers:
@@ -769,6 +769,147 @@ paths:
                         memTotalBytes:      { type: integer, nullable: true }
                         rootDiskUsedBytes:  { type: integer, nullable: true }
                         rootDiskTotalBytes: { type: integer, nullable: true }
+
+  /agents/{id}/network:
+    get:
+      summary: Network bps samples + hourly byte totals
+      description: |
+        One sample per snapshot (60 s cadence) plus a 1-hour
+        rollup of bytes-sent / bytes-received. Powers the
+        "Network usage" + "Network usage (hourly)" charts on
+        AgentDetail.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: range
+          schema: { type: string, default: "24h" }
+      responses:
+        "200":
+          description: Samples + hourly rollup
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agentId: { type: string, format: uuid }
+                  range:   { type: string }
+                  samples:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        time:   { type: string, format: date-time }
+                        inBps:  { type: integer, nullable: true }
+                        outBps: { type: integer, nullable: true }
+                  hourly:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        hour:     { type: string, format: date-time }
+                        inBytes:  { type: integer, nullable: true }
+                        outBytes: { type: integer, nullable: true }
+
+  /agents/{id}/latency:
+    get:
+      summary: ICMP latency samples per target
+      description: |
+        Samples produced by the probe's ICMP latency module, one row
+        per (target, time). target='8.8.8.8' is the WAN target; target
+        ='gateway' is the host's discovered default-route gateway.
+        Older probes (schema < v4) return an empty array.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: range
+          schema: { type: string, default: "24h" }
+        - in: query
+          name: target
+          schema: { type: string, enum: ["both", "8.8.8.8", "gateway"], default: "both" }
+      responses:
+        "200":
+          description: Samples
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agentId: { type: string, format: uuid }
+                  range:   { type: string }
+                  target:  { type: string }
+                  samples:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        time:    { type: string, format: date-time }
+                        target:  { type: string }
+                        address: { type: string, nullable: true }
+                        avgMs:   { type: number, nullable: true }
+                        minMs:   { type: number, nullable: true }
+                        maxMs:   { type: number, nullable: true }
+                        lossPct: { type: number, nullable: true }
+
+  /agents/overview/devices-averages:
+    get:
+      summary: "Devices - Averages overview aggregates"
+      description: |
+        Top-5 cards (worst battery, most BSODs, app crashes,
+        least free disk, most missing patches, most event-log
+        errors) plus 24h hourly trend lines (CPU%, CPU queue,
+        memory%, disk queue, network MB/s, hourly network MB).
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  /agents/overview/devices-performance:
+    get:
+      summary: "Devices - Performance overview aggregates"
+      description: |
+        Per-OS counts, KPI tiles, top/bottom 5 models by composite
+        score, geo-tagged map data, and a 24h device-score trend.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  /agents/overview/network-latency:
+    get:
+      summary: "Network - Latency overview aggregates"
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  /agents/overview/network-performance:
+    get:
+      summary: "Network - Performance overview aggregates"
+      description: |
+        WiFi / Wired adapter split, hourly MB sent/received, devices
+        with high latency, latency-by-adapter line, top/bottom ISPs by
+        latency.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  /agents/overview/applications-performance:
+    get:
+      summary: "Applications - Performance overview"
+      description: |
+        Aggregate-only (per-app breakdown is deferred). Returns a
+        `coverage` flag map indicating which sub-views have probe
+        support yet.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+
+  /agents/overview/user-experience:
+    get:
+      summary: "User Experience composite scores"
+      description: |
+        Per-host composite score (0..10) plus a 11-bucket histogram,
+        the worst 10 / best 10 hosts, and the fleet average.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
 
   /agents/enrollment-tokens:
     get:

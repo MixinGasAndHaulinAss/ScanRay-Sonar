@@ -328,8 +328,27 @@ Refresh the databases with `make refresh-geoip` and restart `sonar-api` to pick 
 - **Phase 1 — Foundation** ✅
   Repo, compose stack, Postgres + Timescale, OpenAPI 3.1, JWT / MFA / RBAC, multi-site, AES-256-GCM envelope encryption, host-side Cloudflare Tunnel wiring, CalVer.
 - **Phase 2 — Probe v1** ✅ (core shipped)
-  Cross-compiled Go agent with self-enrollment + WebSocket ingest. Collects: system / disk / NIC, expanded top-process stats (cpu %, mem %, disk-r/w, net-up/down, open conns), listeners + remote conversations (per-process, per-peer, port set), DNS resolution telemetry, hardware specs (DMI/SMBIOS/WMI), public-IP discovery via `icanhazip.com`. Agent **tagging** + GUI filtering. Per-agent radial network graph (host → process → ISP) with offline GeoIP. World map of agents.
-  *Still TODO for Phase 2:* IPMI / Redfish, RAID + SMART, failed services, pending reboots, backup-last-success, time drift, cert inventory, security posture, EDR/Sysmon presence + events, GPU/UPS, containers/VMs, synthetic checks, reboot/crash history.
+  Cross-compiled Go agent with self-enrollment + WebSocket ingest. Collects: system / disk / NIC (incl. per-NIC `Kind=wired|wireless|virtual|loopback` and `bytesSent/RecvBps` deltas), expanded top-process stats (cpu %, mem %, disk-r/w, net-up/down, open conns), listeners + remote conversations (per-process, per-peer, port set), DNS resolution telemetry, hardware specs (DMI/SMBIOS/WMI), public-IP discovery via `icanhazip.com`, **interactive logon sessions** (Windows via `WTSEnumerateSessionsExW` with state/source; Linux/macOS via `gopsutil`), **ICMP latency** to `8.8.8.8` and the discovered default gateway (60 s cadence, raw socket), and **HealthSignals** at 5 min cadence (battery health %, BSOD count, user-reboot count, app-crash count, event-log error count, missing-patch count, CPU + disk queue length, WiFi SSID/RSSI/signal %). Agent **tagging** + GUI filtering. Per-agent radial network graph (host → process → ISP) with offline GeoIP. World map of agents.
+
+  **HealthSignals per-OS coverage** (✓ collected, — not yet, ✗ N/A):
+
+  | Signal                    | Windows | Linux | macOS |
+  |---------------------------|:-------:|:-----:|:-----:|
+  | `batteryHealthPct`        |   ✓     |   ✓   |   —   |
+  | `bsodCount24h`            |   ✓     |   ✗   |   ✗   |
+  | `userRebootCount24h`      |   ✓     |   —   |   —   |
+  | `appCrashCount24h`        |   ✓     |   —   |   —   |
+  | `eventLogErrorCount24h`   |   ✓     |   ✗   |   ✗   |
+  | `missingPatchCount`       |   ✓     |   —   |   —   |
+  | `cpuQueueLength`          |   ✓     |   ✓   |   —   |
+  | `diskQueueLength`         |   ✓     |   ✓   |   —   |
+  | `highloadCpuIncidents24h` |   —     |   —   |   —   |
+  | `wifiSsid` / `wifiRssiDbm`/`wifiSignalPct` | ✓ | ✓ |   —   |
+  | `ispName`                 | mirrors `agents.geo_org`             |||
+
+  Linux Windows-only patch counts and Linux package-manager scraping are gated behind `SONAR_PROBE_HEALTH_PKG=true` because they shell out to `apt`/`dnf`. Windows uses an embedded PowerShell batch + `typeperf.exe` for queue length to avoid pulling in `go-ole`.
+
+  *Still TODO for Phase 2:* IPMI / Redfish, RAID + SMART, failed services, pending reboots, backup-last-success, time drift, cert inventory, security posture, EDR/Sysmon presence + events, GPU/UPS, containers/VMs, synthetic checks, traceroute hops, ETW UserInputDelay (high user-input delay).
 - **Phase 3 — Network module** ✅ (core shipped)
   SNMP v1/v2c/v3 poller, IF-MIB (port stats), ENTITY-MIB / ENTITY-SENSOR-MIB (chassis + transceiver DDM), LLDP + CDP auto-topology with Cisco IP-phone suppression, **physical-vs-virtual port** distinction, **uplink highlighting**, last-seen tracking, full appliance + site CRUD, encrypted SNMP credentials.
   *Still TODO for Phase 3:* live SNMP link-utilization overlay on the topology, SNMP trap receiver on UDP 162.

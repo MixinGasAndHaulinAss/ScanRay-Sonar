@@ -52,6 +52,15 @@ type Snapshot struct {
 	// Conversations are aggregated active TCP/UDP peer pairs (one row
 	// per (proto, direction, remote, process)). Schema v2+.
 	Conversations       []Conversation `json:"conversations,omitempty"`
+	// Latency is the per-target ICMP RTT report cached by
+	// extras.runLatencyLoop. Empty on platforms without raw-socket
+	// access; see CollectionWarnings for the reason. Schema v4+.
+	Latency             []LatencyRow `json:"latency,omitempty"`
+	// HealthSignals are slow-cadence host metrics (battery, BSOD,
+	// missing patches, WiFi RSSI, queue lengths, ...). Optional —
+	// older probes and unsupported platforms simply omit the field.
+	// Schema v4+.
+	Health              *HealthSignals `json:"health,omitempty"`
 	LoggedInUsers       []SessionRow `json:"loggedInUsers"`
 	PendingReboot       bool         `json:"pendingReboot"`
 	PendingRebootReason string       `json:"pendingRebootReason,omitempty"`
@@ -118,19 +127,29 @@ type Disk struct {
 }
 
 type NIC struct {
-	Name       string   `json:"name"`
-	MAC        string   `json:"mac,omitempty"`
-	MTU        int      `json:"mtu,omitempty"`
-	Up         bool     `json:"up"`
-	Addresses  []string `json:"addresses,omitempty"`
-	BytesSent  uint64   `json:"bytesSent"`
-	BytesRecv  uint64   `json:"bytesRecv"`
-	PktsSent   uint64   `json:"pktsSent"`
-	PktsRecv   uint64   `json:"pktsRecv"`
-	ErrIn      uint64   `json:"errIn"`
-	ErrOut     uint64   `json:"errOut"`
-	DropIn     uint64   `json:"dropIn"`
-	DropOut    uint64   `json:"dropOut"`
+	Name      string   `json:"name"`
+	MAC       string   `json:"mac,omitempty"`
+	MTU       int      `json:"mtu,omitempty"`
+	Up        bool     `json:"up"`
+	// Kind is one of "wired", "wireless", "virtual", "loopback".
+	// Powers the WiFi-vs-Wired charts on the Network - Performance
+	// dashboard. Always populated; classifier in nic_kind.go.
+	Kind      string   `json:"kind,omitempty"`
+	Addresses []string `json:"addresses,omitempty"`
+	BytesSent uint64   `json:"bytesSent"`
+	BytesRecv uint64   `json:"bytesRecv"`
+	// BytesSentBps / BytesRecvBps are deltas of the cumulative
+	// counters across the previous and current snapshot, divided by
+	// the elapsed time. Zero on the first snapshot of a probe
+	// lifetime — see nic_tracker.go.
+	BytesSentBps uint64 `json:"bytesSentBps"`
+	BytesRecvBps uint64 `json:"bytesRecvBps"`
+	PktsSent     uint64 `json:"pktsSent"`
+	PktsRecv     uint64 `json:"pktsRecv"`
+	ErrIn        uint64 `json:"errIn"`
+	ErrOut       uint64 `json:"errOut"`
+	DropIn       uint64 `json:"dropIn"`
+	DropOut      uint64 `json:"dropOut"`
 }
 
 // ProcessRow is one row of the "top processes" tables plus enough
@@ -186,6 +205,14 @@ type SessionRow struct {
 	Tty     string `json:"tty,omitempty"`
 	Host    string `json:"host,omitempty"`
 	Started string `json:"started,omitempty"` // RFC3339
+	// State is meaningful on Windows ("Active", "Disconnected",
+	// "Idle", "Listen", ...). On *nix it stays empty.
+	State string `json:"state,omitempty"`
+	// Source identifies the connection origin: on Windows this is
+	// the RDP client name when set, or "console" for the local
+	// session; on *nix gopsutil already populates Host so we leave
+	// Source empty.
+	Source string `json:"source,omitempty"`
 }
 
 type ServiceRow struct {
@@ -204,7 +231,7 @@ type ServiceRow struct {
 func CollectSnapshot(ctx context.Context, hostname string) Snapshot {
 	start := time.Now()
 	s := Snapshot{
-		SchemaVersion: 3, // v3 adds Hardware, PublicIP, expanded ProcessRow stats
+		SchemaVersion: 4, // v4 adds NIC.Kind/bps, Latency, HealthSignals, richer SessionRow
 		CapturedAt:    start.UTC().Format(time.RFC3339Nano),
 		// Pre-allocate every collection-typed field so JSON always
 		// emits `[]` instead of `null` even when a collector is a
@@ -256,6 +283,18 @@ func CollectSnapshot(ctx context.Context, hostname string) Snapshot {
 	// Hardware inventory: cached once per refreshHardwareEvery, so
 	// after the first snapshot this is just a map read.
 	s.Hardware = snapshotHardware(ctx)
+
+	// Latency + HealthSignals are populated by separate goroutines
+	// at slower cadences (60 s and 5 min, see extras.go). We just
+	// copy out of the cache here so the snapshot stays a single
+	// fast-path read.
+	if rows := extras.LatestLatency(); len(rows) > 0 {
+		s.Latency = rows
+	}
+	if extras.ICMPBroken() {
+		s.warn("latency: ICMP probe unavailable on this host (no raw-socket privilege)")
+	}
+	s.Health = extras.LatestHealth()
 
 	s.CaptureMs = time.Since(start).Milliseconds()
 	return s
@@ -385,6 +424,8 @@ func collectNICs(ctx context.Context, s *Snapshot) {
 	for _, c := range counters {
 		cmap[c.Name] = c
 	}
+	now := time.Now()
+	seen := make(map[string]struct{}, len(ifaces))
 	for _, iface := range ifaces {
 		// Skip down loopback noise but keep loopback if it's up — some
 		// hosts bind services exclusively to lo.
@@ -409,9 +450,17 @@ func collectNICs(ctx context.Context, s *Snapshot) {
 			nic.ErrOut = c.Errout
 			nic.DropIn = c.Dropin
 			nic.DropOut = c.Dropout
+			nic.BytesSentBps, nic.BytesRecvBps = nicDelta.recordAndDelta(iface.Name, nicCounters{
+				bytesSent: c.BytesSent,
+				bytesRecv: c.BytesRecv,
+				at:        now,
+			})
+			seen[iface.Name] = struct{}{}
 		}
+		nic.Kind = classifyNIC(iface.Name, nic.Addresses)
 		s.NICs = append(s.NICs, nic)
 	}
+	nicDelta.reapMissing(seen)
 }
 
 func contains(haystack []string, needle string) bool {
@@ -738,10 +787,17 @@ func isLoopbackIP(ip string) bool {
 }
 
 func collectUsers(ctx context.Context, s *Snapshot) {
+	// Windows: gopsutil's host.Users is not implemented (returns
+	// "not implemented" on every call). We dispatch to a real
+	// implementation in sessions_windows.go that enumerates
+	// terminal-services sessions via WTSEnumerateSessionsEx.
+	// Linux + macOS: gopsutil works fine, keep using it.
+	if rows, ok := collectSessionsOS(ctx); ok {
+		s.LoggedInUsers = append(s.LoggedInUsers, rows...)
+		return
+	}
 	us, err := host.UsersWithContext(ctx)
 	if err != nil {
-		// Windows often returns "not implemented" here; not a real
-		// problem, just don't surface a warning for the common case.
 		if !strings.Contains(err.Error(), "not implemented") {
 			s.warn("host.Users: " + err.Error())
 		}

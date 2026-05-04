@@ -25,6 +25,12 @@ type Config struct {
 	Fingerprint  string `json:"fingerprint"`
 	AgentVersion string `json:"agentVersion"`
 	EnrolledAt   string `json:"enrolledAt"`
+	// LatencyTarget overrides the default ICMP probe target
+	// ("8.8.8.8"). Honored by extras.LatencyTargets; an empty
+	// string falls back to the default. Useful for environments
+	// where outbound ICMP to public DNS is firewalled (e.g.
+	// air-gapped sites with an internal anycast resolver).
+	LatencyTarget string `json:"latencyTarget,omitempty"`
 }
 
 type enrollReq struct {

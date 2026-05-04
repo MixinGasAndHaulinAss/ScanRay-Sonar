@@ -20,7 +20,9 @@ import type {
   HardwareGPU,
   HardwareMemoryModule,
   HardwareNIC,
+  LatencySeries,
   MetricSeries,
+  NetworkSeries,
   Site,
   SnapshotConversation,
   SnapshotDisk,
@@ -32,6 +34,7 @@ import type {
   SnapshotService,
 } from "../api/types";
 import AgentNetworkGraphSection from "../components/AgentNetworkGraph";
+import LineChart from "../components/LineChart";
 import Sparkline from "../components/Sparkline";
 import {
   formatBytes,
@@ -54,6 +57,18 @@ export default function AgentDetailPage() {
   const metrics = useQuery({
     queryKey: ["agent-metrics", id, "24h"],
     queryFn: () => api.get<MetricSeries>(`/agents/${id}/metrics?range=24h`),
+    refetchInterval: 60_000,
+    enabled: !!id,
+  });
+  const network = useQuery({
+    queryKey: ["agent-network", id, "24h"],
+    queryFn: () => api.get<NetworkSeries>(`/agents/${id}/network?range=24h`),
+    refetchInterval: 60_000,
+    enabled: !!id,
+  });
+  const latency = useQuery({
+    queryKey: ["agent-latency", id, "24h"],
+    queryFn: () => api.get<LatencySeries>(`/agents/${id}/latency?range=24h&target=both`),
     refetchInterval: 60_000,
     enabled: !!id,
   });
@@ -212,6 +227,12 @@ export default function AgentDetailPage() {
           />
 
           <Charts cpu={cpuSeries} mem={memSeries} loading={metrics.isLoading} />
+
+          <NetworkAndLatencySection
+            network={network.data}
+            latency={latency.data}
+            loading={network.isLoading || latency.isLoading}
+          />
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <DisksTable disks={snap.disks ?? []} />
@@ -519,6 +540,183 @@ function ChartCard({
       <div className="mt-1 text-xs text-slate-600">
         {values.length} samples · 1/min cadence
       </div>
+    </div>
+  );
+}
+
+// ---- Network usage + latency (Phase 4) -----------------------------------
+//
+// Three charts side-by-side on wide viewports:
+//   1. "Network usage" — per-snapshot in/out bps (MB/s on the y-axis).
+//   2. "Network usage (hourly)" — bytes-per-hour bar-style line for
+//      operators who want the daily shape, not the instantaneous rate.
+//   3. "Network latency" — two ICMP latency lines (target + gateway)
+//      with a loss-percentage badge per series.
+//
+// Empty states are common for fresh enrollments (no samples yet) and
+// for older probes (schema v3 didn't collect latency). We use
+// LineChart's built-in "no data" placeholder so the section still
+// renders consistently.
+
+function NetworkAndLatencySection({
+  network,
+  latency,
+  loading,
+}: {
+  network: NetworkSeries | undefined;
+  latency: LatencySeries | undefined;
+  loading: boolean;
+}) {
+  // Per-snapshot bps -> MB/s for the line chart.
+  const bpsTimes = useMemo(
+    () => (network?.samples ?? []).map((s) => s.time),
+    [network],
+  );
+  const bpsIn = useMemo(
+    () => (network?.samples ?? []).map((s) =>
+      s.inBps == null ? null : Number(s.inBps) / 1024 / 1024,
+    ),
+    [network],
+  );
+  const bpsOut = useMemo(
+    () => (network?.samples ?? []).map((s) =>
+      s.outBps == null ? null : Number(s.outBps) / 1024 / 1024,
+    ),
+    [network],
+  );
+
+  // Hourly totals — convert bytes -> MB.
+  const hourlyTimes = useMemo(
+    () => (network?.hourly ?? []).map((h) => h.hour),
+    [network],
+  );
+  const hourlyIn = useMemo(
+    () => (network?.hourly ?? []).map((h) =>
+      h.inBytes == null ? null : Number(h.inBytes) / 1024 / 1024,
+    ),
+    [network],
+  );
+  const hourlyOut = useMemo(
+    () => (network?.hourly ?? []).map((h) =>
+      h.outBytes == null ? null : Number(h.outBytes) / 1024 / 1024,
+    ),
+    [network],
+  );
+
+  // Latency: split per target. We construct a unified time axis so the
+  // two series line up — when one target has no sample at a given
+  // time the value is left null (LineChart breaks the path on null).
+  const { latTimes, latTarget, latGateway, lossTarget, lossGateway, targetName } = useMemo(() => {
+    const samples = latency?.samples ?? [];
+    const timeSet = new Set<string>();
+    samples.forEach((s) => timeSet.add(s.time));
+    const times = Array.from(timeSet).sort();
+    const idx = new Map(times.map((t, i) => [t, i]));
+    const tgt: Array<number | null> = times.map(() => null);
+    const gw: Array<number | null> = times.map(() => null);
+    const lt: Array<number | null> = times.map(() => null);
+    const lg: Array<number | null> = times.map(() => null);
+    let firstTarget = "";
+    samples.forEach((s) => {
+      const i = idx.get(s.time);
+      if (i == null) return;
+      if (s.target === "gateway") {
+        gw[i] = s.avgMs ?? null;
+        lg[i] = s.lossPct ?? null;
+      } else {
+        tgt[i] = s.avgMs ?? null;
+        lt[i] = s.lossPct ?? null;
+        if (!firstTarget) firstTarget = s.target;
+      }
+    });
+    return {
+      latTimes: times,
+      latTarget: tgt,
+      latGateway: gw,
+      lossTarget: lt,
+      lossGateway: lg,
+      targetName: firstTarget || "8.8.8.8",
+    };
+  }, [latency]);
+
+  const lastLossTarget = lossTarget.length ? lossTarget[lossTarget.length - 1] : null;
+  const lastLossGateway = lossGateway.length ? lossGateway[lossGateway.length - 1] : null;
+
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <Section title="Network usage (MB/s)">
+        {loading ? (
+          <div className="h-48 animate-pulse rounded bg-ink-800/50" />
+        ) : (
+          <LineChart
+            times={bpsTimes}
+            series={[
+              { label: "In",  values: bpsIn,  color: "stroke-emerald-400 text-emerald-400" },
+              { label: "Out", values: bpsOut, color: "stroke-sky-400 text-sky-400" },
+            ]}
+            yUnit=" MB/s"
+            yMin={0}
+            height={200}
+            ariaLabel="Network usage MB/s"
+          />
+        )}
+      </Section>
+      <Section title="Network usage (hourly)">
+        {loading ? (
+          <div className="h-48 animate-pulse rounded bg-ink-800/50" />
+        ) : (
+          <LineChart
+            times={hourlyTimes}
+            series={[
+              { label: "Received (MB)", values: hourlyIn,  color: "stroke-emerald-400 text-emerald-400" },
+              { label: "Sent (MB)",     values: hourlyOut, color: "stroke-sky-400 text-sky-400" },
+            ]}
+            yUnit=" MB"
+            yMin={0}
+            height={200}
+            ariaLabel="Network usage hourly"
+          />
+        )}
+      </Section>
+      <Section
+        title={
+          <span className="flex items-center gap-2">
+            <span>Network latency (ms)</span>
+            {lastLossTarget != null && lastLossTarget > 0 && (
+              <span className="rounded bg-amber-900/40 px-1.5 py-0.5 text-[10px] text-amber-200">
+                {targetName} loss {lastLossTarget.toFixed(0)}%
+              </span>
+            )}
+            {lastLossGateway != null && lastLossGateway > 0 && (
+              <span className="rounded bg-amber-900/40 px-1.5 py-0.5 text-[10px] text-amber-200">
+                gateway loss {lastLossGateway.toFixed(0)}%
+              </span>
+            )}
+          </span>
+        }
+      >
+        {loading ? (
+          <div className="h-48 animate-pulse rounded bg-ink-800/50" />
+        ) : latTimes.length === 0 ? (
+          <Empty>
+            No latency samples yet — the probe needs raw-socket access (SYSTEM
+            on Windows, root on Linux) and will start populating this once
+            it's running.
+          </Empty>
+        ) : (
+          <LineChart
+            times={latTimes}
+            series={[
+              { label: targetName, values: latTarget,  color: "stroke-sky-400 text-sky-400" },
+              { label: "gateway",  values: latGateway, color: "stroke-amber-400 text-amber-400" },
+            ]}
+            yUnit=" ms"
+            yMin={0}
+            height={200}
+            ariaLabel="ICMP latency"
+          />
+        )}
+      </Section>
     </div>
   );
 }
@@ -1015,16 +1213,35 @@ function DirectionPill({ dir }: { dir: SnapshotConversation["direction"] }) {
 // ---- Sessions / services / failed units -----------------------------------
 
 function SessionsTable({ sessions }: { sessions: SnapshotSession[] }) {
+  // Probe schema v4+ adds `state` (Active/Disconnected/Idle) and
+  // `source` (RDP client name or "console") on Windows. Show those
+  // columns only when at least one session populates them so the
+  // header isn't misleading on Linux/macOS hosts.
+  const hasState = sessions.some((s) => !!s.state);
+  const hasSource = sessions.some((s) => !!s.source);
+  const head = ["User", "Tty"];
+  if (hasState) head.push("State");
+  if (hasSource) head.push("Source");
+  head.push("Host", "Since");
+
   return (
     <Section title="Logged-in users">
       {sessions.length === 0 ? (
         <Empty>No interactive sessions.</Empty>
       ) : (
-        <Table head={["User", "Tty", "Host", "Since"]}>
+        <Table head={head}>
           {sessions.map((s, i) => (
             <tr key={i} className="border-t border-ink-800">
               <td className="px-3 py-1.5 text-xs">{s.user}</td>
               <td className="px-3 py-1.5 font-mono text-xs text-slate-400">{s.tty || "—"}</td>
+              {hasState && (
+                <td className="px-3 py-1.5 text-xs">
+                  <SessionStatePill state={s.state} />
+                </td>
+              )}
+              {hasSource && (
+                <td className="px-3 py-1.5 text-xs text-slate-400">{s.source || "—"}</td>
+              )}
               <td className="px-3 py-1.5 text-xs text-slate-400">{s.host || "—"}</td>
               <td className="px-3 py-1.5 text-xs text-slate-500">
                 {s.started ? formatRelative(s.started) : "—"}
@@ -1034,6 +1251,23 @@ function SessionsTable({ sessions }: { sessions: SnapshotSession[] }) {
         </Table>
       )}
     </Section>
+  );
+}
+
+function SessionStatePill({ state }: { state?: string }) {
+  if (!state) return <span className="text-slate-500">—</span>;
+  const cls =
+    state === "Active"
+      ? "bg-emerald-900/60 text-emerald-200"
+      : state === "Disconnected"
+        ? "bg-slate-800 text-slate-300"
+        : state === "Idle"
+          ? "bg-amber-900/40 text-amber-200"
+          : "bg-slate-800 text-slate-300";
+  return (
+    <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${cls}`}>
+      {state}
+    </span>
   );
 }
 
@@ -1336,7 +1570,13 @@ function HostMeta({ snap }: { snap: NonNullable<AgentDetail["lastMetrics"]> }) {
 
 // ---- Shared bits ----------------------------------------------------------
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <div className="rounded-xl border border-ink-800 bg-ink-900 p-4">
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
