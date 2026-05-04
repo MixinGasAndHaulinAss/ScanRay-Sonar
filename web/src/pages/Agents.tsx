@@ -29,7 +29,8 @@ export default function Agents() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-wrap items-center gap-4">
+        <OverviewSelect value={view} onChange={setView} />
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Agents</h2>
           <p className="text-sm text-slate-400">
@@ -37,7 +38,6 @@ export default function Agents() {
             device, network, or user-experience aggregations.
           </p>
         </div>
-        <OverviewSelect value={view} onChange={setView} />
       </div>
 
       <ViewBody view={view} />

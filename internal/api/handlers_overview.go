@@ -70,7 +70,7 @@ type overviewAgent struct {
 	DiskQueueLength         *float64
 	HighloadCPUIncidents24h *int
 	WiFiSignalPct           *int
-	WiFiSSID                string
+	WiFiSSID                *string
 
 	// Pulled from the hardware sub-blob.
 	HardwareModel string
@@ -333,6 +333,7 @@ func (s *Server) handleOverviewDevicesAverages(w http.ResponseWriter, r *http.Re
 	ctx := r.Context()
 	agents, err := loadOverviewAgents(ctx, s.pool)
 	if err != nil {
+		s.log.Error("overview: load agents failed", "err", err)
 		writeErr(w, http.StatusInternalServerError, "server_error", "load agents failed")
 		return
 	}
@@ -466,6 +467,7 @@ func (s *Server) handleOverviewDevicesPerformance(w http.ResponseWriter, r *http
 	ctx := r.Context()
 	agents, err := loadOverviewAgents(ctx, s.pool)
 	if err != nil {
+		s.log.Error("overview: load agents failed", "err", err)
 		writeErr(w, http.StatusInternalServerError, "server_error", "load agents failed")
 		return
 	}
@@ -623,6 +625,7 @@ func (s *Server) handleOverviewNetworkLatency(w http.ResponseWriter, r *http.Req
 	ctx := r.Context()
 	agents, err := loadOverviewAgents(ctx, s.pool)
 	if err != nil {
+		s.log.Error("overview: load agents failed", "err", err)
 		writeErr(w, http.StatusInternalServerError, "server_error", "load agents failed")
 		return
 	}
@@ -698,6 +701,7 @@ func (s *Server) handleOverviewNetworkPerformance(w http.ResponseWriter, r *http
 	ctx := r.Context()
 	agents, err := loadOverviewAgents(ctx, s.pool)
 	if err != nil {
+		s.log.Error("overview: load agents failed", "err", err)
 		writeErr(w, http.StatusInternalServerError, "server_error", "load agents failed")
 		return
 	}
@@ -905,6 +909,7 @@ func (s *Server) handleOverviewApplicationsPerformance(w http.ResponseWriter, r 
 	ctx := r.Context()
 	agents, err := loadOverviewAgents(ctx, s.pool)
 	if err != nil {
+		s.log.Error("overview: load agents failed", "err", err)
 		writeErr(w, http.StatusInternalServerError, "server_error", "load agents failed")
 		return
 	}
@@ -944,6 +949,7 @@ func (s *Server) handleOverviewUserExperience(w http.ResponseWriter, r *http.Req
 	ctx := r.Context()
 	agents, err := loadOverviewAgents(ctx, s.pool)
 	if err != nil {
+		s.log.Error("overview: load agents failed", "err", err)
 		writeErr(w, http.StatusInternalServerError, "server_error", "load agents failed")
 		return
 	}
