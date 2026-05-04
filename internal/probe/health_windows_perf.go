@@ -40,6 +40,11 @@ func winRunTypeperf(ctx context.Context, h *HealthSignals) {
 		return
 	}
 	r := csv.NewReader(strings.NewReader(string(out)))
+	// typeperf appends non-CSV trailer lines after the data row
+	// ("Exiting, please wait...", "The command completed successfully.")
+	// which trip Go's default FieldsPerRecord=0 check. -1 disables
+	// the consistency check and lets us scan past those lines.
+	r.FieldsPerRecord = -1
 	rows, err := r.ReadAll()
 	if err != nil || len(rows) < 2 {
 		return

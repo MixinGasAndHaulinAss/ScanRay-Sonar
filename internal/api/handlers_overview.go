@@ -323,6 +323,13 @@ func round1(v float64) float64 {
 	return float64(int(v*10+0.5)) / 10
 }
 
+// round3 keeps three decimal places — used for trends whose magnitudes
+// are typically below 1 (e.g. fleet-average MB/s on a quiet office,
+// where round1 collapses every hour to 0.0).
+func round3(v float64) float64 {
+	return float64(int(v*1000+0.5)) / 1000
+}
+
 // ============================================================================
 // Endpoint handlers
 // ============================================================================
@@ -372,7 +379,10 @@ func (s *Server) handleOverviewDevicesAverages(w http.ResponseWriter, r *http.Re
 
 	// Hourly aggregates: shape is [{hour, avg}] suitable for a
 	// 24-bucket area chart. The frontend stitches to a Date axis.
-	hourly := func(query string, valExpr string) []map[string]any {
+	// `decimals` controls the rounding precision — pass 3 for
+	// magnitudes that may be sub-unit (fleet MB/s on a quiet office),
+	// 1 for everything else.
+	hourly := func(query string, valExpr string, decimals int) []map[string]any {
 		rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 			SELECT date_trunc('hour', time) AS hour, %s
 			  FROM %s
@@ -391,20 +401,24 @@ func (s *Server) handleOverviewDevicesAverages(w http.ResponseWriter, r *http.Re
 			if err := rows.Scan(&h, &v); err != nil {
 				continue
 			}
-			out = append(out, map[string]any{"hour": h, "value": round1(v)})
+			rounded := round1(v)
+			if decimals == 3 {
+				rounded = round3(v)
+			}
+			out = append(out, map[string]any{"hour": h, "value": rounded})
 		}
 		return out
 	}
 
-	cpuTrend := hourly("agent_metric_samples", "AVG(cpu_pct)::float8 AS v")
+	cpuTrend := hourly("agent_metric_samples", "AVG(cpu_pct)::float8 AS v", 1)
 	memTrend := hourly("agent_metric_samples",
-		"(AVG(mem_used_bytes::float8 / NULLIF(mem_total_bytes,0)) * 100)::float8 AS v")
+		"(AVG(mem_used_bytes::float8 / NULLIF(mem_total_bytes,0)) * 100)::float8 AS v", 1)
 	diskQueue := hourlyHealth(ctx, s.pool, "diskQueueLength")
 	cpuQueue := hourlyHealth(ctx, s.pool, "cpuQueueLength")
 	netMBps := hourly("agent_network_samples",
-		"(AVG(in_bps + out_bps) / 1024.0 / 1024.0)::float8 AS v")
+		"(AVG(in_bps + out_bps) / 1024.0 / 1024.0)::float8 AS v", 3)
 	netHourly := hourly("agent_network_samples",
-		"(AVG(in_bps + out_bps) * 3600 / 1024.0 / 1024.0)::float8 AS v")
+		"(AVG(in_bps + out_bps) * 3600 / 1024.0 / 1024.0)::float8 AS v", 1)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"top": map[string]any{
