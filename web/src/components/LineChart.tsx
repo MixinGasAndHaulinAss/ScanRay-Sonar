@@ -98,6 +98,22 @@ export default function LineChart({
     };
   }, [series, yMin, yMax]);
 
+  // X-axis labels: show start, midpoint, end (and one or two more if
+  // the chart is wide enough). Trade simplicity for readability.
+  // NOTE: Must be called unconditionally — see the "no data" early
+  // return below. React's Rules of Hooks require every render of this
+  // component to call the same hooks in the same order, otherwise we
+  // get minified error #300 when data toggles between empty and not.
+  const xLabelIdxs = useMemo(() => {
+    const idxs: number[] = [];
+    const targetCount = Math.min(5, times.length);
+    if (targetCount <= 1) return [0];
+    for (let i = 0; i < targetCount; i++) {
+      idxs.push(Math.round((i * (times.length - 1)) / (targetCount - 1)));
+    }
+    return idxs;
+  }, [times.length]);
+
   if (!times.length || series.every((s) => s.values.every((v) => v == null))) {
     return (
       <div
@@ -120,18 +136,6 @@ export default function LineChart({
   for (let i = 0; i <= yTicks; i++) {
     ticks.push(yLo + ((yHi - yLo) * i) / yTicks);
   }
-
-  // X-axis labels: show start, midpoint, end (and one or two more if
-  // the chart is wide enough). Trade simplicity for readability.
-  const xLabelIdxs = useMemo(() => {
-    const idxs: number[] = [];
-    const targetCount = Math.min(5, times.length);
-    if (targetCount <= 1) return [0];
-    for (let i = 0; i < targetCount; i++) {
-      idxs.push(Math.round((i * (times.length - 1)) / (targetCount - 1)));
-    }
-    return idxs;
-  }, [times.length]);
 
   const fmtTime = (d: Date | string) => {
     const dt = typeof d === "string" ? new Date(d) : d;

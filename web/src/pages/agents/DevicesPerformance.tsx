@@ -24,13 +24,18 @@ export default function DevicesPerformance() {
     refetchInterval: 60_000,
   });
 
+  // NOTE: All hooks (useMemo) MUST be called before any early return,
+  // otherwise React error #300 fires when data toggles between
+  // loading and loaded states.
+  const scoreTrendData = q.data?.scoreTrend ?? [];
+  const trendTimes = useMemo(() => scoreTrendData.map((t) => t.hour), [scoreTrendData]);
+  const trendScores = useMemo(() => scoreTrendData.map((t) => t.score), [scoreTrendData]);
+
   if (q.isLoading) return <EmptyHint>Loading performance dashboard…</EmptyHint>;
   if (q.isError || !q.data) return <ErrorHint>Failed to load Devices Performance.</ErrorHint>;
   const { managedDevicesByOS, keyDeviceInsights, top5Models, bottom5Models, map, scoreTrend } = q.data;
 
   const totalDevices = Object.values(managedDevicesByOS).reduce((s, n) => s + n, 0);
-  const trendTimes = useMemo(() => scoreTrend.map((t) => t.hour), [scoreTrend]);
-  const trendScores = useMemo(() => scoreTrend.map((t) => t.score), [scoreTrend]);
 
   const insights: { label: string; key: string; tone?: "good" | "warn" | "bad" }[] = [
     { label: "BSODs (24h)",          key: "bsodCount",            tone: "bad" },

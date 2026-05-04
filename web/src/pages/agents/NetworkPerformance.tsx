@@ -25,24 +25,12 @@ export default function NetworkPerformance() {
     refetchInterval: 60_000,
   });
 
-  if (q.isLoading) return <EmptyHint>Loading performance…</EmptyHint>;
-  if (q.isError || !q.data) return <ErrorHint>Failed to load Network Performance.</ErrorHint>;
-
-  const {
-    adapterSplit,
-    hourlyMB,
-    highLatencyDevices,
-    avgWiredLatencyMs,
-    avgWiFiLatencyMs,
-    avgWiFiSignalPct,
-    latencyByAdapter,
-    topISPsByLatency,
-    bottomISPsByLatency,
-  } = q.data;
-
-  const totalBytes = adapterSplit.wifiBytes24h + adapterSplit.wiredBytes24h;
-  const wifiPct = totalBytes > 0 ? (adapterSplit.wifiBytes24h / totalBytes) * 100 : 0;
-  const wiredPct = totalBytes > 0 ? (adapterSplit.wiredBytes24h / totalBytes) * 100 : 0;
+  // NOTE: All hooks (useMemo) MUST be called before any early return,
+  // otherwise React error #300 fires when data toggles between
+  // loading and loaded states. Defaults below let the hooks run
+  // safely even before q.data is available.
+  const hourlyMB = q.data?.hourlyMB ?? [];
+  const latencyByAdapter = q.data?.latencyByAdapter ?? [];
 
   const hourlyTimes = useMemo(() => hourlyMB.map((h) => h.hour), [hourlyMB]);
   const hourlyIn = useMemo(() => hourlyMB.map((h) => h.inMB), [hourlyMB]);
@@ -51,6 +39,23 @@ export default function NetworkPerformance() {
   const lbaTimes = useMemo(() => latencyByAdapter.map((p) => p.hour), [latencyByAdapter]);
   const lbaWifi = useMemo(() => latencyByAdapter.map((p) => p.wifi ?? 0), [latencyByAdapter]);
   const lbaWired = useMemo(() => latencyByAdapter.map((p) => p.wired ?? 0), [latencyByAdapter]);
+
+  if (q.isLoading) return <EmptyHint>Loading performance…</EmptyHint>;
+  if (q.isError || !q.data) return <ErrorHint>Failed to load Network Performance.</ErrorHint>;
+
+  const {
+    adapterSplit,
+    highLatencyDevices,
+    avgWiredLatencyMs,
+    avgWiFiLatencyMs,
+    avgWiFiSignalPct,
+    topISPsByLatency,
+    bottomISPsByLatency,
+  } = q.data;
+
+  const totalBytes = adapterSplit.wifiBytes24h + adapterSplit.wiredBytes24h;
+  const wifiPct = totalBytes > 0 ? (adapterSplit.wifiBytes24h / totalBytes) * 100 : 0;
+  const wiredPct = totalBytes > 0 ? (adapterSplit.wiredBytes24h / totalBytes) * 100 : 0;
 
   return (
     <div className="space-y-4">
