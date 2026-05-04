@@ -263,7 +263,7 @@ function Tile({
       <div className="text-xs uppercase tracking-wide text-slate-400">
         {label}
       </div>
-      <div className="mt-1 text-2xl font-semibold tracking-tight text-white">
+      <div className="mt-1 text-2xl font-semibold tracking-tight text-slate-100">
         {value}
       </div>
       {subtitle && (

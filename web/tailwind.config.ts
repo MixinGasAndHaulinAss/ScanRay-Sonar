@@ -37,6 +37,31 @@ export default {
           500: "rgb(var(--sonar-500) / <alpha-value>)",
           600: "rgb(var(--sonar-600) / <alpha-value>)",
         },
+        // Status / tone text shades. The 200 & 300 weights are used as
+        // *text* (e.g. text-emerald-300 for "good" KPI values). On the
+        // dark surface those pastel weights have enough contrast; on a
+        // light surface they wash out. We CSS-var-back them so light
+        // mode swaps in the 700/800 weights of the same hue.
+        emerald: {
+          200: "rgb(var(--emerald-200) / <alpha-value>)",
+          300: "rgb(var(--emerald-300) / <alpha-value>)",
+        },
+        amber: {
+          200: "rgb(var(--amber-200) / <alpha-value>)",
+          300: "rgb(var(--amber-300) / <alpha-value>)",
+        },
+        red: {
+          200: "rgb(var(--red-200) / <alpha-value>)",
+          300: "rgb(var(--red-300) / <alpha-value>)",
+        },
+        sky: {
+          200: "rgb(var(--sky-200) / <alpha-value>)",
+          300: "rgb(var(--sky-300) / <alpha-value>)",
+        },
+        indigo: {
+          200: "rgb(var(--indigo-200) / <alpha-value>)",
+          300: "rgb(var(--indigo-300) / <alpha-value>)",
+        },
       },
     },
   },
