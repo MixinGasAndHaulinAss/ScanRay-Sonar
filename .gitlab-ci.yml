@@ -52,8 +52,13 @@ variables:
   HADOLINT_IMAGE: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/hadolint/hadolint:latest-alpine
   GITLEAKS_IMAGE: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/zricethezav/gitleaks:latest
   TRIVY_IMAGE: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/aquasec/trivy:latest
-  DOCKER_IMAGE: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/library/docker:27
-  DIND_IMAGE: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/library/docker:27-dind
+  # The dep-proxy has been flaky for `docker`/`docker:dind` (JWT-auth
+  # timeouts during prepare_executor when its upstream cache misses).
+  # Pull these two directly from Docker Hub — small, frequently-cached
+  # images that don't benefit much from proxying anyway. Other images
+  # (Go, Node, Trivy, etc.) stay on the dep-proxy.
+  DOCKER_IMAGE: docker:27
+  DIND_IMAGE: docker:27-dind
   # Speed up `go test` and module downloads by caching modules in a
   # job-scoped path that's also the GOPATH so artifacts stay coherent.
   GOPATH: ${CI_PROJECT_DIR}/.gocache
@@ -181,6 +186,16 @@ variables:
     DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
     DOCKER_DRIVER: overlay2
+  # Auto-recover from transient failures pulling the docker:27/dind
+  # images from the GitLab dependency proxy (we've seen JWT-auth
+  # timeouts during prepare_executor under registry load).
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+      - scheduler_failure
+      - api_failure
   before_script:
     # The official `docker:27` image is Alpine-based and ships with
     # busybox `sh` only. `ci/smart_build.sh` uses bash-isms ([[, etc.)
