@@ -182,6 +182,11 @@ variables:
     DOCKER_TLS_CERTDIR: ""
     DOCKER_DRIVER: overlay2
   before_script:
+    # The official `docker:27` image is Alpine-based and ships with
+    # busybox `sh` only. `ci/smart_build.sh` uses bash-isms ([[, etc.)
+    # and calls `git diff` for the smart-build retag chain, so install
+    # both up-front. `--no-cache` keeps the layer ephemeral.
+    - apk add --no-cache bash git
     # Authenticate to GLCR using the per-job CI registry credentials
     # (provided automatically by GitLab when Container Registry is
     # enabled on this project).
@@ -300,7 +305,13 @@ test:probe-windows:
     GOARCH: amd64
     CGO_ENABLED: "0"
   script:
-    - go vet ./...
+    # `-unsafeptr=false` because internal/probe/sessions_windows.go
+    # has legitimate `unsafe.Pointer(uintptr)` and `unsafe.Add`
+    # patterns that cross the Windows-API boundary (WTSEnumerateSessionsExW
+    # buffer slicing, FILETIME pointer arithmetic). The Windows native
+    # build itself catches real bugs; vet's heuristic flags these as
+    # potential misuse on every cross-OS lint run.
+    - go vet -unsafeptr=false ./...
     - go build -o /dev/null ./cmd/sonar-probe
 
 test:probe-darwin:
