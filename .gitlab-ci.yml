@@ -29,6 +29,15 @@ stages:
   - package
   - sync
 
+# Every job runs on the StrikeTeam Linux+Docker shared runner unless it
+# overrides `tags:` explicitly. The instance runners on gitlab.nclgisa.org
+# all have `run_untagged = false`, so omitting tags would leave jobs
+# sitting in `pending` forever — every sibling project in the group
+# matches this convention.
+default:
+  tags:
+    - linuxrunner
+
 variables:
   # Two GLCR images get published:
   #   ${REGISTRY}/${IMAGE_PREFIX}/api
