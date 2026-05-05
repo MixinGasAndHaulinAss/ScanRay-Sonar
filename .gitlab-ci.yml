@@ -491,8 +491,15 @@ mirror:github:
         echo "GITHUB_MIRROR_TOKEN not set — skipping mirror";
         exit 0;
       fi
-    - git remote add github "https://x-access-token:${GITHUB_MIRROR_TOKEN}@github.com/MixinGasAndHaulinAss/ScanRay-Sonar.git"
-    - git push github "HEAD:refs/heads/master"
+    # Username must be any non-empty string; GitHub fine-grained PATs
+    # authenticate via the token-as-password. `x-access-token` only
+    # works for GitHub App installation tokens, not PATs, so we use
+    # the account name here instead.
+    - git remote add github "https://MixinGasAndHaulinAss:${GITHUB_MIRROR_TOKEN}@github.com/MixinGasAndHaulinAss/ScanRay-Sonar.git"
+    # Push to the same ref name we're running on (CI_COMMIT_REF_NAME=main
+    # for our default branch). Hardcoding `master` was a leftover from
+    # the sibling-project template.
+    - git push github "HEAD:refs/heads/${CI_COMMIT_REF_NAME}"
     - >
       if [ -n "${CI_COMMIT_TAG:-}" ]; then
         git push github "${CI_COMMIT_TAG}";
