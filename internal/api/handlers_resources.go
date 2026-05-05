@@ -665,9 +665,9 @@ func (s *Server) handleListAppliances(w http.ResponseWriter, r *http.Request) {
 			"memTotalBytes":       memTotal,
 			"ifUpCount":           ifUp,
 			"ifTotalCount":        ifTotal,
-			"physTotalCount":     physTotal,
-			"physUpCount":        physUp,
-			"uplinkCount":        uplinks,
+			"physTotalCount":      physTotal,
+			"physUpCount":         physUp,
+			"uplinkCount":         uplinks,
 		})
 	}
 	writeJSON(w, http.StatusOK, out)

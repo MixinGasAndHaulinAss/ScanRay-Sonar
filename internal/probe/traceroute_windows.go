@@ -44,9 +44,9 @@ func TraceHopCount(ctx context.Context, addr string, maxTTL int) (int, error) {
 	}
 	cmd := exec.CommandContext(ctx,
 		"tracert.exe",
-		"-d",                          // skip reverse DNS for speed
-		"-h", strconv.Itoa(maxTTL),    // max hops
-		"-w", "1000",                  // 1 s wait per hop
+		"-d",                       // skip reverse DNS for speed
+		"-h", strconv.Itoa(maxTTL), // max hops
+		"-w", "1000", // 1 s wait per hop
 		addr,
 	)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}

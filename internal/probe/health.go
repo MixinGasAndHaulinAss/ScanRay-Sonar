@@ -40,8 +40,8 @@ type HealthSignals struct {
 	// AppLaunchMaxMs / InputDelayAvgMs are reserved for future
 	// collectors. Currently always nil; the dashboards render a
 	// "data not yet collected" placeholder.
-	AppLaunchMaxMs   *float64 `json:"appLaunchMaxMs,omitempty"`
-	InputDelayAvgMs  *float64 `json:"inputDelayAvgMs,omitempty"`
+	AppLaunchMaxMs  *float64 `json:"appLaunchMaxMs,omitempty"`
+	InputDelayAvgMs *float64 `json:"inputDelayAvgMs,omitempty"`
 	// TracerouteHops is the count of distinct hops on a TTL-ramp
 	// traceroute to the primary latency target (8.8.8.8 by default).
 	// Set by latency.go after the periodic ICMP run.

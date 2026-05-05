@@ -1,9 +1,9 @@
 // Package snmp — Cisco-specific chassis collectors.
 //
 // Two MIB families are useful here:
-//   * CISCO-PROCESS-MIB — CPU averages, per-CPU
+//   - CISCO-PROCESS-MIB — CPU averages, per-CPU
 //     entry. cpmCPUTotal5secRev exposes the most recent reading.
-//   * CISCO-MEMORY-POOL-MIB / CISCO-ENHANCED-MEMPOOL-MIB — heap
+//   - CISCO-MEMORY-POOL-MIB / CISCO-ENHANCED-MEMPOOL-MIB — heap
 //     used/free in bytes. We try the enhanced pool first (newer IOS-XE)
 //     and fall back to the legacy table.
 //

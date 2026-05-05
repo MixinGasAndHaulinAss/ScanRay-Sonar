@@ -20,15 +20,15 @@ func NewStore(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
 // ---- Users ----------------------------------------------------------------
 
 type User struct {
-	ID            uuid.UUID
-	Email         string
-	DisplayName   string
-	PasswordHash  string
-	Role          string
-	TOTPEnrolled  bool
-	IsActive      bool
-	LastLoginAt   *time.Time
-	CreatedAt     time.Time
+	ID           uuid.UUID
+	Email        string
+	DisplayName  string
+	PasswordHash string
+	Role         string
+	TOTPEnrolled bool
+	IsActive     bool
+	LastLoginAt  *time.Time
+	CreatedAt    time.Time
 }
 
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (*User, error) {

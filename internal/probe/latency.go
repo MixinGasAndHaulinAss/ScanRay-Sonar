@@ -278,4 +278,3 @@ func round1(v float64) float64 {
 	}
 	return float64(int(v*10-0.5)) / 10
 }
-

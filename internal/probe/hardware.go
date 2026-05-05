@@ -31,12 +31,12 @@ import (
 // collector (containerized host, missing root, locked-down WMI) emits
 // just the parts it could read instead of a wall of empty strings.
 type Hardware struct {
-	System          *HardwareSystem      `json:"system,omitempty"`
-	CPU             *HardwareCPU         `json:"cpu,omitempty"`
-	MemoryModules   []HardwareMemModule  `json:"memoryModules,omitempty"`
-	Storage         []HardwareDisk       `json:"storage,omitempty"`
-	NetworkAdapters []HardwareNICInfo    `json:"networkAdapters,omitempty"`
-	GPUs            []HardwareGPU        `json:"gpus,omitempty"`
+	System          *HardwareSystem     `json:"system,omitempty"`
+	CPU             *HardwareCPU        `json:"cpu,omitempty"`
+	MemoryModules   []HardwareMemModule `json:"memoryModules,omitempty"`
+	Storage         []HardwareDisk      `json:"storage,omitempty"`
+	NetworkAdapters []HardwareNICInfo   `json:"networkAdapters,omitempty"`
+	GPUs            []HardwareGPU       `json:"gpus,omitempty"`
 
 	// Per-collector warnings so the UI can show "memory DIMM details
 	// unavailable: dmidecode requires root" without dropping the rest.
@@ -84,7 +84,7 @@ type HardwareMemModule struct {
 }
 
 type HardwareDisk struct {
-	Device     string `json:"device,omitempty"`     // /dev/sda, \\.\PHYSICALDRIVE0
+	Device     string `json:"device,omitempty"` // /dev/sda, \\.\PHYSICALDRIVE0
 	Model      string `json:"model,omitempty"`
 	Serial     string `json:"serial,omitempty"`
 	Vendor     string `json:"vendor,omitempty"`

@@ -70,8 +70,8 @@ func (s *Server) handleGetAppliance(w http.ResponseWriter, r *http.Request) {
 		 WHERE id = $1
 	`
 	var (
-		v          applianceDetailView
-		lastSnap   []byte
+		v        applianceDetailView
+		lastSnap []byte
 	)
 	err = s.pool.QueryRow(r.Context(), q, id).Scan(
 		&v.ID, &v.SiteID, &v.Name, &v.Vendor, &v.Model, &v.Serial, &v.MgmtIP, &v.SNMPVersion,

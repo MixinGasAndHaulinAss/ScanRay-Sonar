@@ -3,7 +3,7 @@
 # inside the dev compose stack. Production deployment is bare-binary via
 # the cross-compile matrix in scripts/build-probe.sh.
 
-FROM golang:1.24-alpine AS gobuild
+FROM golang:1.25-alpine AS gobuild
 RUN apk add --no-cache git ca-certificates
 WORKDIR /src
 COPY go.mod go.sum* ./

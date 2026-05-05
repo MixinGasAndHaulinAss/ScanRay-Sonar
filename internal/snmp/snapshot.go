@@ -38,9 +38,9 @@ type System struct {
 	Name        string `json:"name"`
 	Contact     string `json:"contact,omitempty"`
 	Location    string `json:"location,omitempty"`
-	ObjectID    string `json:"objectId,omitempty"`     // sysObjectID — vendor enum
-	UptimeTicks uint64 `json:"uptimeTicks"`            // sysUpTime in 1/100s
-	UptimeSecs  int64  `json:"uptimeSeconds"`          // derived
+	ObjectID    string `json:"objectId,omitempty"` // sysObjectID — vendor enum
+	UptimeTicks uint64 `json:"uptimeTicks"`        // sysUpTime in 1/100s
+	UptimeSecs  int64  `json:"uptimeSeconds"`      // derived
 }
 
 // Chassis collapses vendor-specific CPU/mem/sensor data into a single
@@ -60,11 +60,11 @@ type Chassis struct {
 // and writes them to appliance_iface_samples; the values here are the
 // raw SNMP reading at CollectedAt for the snapshot detail page.
 type Interface struct {
-	Index        int32  `json:"ifIndex"`
-	Name         string `json:"name"`        // ifName (short, e.g. Gi1/0/1)
-	Descr        string `json:"descr"`       // ifDescr (long)
-	Alias        string `json:"alias,omitempty"` // ifAlias (operator's port description)
-	Type         int32  `json:"type"`        // ifType enum (6=ethernet, 53=propVirtual, …)
+	Index int32  `json:"ifIndex"`
+	Name  string `json:"name"`            // ifName (short, e.g. Gi1/0/1)
+	Descr string `json:"descr"`           // ifDescr (long)
+	Alias string `json:"alias,omitempty"` // ifAlias (operator's port description)
+	Type  int32  `json:"type"`            // ifType enum (6=ethernet, 53=propVirtual, …)
 
 	// Kind is our human-readable classification derived from ifType +
 	// name prefix. One of: "physical", "vlan", "loopback", "tunnel",
@@ -77,24 +77,24 @@ type Interface struct {
 	// contains "uplink"/"trunk", or LLDP shows a switch on the other
 	// end). The poller sets it from a combination of speed + alias;
 	// LLDP cross-referencing is layered on at persist time.
-	IsUplink bool `json:"isUplink,omitempty"`
-	MTU          int32  `json:"mtu,omitempty"`
-	SpeedBps     uint64 `json:"speedBps,omitempty"` // ifHighSpeed × 1e6
-	MAC          string `json:"mac,omitempty"`      // ifPhysAddress
-	AdminUp      bool   `json:"adminUp"`
-	OperUp       bool   `json:"operUp"`
-	LastChangeS  int64  `json:"lastChangeSeconds,omitempty"` // sysUpTime - ifLastChange
+	IsUplink    bool   `json:"isUplink,omitempty"`
+	MTU         int32  `json:"mtu,omitempty"`
+	SpeedBps    uint64 `json:"speedBps,omitempty"` // ifHighSpeed × 1e6
+	MAC         string `json:"mac,omitempty"`      // ifPhysAddress
+	AdminUp     bool   `json:"adminUp"`
+	OperUp      bool   `json:"operUp"`
+	LastChangeS int64  `json:"lastChangeSeconds,omitempty"` // sysUpTime - ifLastChange
 
 	// HC counters — 64-bit. Zero means "not reported by the device";
 	// gigantic values (close to MaxUint64) usually mean a bug, but we
 	// still store what the device gave us.
-	InOctets   uint64 `json:"inOctets"`
-	OutOctets  uint64 `json:"outOctets"`
-	InUcast    uint64 `json:"inUcast,omitempty"`
-	OutUcast   uint64 `json:"outUcast,omitempty"`
-	InErrors   uint64 `json:"inErrors,omitempty"`
-	OutErrors  uint64 `json:"outErrors,omitempty"`
-	InDiscards uint64 `json:"inDiscards,omitempty"`
+	InOctets    uint64 `json:"inOctets"`
+	OutOctets   uint64 `json:"outOctets"`
+	InUcast     uint64 `json:"inUcast,omitempty"`
+	OutUcast    uint64 `json:"outUcast,omitempty"`
+	InErrors    uint64 `json:"inErrors,omitempty"`
+	OutErrors   uint64 `json:"outErrors,omitempty"`
+	InDiscards  uint64 `json:"inDiscards,omitempty"`
 	OutDiscards uint64 `json:"outDiscards,omitempty"`
 
 	// Computed deltas — populated by the poller, not by the SNMP
@@ -122,11 +122,11 @@ type Entity struct {
 // LLDP is one neighbor row from LLDP-MIB::lldpRemTable. Local port →
 // remote chassis/port. Drives the future topology view.
 type LLDP struct {
-	LocalIfIndex int32  `json:"localIfIndex"`
-	LocalPort    string `json:"localPort,omitempty"`
-	RemoteSysName string `json:"remoteSysName,omitempty"`
-	RemoteSysDescr string `json:"remoteSysDescr,omitempty"`
-	RemotePortID  string `json:"remotePortId,omitempty"`
+	LocalIfIndex    int32  `json:"localIfIndex"`
+	LocalPort       string `json:"localPort,omitempty"`
+	RemoteSysName   string `json:"remoteSysName,omitempty"`
+	RemoteSysDescr  string `json:"remoteSysDescr,omitempty"`
+	RemotePortID    string `json:"remotePortId,omitempty"`
 	RemotePortDescr string `json:"remotePortDescr,omitempty"`
 	RemoteChassisID string `json:"remoteChassisId,omitempty"`
 
@@ -144,11 +144,11 @@ type LLDP struct {
 // /topology API merges both lists into a single edge set, deduping by
 // (localIfIndex, remoteSysName).
 type CDP struct {
-	LocalIfIndex int32  `json:"localIfIndex"`
-	RemoteSysName string `json:"remoteSysName,omitempty"`     // cdpCacheDeviceId
-	RemotePortID  string `json:"remotePortId,omitempty"`      // cdpCacheDevicePort
-	RemoteAddress string `json:"remoteAddress,omitempty"`     // cdpCacheAddress (IPv4 dotted-quad when v4)
-	RemotePlatform string `json:"remotePlatform,omitempty"`   // cdpCachePlatform
-	RemoteVersion string `json:"remoteVersion,omitempty"`     // cdpCacheVersion
-	RemoteCaps    int32  `json:"remoteCapabilities,omitempty"` // cdpCacheCapabilities (bitmask)
+	LocalIfIndex   int32  `json:"localIfIndex"`
+	RemoteSysName  string `json:"remoteSysName,omitempty"`      // cdpCacheDeviceId
+	RemotePortID   string `json:"remotePortId,omitempty"`       // cdpCacheDevicePort
+	RemoteAddress  string `json:"remoteAddress,omitempty"`      // cdpCacheAddress (IPv4 dotted-quad when v4)
+	RemotePlatform string `json:"remotePlatform,omitempty"`     // cdpCachePlatform
+	RemoteVersion  string `json:"remoteVersion,omitempty"`      // cdpCacheVersion
+	RemoteCaps     int32  `json:"remoteCapabilities,omitempty"` // cdpCacheCapabilities (bitmask)
 }

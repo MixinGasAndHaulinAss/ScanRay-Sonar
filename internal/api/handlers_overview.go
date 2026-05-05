@@ -39,25 +39,25 @@ import (
 // once per request (one query) and then folded into per-view
 // aggregates.
 type overviewAgent struct {
-	ID            string
-	Hostname      string
-	SiteID        string
-	OS            string
-	Tags          []string
-	LastSeenAt    *time.Time
-	IsActive      bool
-	UptimeSeconds *int64
-	CPUPct        *float64
-	MemUsedBytes  *int64
-	MemTotalBytes *int64
-	DiskUsedBytes *int64
+	ID             string
+	Hostname       string
+	SiteID         string
+	OS             string
+	Tags           []string
+	LastSeenAt     *time.Time
+	IsActive       bool
+	UptimeSeconds  *int64
+	CPUPct         *float64
+	MemUsedBytes   *int64
+	MemTotalBytes  *int64
+	DiskUsedBytes  *int64
 	DiskTotalBytes *int64
-	GeoCity       *string
-	GeoCountry    *string
-	GeoLat        *float64
-	GeoLon        *float64
-	GeoOrg        *string
-	GeoASN        *int
+	GeoCity        *string
+	GeoCountry     *string
+	GeoLat         *float64
+	GeoLon         *float64
+	GeoOrg         *string
+	GeoASN         *int
 
 	// Pulled from last_metrics JSONB — the probe's HealthSignals.
 	BatteryHealthPct        *float64
@@ -445,12 +445,12 @@ func (s *Server) handleOverviewDevicesAverages(w http.ResponseWriter, r *http.Re
 			"mostEventLogErrors": mostEventErrors,
 		},
 		"trends": map[string]any{
-			"cpuPct":         cpuTrend,
-			"cpuQueueLength": cpuQueue,
-			"memPct":         memTrend,
+			"cpuPct":          cpuTrend,
+			"cpuQueueLength":  cpuQueue,
+			"memPct":          memTrend,
 			"diskQueueLength": diskQueue,
-			"networkMBps":    netMBps,
-			"networkHourly":  netHourly,
+			"networkMBps":     netMBps,
+			"networkHourly":   netHourly,
 		},
 		"asOf": time.Now().UTC(),
 	})
@@ -828,9 +828,9 @@ func (s *Server) handleOverviewNetworkPerformance(w http.ResponseWriter, r *http
 				continue
 			}
 			hourly = append(hourly, map[string]any{
-				"hour":   h,
-				"inMB":   round1(inMB),
-				"outMB":  round1(outMB),
+				"hour":  h,
+				"inMB":  round1(inMB),
+				"outMB": round1(outMB),
 			})
 		}
 	}
@@ -923,15 +923,15 @@ func (s *Server) handleOverviewNetworkPerformance(w http.ResponseWriter, r *http
 			"wiredBytes24h": wiredBytes,
 			"deviceCount":   len(agents),
 		},
-		"hourlyMB":             hourly,
-		"highLatencyDevices":   highLatencyDevices,
-		"avgWiredLatencyMs":    round1(avgWiredLat),
-		"avgWiFiLatencyMs":     round1(avgWiFiLat),
-		"avgWiFiSignalPct":     avgWiFiSignal,
-		"latencyByAdapter":     latByAdapter,
-		"topISPsByLatency":     topISPs,
-		"bottomISPsByLatency":  bottomISPs,
-		"asOf":                 time.Now().UTC(),
+		"hourlyMB":            hourly,
+		"highLatencyDevices":  highLatencyDevices,
+		"avgWiredLatencyMs":   round1(avgWiredLat),
+		"avgWiFiLatencyMs":    round1(avgWiFiLat),
+		"avgWiFiSignalPct":    avgWiFiSignal,
+		"latencyByAdapter":    latByAdapter,
+		"topISPsByLatency":    topISPs,
+		"bottomISPsByLatency": bottomISPs,
+		"asOf":                time.Now().UTC(),
 	})
 }
 

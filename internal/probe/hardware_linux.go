@@ -639,7 +639,9 @@ func readLinuxGPUs(ctx context.Context, hw *Hardware) []HardwareGPU {
 }
 
 // parseLspciGPUs picks lines like:
-//   0000:01:00.0 "VGA compatible controller [0300]" "NVIDIA Corp. [10de]" "TU106 [GeForce RTX 2060] [1f08]" -r0a "Gigabyte" "..."
+//
+//	0000:01:00.0 "VGA compatible controller [0300]" "NVIDIA Corp. [10de]" "TU106 [GeForce RTX 2060] [1f08]" -r0a "Gigabyte" "..."
+//
 // The fields are quoted and separated by spaces; split on `" "` after
 // stripping the leading bus token.
 func parseLspciGPUs(out string) []HardwareGPU {

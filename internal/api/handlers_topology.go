@@ -28,15 +28,15 @@ type topologyNode struct {
 	// ID is the appliance UUID for managed nodes, or
 	// "foreign:<sysname>" for unmanaged neighbors. The UI uses it as
 	// a stable key for layout caching across renders.
-	ID       string  `json:"id"`
-	Kind     string  `json:"kind"`     // "appliance" | "foreign"
-	Name     string  `json:"name"`     // sys_name (or fallback)
-	Label    string  `json:"label"`    // user-friendly name (appliance.name for managed)
-	Vendor   string  `json:"vendor,omitempty"`
-	Model    string  `json:"model,omitempty"`
-	Platform string  `json:"platform,omitempty"` // CDP cdpCachePlatform for foreign
-	MgmtIP   string  `json:"mgmtIp,omitempty"`
-	SiteID   string  `json:"siteId,omitempty"`
+	ID       string `json:"id"`
+	Kind     string `json:"kind"`  // "appliance" | "foreign"
+	Name     string `json:"name"`  // sys_name (or fallback)
+	Label    string `json:"label"` // user-friendly name (appliance.name for managed)
+	Vendor   string `json:"vendor,omitempty"`
+	Model    string `json:"model,omitempty"`
+	Platform string `json:"platform,omitempty"` // CDP cdpCachePlatform for foreign
+	MgmtIP   string `json:"mgmtIp,omitempty"`
+	SiteID   string `json:"siteId,omitempty"`
 	// Status: "up" | "degraded" (last poll errored) | "down" (no
 	// recent poll) | "unknown" (foreign - we don't poll it).
 	Status      string     `json:"status"`
@@ -54,29 +54,29 @@ type topologyNode struct {
 // always "from local-side appliance to remote neighbor" because that's
 // the side we have rich port info for.
 type topologyEdge struct {
-	From       string `json:"from"`       // node ID
-	To         string `json:"to"`         // node ID
-	FromPort   string `json:"fromPort,omitempty"`
-	ToPort     string `json:"toPort,omitempty"`
-	Protocol   string `json:"protocol"`   // "lldp" | "cdp" | "both"
-	OperUp     bool   `json:"operUp"`     // local interface oper state
+	From     string `json:"from"` // node ID
+	To       string `json:"to"`   // node ID
+	FromPort string `json:"fromPort,omitempty"`
+	ToPort   string `json:"toPort,omitempty"`
+	Protocol string `json:"protocol"` // "lldp" | "cdp" | "both"
+	OperUp   bool   `json:"operUp"`   // local interface oper state
 }
 
 type topologyResp struct {
-	Nodes      []topologyNode `json:"nodes"`
-	Edges      []topologyEdge `json:"edges"`
-	GeneratedAt time.Time     `json:"generatedAt"`
+	Nodes       []topologyNode `json:"nodes"`
+	Edges       []topologyEdge `json:"edges"`
+	GeneratedAt time.Time      `json:"generatedAt"`
 }
 
 // handleTopology builds the graph in three passes:
-//   1. Pull every appliance row + its last_snapshot in one query.
-//   2. Index managed appliances by sys_name (lowercased) so neighbors
-//      reported under that name resolve to the existing node instead
-//      of becoming a duplicate "foreign" entry.
-//   3. Walk each snapshot's lldp + cdp arrays, mapping neighbor names
-//      either back to a managed node or to a synthesized foreign node.
-//      Edges are accumulated into a map keyed by an unordered node-pair
-//      so we don't double-count when both ends report the same link.
+//  1. Pull every appliance row + its last_snapshot in one query.
+//  2. Index managed appliances by sys_name (lowercased) so neighbors
+//     reported under that name resolve to the existing node instead
+//     of becoming a duplicate "foreign" entry.
+//  3. Walk each snapshot's lldp + cdp arrays, mapping neighbor names
+//     either back to a managed node or to a synthesized foreign node.
+//     Edges are accumulated into a map keyed by an unordered node-pair
+//     so we don't double-count when both ends report the same link.
 //
 // Query params:
 //   - siteId — restrict to a single site
@@ -118,12 +118,12 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var (
-			id, sid, name, vendor, ip string
-			model, sysName, lastErr   *string
-			lastPolled                *time.Time
+			id, sid, name, vendor, ip  string
+			model, sysName, lastErr    *string
+			lastPolled                 *time.Time
 			physTotal, physUp, uplinks *int
-			tags                      []string
-			snapBytes                 []byte
+			tags                       []string
+			snapBytes                  []byte
 		)
 		if err := rows.Scan(&id, &sid, &name, &vendor, &model, &ip,
 			&sysName, &lastPolled, &lastErr,

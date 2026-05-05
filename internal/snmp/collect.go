@@ -139,23 +139,23 @@ func CollectSystem(_ context.Context, c *Client) (System, error) {
 // ---------------------------------------------------------------------
 
 const (
-	oidIfTable    = "1.3.6.1.2.1.2.2"   // base
-	oidIfDescr    = "1.3.6.1.2.1.2.2.1.2"
-	oidIfType     = "1.3.6.1.2.1.2.2.1.3"
-	oidIfMTU      = "1.3.6.1.2.1.2.2.1.4"
-	oidIfPhys     = "1.3.6.1.2.1.2.2.1.6"
-	oidIfAdmin    = "1.3.6.1.2.1.2.2.1.7"
-	oidIfOper     = "1.3.6.1.2.1.2.2.1.8"
-	oidIfLastChg  = "1.3.6.1.2.1.2.2.1.9"
-	oidIfInErrs   = "1.3.6.1.2.1.2.2.1.14"
-	oidIfOutErrs  = "1.3.6.1.2.1.2.2.1.20"
-	oidIfInDisc   = "1.3.6.1.2.1.2.2.1.13"
-	oidIfOutDisc  = "1.3.6.1.2.1.2.2.1.19"
+	oidIfTable   = "1.3.6.1.2.1.2.2" // base
+	oidIfDescr   = "1.3.6.1.2.1.2.2.1.2"
+	oidIfType    = "1.3.6.1.2.1.2.2.1.3"
+	oidIfMTU     = "1.3.6.1.2.1.2.2.1.4"
+	oidIfPhys    = "1.3.6.1.2.1.2.2.1.6"
+	oidIfAdmin   = "1.3.6.1.2.1.2.2.1.7"
+	oidIfOper    = "1.3.6.1.2.1.2.2.1.8"
+	oidIfLastChg = "1.3.6.1.2.1.2.2.1.9"
+	oidIfInErrs  = "1.3.6.1.2.1.2.2.1.14"
+	oidIfOutErrs = "1.3.6.1.2.1.2.2.1.20"
+	oidIfInDisc  = "1.3.6.1.2.1.2.2.1.13"
+	oidIfOutDisc = "1.3.6.1.2.1.2.2.1.19"
 
 	// ifXTable (1.3.6.1.2.1.31.1.1.1)
-	oidIfName       = "1.3.6.1.2.1.31.1.1.1.1"
-	oidIfHCInOctets = "1.3.6.1.2.1.31.1.1.1.6"
-	oidIfHCInUcast  = "1.3.6.1.2.1.31.1.1.1.7"
+	oidIfName        = "1.3.6.1.2.1.31.1.1.1.1"
+	oidIfHCInOctets  = "1.3.6.1.2.1.31.1.1.1.6"
+	oidIfHCInUcast   = "1.3.6.1.2.1.31.1.1.1.7"
 	oidIfHCOutOctets = "1.3.6.1.2.1.31.1.1.1.10"
 	oidIfHCOutUcast  = "1.3.6.1.2.1.31.1.1.1.11"
 	oidIfHighSpeed   = "1.3.6.1.2.1.31.1.1.1.15"
@@ -459,11 +459,11 @@ func CollectEntities(_ context.Context, c *Client) ([]Entity, error) {
 // ---------------------------------------------------------------------
 
 const (
-	oidLldpRemChassisID    = "1.0.8802.1.1.2.1.4.1.1.5"
-	oidLldpRemPortID       = "1.0.8802.1.1.2.1.4.1.1.7"
-	oidLldpRemPortDescr    = "1.0.8802.1.1.2.1.4.1.1.8"
-	oidLldpRemSysName      = "1.0.8802.1.1.2.1.4.1.1.9"
-	oidLldpRemSysDescr     = "1.0.8802.1.1.2.1.4.1.1.10"
+	oidLldpRemChassisID = "1.0.8802.1.1.2.1.4.1.1.5"
+	oidLldpRemPortID    = "1.0.8802.1.1.2.1.4.1.1.7"
+	oidLldpRemPortDescr = "1.0.8802.1.1.2.1.4.1.1.8"
+	oidLldpRemSysName   = "1.0.8802.1.1.2.1.4.1.1.9"
+	oidLldpRemSysDescr  = "1.0.8802.1.1.2.1.4.1.1.10"
 	// lldpRemSysCapEnabled — bitmask of capabilities actively in use.
 	// Bit 5 = telephone (RFC2922 LldpSystemCapabilitiesMap).
 	oidLldpRemSysCapEnabled = "1.0.8802.1.1.2.1.4.1.1.12"

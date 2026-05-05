@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM golang:1.24-alpine AS gobuild
+FROM golang:1.25-alpine AS gobuild
 # Optional: inject a corporate root CA for hosts behind TLS inspection.
 # `docker/local-ca.crt` ships as an empty placeholder; populate it via
 # `scripts/inject-host-ca.sh` on hosts where outbound HTTPS is intercepted.
@@ -18,7 +18,7 @@ ARG VERSION=
 ARG COMMIT=unknown
 ARG BUILD_TIME=unknown
 RUN set -eux; \
-    V="${VERSION:-$(cat VERSION 2>/dev/null | tr -d '[:space:]')}"; \
+    V="${VERSION:-$(tr -d "[:space:]" < VERSION 2>/dev/null)}"; \
     V="${V:-dev}"; \
     BT="${BUILD_TIME}"; \
     if [ "$BT" = "unknown" ]; then BT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"; fi; \

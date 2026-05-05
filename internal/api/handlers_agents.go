@@ -275,12 +275,12 @@ func (s *Server) handleAgentEnroll(w http.ResponseWriter, r *http.Request) {
 	defer func() { _ = tx.Rollback(r.Context()) }()
 
 	var (
-		tokenID  uuid.UUID
-		siteID   uuid.UUID
-		maxUses  int
-		used     int
-		expires  time.Time
-		revoked  *time.Time
+		tokenID uuid.UUID
+		siteID  uuid.UUID
+		maxUses int
+		used    int
+		expires time.Time
+		revoked *time.Time
 	)
 	err = tx.QueryRow(r.Context(), `
 		SELECT id, site_id, max_uses, used_count, expires_at, revoked_at

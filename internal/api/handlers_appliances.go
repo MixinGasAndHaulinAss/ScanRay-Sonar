@@ -173,14 +173,14 @@ func (s *Server) handleCreateAppliance(w http.ResponseWriter, r *http.Request) {
 // credential fields keeps the existing sealed value intact, which is
 // the right default for "rename this appliance" workflows.
 type updateApplianceReq struct {
-	SiteID              *string  `json:"siteId,omitempty"`
-	Name                *string  `json:"name,omitempty"`
-	Vendor              *string  `json:"vendor,omitempty"`
-	Model               *string  `json:"model,omitempty"`
-	Serial              *string  `json:"serial,omitempty"`
-	MgmtIP              *string  `json:"mgmtIp,omitempty"`
-	PollIntervalSeconds *int     `json:"pollIntervalSeconds,omitempty"`
-	IsActive            *bool    `json:"isActive,omitempty"`
+	SiteID              *string   `json:"siteId,omitempty"`
+	Name                *string   `json:"name,omitempty"`
+	Vendor              *string   `json:"vendor,omitempty"`
+	Model               *string   `json:"model,omitempty"`
+	Serial              *string   `json:"serial,omitempty"`
+	MgmtIP              *string   `json:"mgmtIp,omitempty"`
+	PollIntervalSeconds *int      `json:"pollIntervalSeconds,omitempty"`
+	IsActive            *bool     `json:"isActive,omitempty"`
 	Tags                *[]string `json:"tags,omitempty"`
 
 	// Credential rotation. SNMPVersion alone is not enough to trigger
@@ -400,4 +400,3 @@ func (s *Server) handleDeleteAppliance(w http.ResponseWriter, r *http.Request) {
 		map[string]any{"appliance_id": id.String()})
 	w.WriteHeader(http.StatusNoContent)
 }
-

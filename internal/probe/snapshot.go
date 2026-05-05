@@ -34,36 +34,36 @@ type Snapshot struct {
 	CapturedAt    string `json:"capturedAt"`
 	CaptureMs     int64  `json:"captureMs"` // wall-clock cost of building this snapshot
 
-	Host                Host         `json:"host"`
-	PublicIP            string       `json:"publicIp,omitempty"` // discovered via icanhazip; cached 1h
-	CPU                 CPU          `json:"cpu"`
-	Memory              Memory       `json:"memory"`
-	LoadAvg             *LoadAvg     `json:"loadAvg,omitempty"` // linux/macos only
-	Disks               []Disk       `json:"disks"`
-	NICs                []NIC        `json:"nics"`
+	Host     Host     `json:"host"`
+	PublicIP string   `json:"publicIp,omitempty"` // discovered via icanhazip; cached 1h
+	CPU      CPU      `json:"cpu"`
+	Memory   Memory   `json:"memory"`
+	LoadAvg  *LoadAvg `json:"loadAvg,omitempty"` // linux/macos only
+	Disks    []Disk   `json:"disks"`
+	NICs     []NIC    `json:"nics"`
 	// Static hardware inventory: collected once per probe lifetime
 	// (refreshed every 6h) and inlined into every snapshot. Optional
 	// — older probe builds and platforms without a collector simply
 	// omit the field. See internal/probe/hardware.go.
-	Hardware *Hardware `json:"hardware,omitempty"`
-	TopByCPU            []ProcessRow `json:"topByCpu"`
-	TopByMem            []ProcessRow `json:"topByMem"`
-	Listeners           []Listener   `json:"listeners"`
+	Hardware  *Hardware    `json:"hardware,omitempty"`
+	TopByCPU  []ProcessRow `json:"topByCpu"`
+	TopByMem  []ProcessRow `json:"topByMem"`
+	Listeners []Listener   `json:"listeners"`
 	// Conversations are aggregated active TCP/UDP peer pairs (one row
 	// per (proto, direction, remote, process)). Schema v2+.
-	Conversations       []Conversation `json:"conversations,omitempty"`
+	Conversations []Conversation `json:"conversations,omitempty"`
 	// Latency is the per-target ICMP RTT report cached by
 	// extras.runLatencyLoop. Empty on platforms without raw-socket
 	// access; see CollectionWarnings for the reason. Schema v4+.
-	Latency             []LatencyRow `json:"latency,omitempty"`
+	Latency []LatencyRow `json:"latency,omitempty"`
 	// HealthSignals are slow-cadence host metrics (battery, BSOD,
 	// missing patches, WiFi RSSI, queue lengths, ...). Optional —
 	// older probes and unsupported platforms simply omit the field.
 	// Schema v4+.
 	Health              *HealthSignals `json:"health,omitempty"`
-	LoggedInUsers       []SessionRow `json:"loggedInUsers"`
-	PendingReboot       bool         `json:"pendingReboot"`
-	PendingRebootReason string       `json:"pendingRebootReason,omitempty"`
+	LoggedInUsers       []SessionRow   `json:"loggedInUsers"`
+	PendingReboot       bool           `json:"pendingReboot"`
+	PendingRebootReason string         `json:"pendingRebootReason,omitempty"`
 
 	// Windows-only.
 	StoppedAutoServices []ServiceRow `json:"stoppedAutoServices,omitempty"`
@@ -93,11 +93,11 @@ type Host struct {
 
 type CPU struct {
 	Model       string  `json:"model"`
-	Cores       int     `json:"cores"`        // physical
-	LogicalCPUs int     `json:"logicalCpus"`  // hyperthreads
-	MHz         float64 `json:"mhz"`          // nominal
-	UsagePct    float64 `json:"usagePct"`     // overall, last 1s
-	PerCorePct  []int   `json:"perCorePct"`   // rounded to int per core
+	Cores       int     `json:"cores"`       // physical
+	LogicalCPUs int     `json:"logicalCpus"` // hyperthreads
+	MHz         float64 `json:"mhz"`         // nominal
+	UsagePct    float64 `json:"usagePct"`    // overall, last 1s
+	PerCorePct  []int   `json:"perCorePct"`  // rounded to int per core
 }
 
 type Memory struct {
@@ -127,10 +127,10 @@ type Disk struct {
 }
 
 type NIC struct {
-	Name      string   `json:"name"`
-	MAC       string   `json:"mac,omitempty"`
-	MTU       int      `json:"mtu,omitempty"`
-	Up        bool     `json:"up"`
+	Name string `json:"name"`
+	MAC  string `json:"mac,omitempty"`
+	MTU  int    `json:"mtu,omitempty"`
+	Up   bool   `json:"up"`
 	// Kind is one of "wired", "wireless", "virtual", "loopback".
 	// Powers the WiFi-vs-Wired charts on the Network - Performance
 	// dashboard. Always populated; classifier in nic_kind.go.
@@ -160,18 +160,18 @@ type NIC struct {
 // to compare two consecutive snapshots, so they're zero on the first
 // snapshot of a probe lifetime.
 type ProcessRow struct {
-	PID         int32   `json:"pid"`
-	Name        string  `json:"name"`
-	User        string  `json:"user,omitempty"`
-	Cmdline     string  `json:"cmdline,omitempty"`
-	CPUPct      float64 `json:"cpuPct"`
-	RSSBytes    uint64  `json:"rssBytes"`
-	MemPct      float64 `json:"memPct,omitempty"`
-	DiskReadBps uint64  `json:"diskReadBps,omitempty"`
-	DiskWriteBps uint64 `json:"diskWriteBps,omitempty"`
-	NetSentBps  uint64  `json:"netSentBps,omitempty"`
-	NetRecvBps  uint64  `json:"netRecvBps,omitempty"`
-	OpenConns   int     `json:"openConns,omitempty"`
+	PID          int32   `json:"pid"`
+	Name         string  `json:"name"`
+	User         string  `json:"user,omitempty"`
+	Cmdline      string  `json:"cmdline,omitempty"`
+	CPUPct       float64 `json:"cpuPct"`
+	RSSBytes     uint64  `json:"rssBytes"`
+	MemPct       float64 `json:"memPct,omitempty"`
+	DiskReadBps  uint64  `json:"diskReadBps,omitempty"`
+	DiskWriteBps uint64  `json:"diskWriteBps,omitempty"`
+	NetSentBps   uint64  `json:"netSentBps,omitempty"`
+	NetRecvBps   uint64  `json:"netRecvBps,omitempty"`
+	OpenConns    int     `json:"openConns,omitempty"`
 }
 
 type Listener struct {
@@ -188,16 +188,16 @@ type Listener struct {
 // connecting out (outbound). Local peers (loopback) are excluded —
 // they're noise for the "what is this host talking to" view.
 type Conversation struct {
-	Proto       string `json:"proto"`              // tcp, udp
-	Direction   string `json:"direction"`          // inbound, outbound, local
+	Proto       string `json:"proto"`     // tcp, udp
+	Direction   string `json:"direction"` // inbound, outbound, local
 	RemoteIP    string `json:"remoteIp"`
 	RemoteHost  string `json:"remoteHost,omitempty"` // reverse-DNS, best-effort
 	RemotePort  uint32 `json:"remotePort"`
-	LocalPort   uint32 `json:"localPort,omitempty"`  // populated for inbound (the listener port)
-	State       string `json:"state,omitempty"`      // ESTABLISHED, CLOSE_WAIT, ...
+	LocalPort   uint32 `json:"localPort,omitempty"` // populated for inbound (the listener port)
+	State       string `json:"state,omitempty"`     // ESTABLISHED, CLOSE_WAIT, ...
 	PID         int32  `json:"pid,omitempty"`
 	ProcessName string `json:"processName,omitempty"`
-	Count       int    `json:"count"`                // number of socket rows aggregated
+	Count       int    `json:"count"` // number of socket rows aggregated
 }
 
 type SessionRow struct {
@@ -477,19 +477,19 @@ func contains(haystack []string, needle string) bool {
 // long tail is rarely actionable.
 //
 // Each row carries a small constellation of per-process stats:
-//   * cpuPct  — gopsutil's internal delta tracking, needs one prior
-//               call to be non-zero (first snapshot shows 0).
-//   * rss / memPct — single-shot syscall.
-//   * diskRead/Write Bps — delta of cumulative I/O bytes between
-//               this snapshot and the last, tracked by procDelta
-//               keyed on (pid, create_time) to defend against pid
-//               reuse. Net rates require platform-specific kernel
-//               support (Linux: cgroup or BPF; Windows: WMI Perf
-//               counters) that gopsutil doesn't surface, so they're
-//               left zero for now and we'll fill them in a later
-//               pass without breaking the wire format.
-//   * openConns — populated post-hoc by collectSockets via
-//               s.applyOpenConns once the socket pass is done.
+//   - cpuPct  — gopsutil's internal delta tracking, needs one prior
+//     call to be non-zero (first snapshot shows 0).
+//   - rss / memPct — single-shot syscall.
+//   - diskRead/Write Bps — delta of cumulative I/O bytes between
+//     this snapshot and the last, tracked by procDelta
+//     keyed on (pid, create_time) to defend against pid
+//     reuse. Net rates require platform-specific kernel
+//     support (Linux: cgroup or BPF; Windows: WMI Perf
+//     counters) that gopsutil doesn't surface, so they're
+//     left zero for now and we'll fill them in a later
+//     pass without breaking the wire format.
+//   - openConns — populated post-hoc by collectSockets via
+//     s.applyOpenConns once the socket pass is done.
 func collectProcesses(ctx context.Context, s *Snapshot) {
 	procs, err := process.ProcessesWithContext(ctx)
 	if err != nil {

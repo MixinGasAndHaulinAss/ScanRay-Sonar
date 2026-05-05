@@ -2,13 +2,13 @@
 // (appliances table → poll targets) and internal/snmp (collectors).
 //
 // Design goals:
-//   * One goroutine per appliance, ticking at its own poll_interval_s.
-//   * Concurrency cap so a 1000-port site doesn't open 1000 SNMP
+//   - One goroutine per appliance, ticking at its own poll_interval_s.
+//   - Concurrency cap so a 1000-port site doesn't open 1000 SNMP
 //     sessions at once.
-//   * Hot reload — the scheduler periodically re-reads the appliances
+//   - Hot reload — the scheduler periodically re-reads the appliances
 //     table; new rows pick up without a restart, deleted rows shut
 //     down their workers.
-//   * State on rate calculation lives in-memory keyed by
+//   - State on rate calculation lives in-memory keyed by
 //     (appliance_id, if_index). Counter wraps and "first poll" cases
 //     are handled cleanly so the UI never sees a sentinel zero or a
 //     nonsense "1 Tbps" spike.
@@ -76,12 +76,12 @@ type rateKey struct {
 	idx  int32
 }
 type rateState struct {
-	t          time.Time
-	inOctets   uint64
-	outOctets  uint64
-	inErrors   uint64
-	outErrors  uint64
-	inDiscards uint64
+	t           time.Time
+	inOctets    uint64
+	outOctets   uint64
+	inErrors    uint64
+	outErrors   uint64
+	inDiscards  uint64
 	outDiscards uint64
 }
 

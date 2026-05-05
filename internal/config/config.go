@@ -21,10 +21,10 @@ type Config struct {
 	PublicURL string
 	IngestURL string
 
-	MasterKeyB64    string // 32 bytes, base64 encoded
-	JWTSecretB64    string // 64 bytes, base64 encoded
-	JWTAccessTTL    time.Duration
-	JWTRefreshTTL   time.Duration
+	MasterKeyB64  string // 32 bytes, base64 encoded
+	JWTSecretB64  string // 64 bytes, base64 encoded
+	JWTAccessTTL  time.Duration
+	JWTRefreshTTL time.Duration
 
 	DB struct {
 		Host     string
@@ -66,14 +66,14 @@ type Config struct {
 // operators can fix them all in one pass.
 func Load() (*Config, error) {
 	c := &Config{
-		Env:           env("SONAR_ENV", "production"),
-		LogLevel:      env("SONAR_LOG_LEVEL", "info"),
-		BindAddr:      env("SONAR_BIND_ADDR", "127.0.0.1:8080"),
-		PublicURL:     env("SONAR_PUBLIC_URL", ""),
-		IngestURL:     env("SONAR_INGEST_URL", ""),
-		MasterKeyB64:  env("SONAR_MASTER_KEY", ""),
-		JWTSecretB64:  env("SONAR_JWT_SECRET", ""),
-		NATSURL:       env("SONAR_NATS_URL", "nats://127.0.0.1:4222"),
+		Env:          env("SONAR_ENV", "production"),
+		LogLevel:     env("SONAR_LOG_LEVEL", "info"),
+		BindAddr:     env("SONAR_BIND_ADDR", "127.0.0.1:8080"),
+		PublicURL:    env("SONAR_PUBLIC_URL", ""),
+		IngestURL:    env("SONAR_INGEST_URL", ""),
+		MasterKeyB64: env("SONAR_MASTER_KEY", ""),
+		JWTSecretB64: env("SONAR_JWT_SECRET", ""),
+		NATSURL:      env("SONAR_NATS_URL", "nats://127.0.0.1:4222"),
 
 		BootstrapAdminEmail:    env("SONAR_BOOTSTRAP_ADMIN_EMAIL", ""),
 		BootstrapAdminPassword: env("SONAR_BOOTSTRAP_ADMIN_PASSWORD", ""),

@@ -46,7 +46,7 @@ variables:
   IMAGE_PREFIX: striketeam/scanray-sonar
   # Pin Go and Node toolchain images. Bump in lockstep with go.mod's
   # `go` directive when you bring in a dep that needs a newer compiler.
-  GO_IMAGE: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/library/golang:1.24-bookworm
+  GO_IMAGE: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/library/golang:1.25-bookworm
   NODE_IMAGE: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/library/node:20-bookworm
   ALPINE_IMAGE: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/library/alpine:3.21
   HADOLINT_IMAGE: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/hadolint/hadolint:latest-alpine

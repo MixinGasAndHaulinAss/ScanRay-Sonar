@@ -752,9 +752,9 @@ func (s *Server) handleAgentMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"agentId":  id.String(),
-		"range":    dur.String(),
-		"samples":  out,
+		"agentId":      id.String(),
+		"range":        dur.String(),
+		"samples":      out,
 		"capturedAtTo": time.Now().UTC(),
 	})
 }
@@ -995,7 +995,7 @@ type netPeer struct {
 	IsPrivate   bool    `json:"isPrivate,omitempty"`
 	// Processes that hold a socket to this peer, with the aggregate
 	// connection count. Sorted by count desc.
-	Processes []netPeerProc `json:"processes"`
+	Processes  []netPeerProc `json:"processes"`
 	TotalConns int           `json:"totalConns"`
 	Ports      []int         `json:"ports,omitempty"` // unique remote ports observed
 }

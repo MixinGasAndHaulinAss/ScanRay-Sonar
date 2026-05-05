@@ -71,10 +71,10 @@ func collectSessionsOS(_ context.Context) ([]SessionRow, bool) {
 	}
 
 	type wtsSessionInfo1 struct {
-		ExecEnvId   uint32
-		State       uint32
-		SessionId   uint32
-		_           [4]byte // alignment for the *uint16s on 64-bit
+		ExecEnvId    uint32
+		State        uint32
+		SessionId    uint32
+		_            [4]byte // alignment for the *uint16s on 64-bit
 		PSessionName *uint16
 		PHostName    *uint16
 		PUserName    *uint16

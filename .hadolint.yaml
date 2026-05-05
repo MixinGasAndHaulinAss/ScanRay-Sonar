@@ -12,7 +12,7 @@ ignored:
   # repository for a small list of build-time tooling (git,
   # ca-certificates) where the latest minor is always desired and
   # there's no upstream CVE history that would benefit from pinning.
-  # The alpine base image tag is pinned (golang:1.24-alpine) so the
+  # The alpine base image tag is pinned (golang:1.25-alpine) so the
   # underlying repo snapshot is reproducible at the image-tag level.
   - DL3018
 
