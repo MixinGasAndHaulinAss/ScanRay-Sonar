@@ -415,22 +415,21 @@ build:poller:
 # Stage 4: scan (re-scan the actually-pushed images)
 # ===========================================================================
 
-scan:trivy-images:
+# Trivy scan is split per-service so it inherits the same per-component
+# rules as `build:*`. Otherwise, when `build:poller` is skipped by
+# smart-build (e.g. a web-only change), the merged scan job would try
+# to pull a poller SHA tag that was never pushed and fail with
+# MANIFEST_UNKNOWN. Same logic applies to `package:*` below.
+.scan-job:
   stage: scan
   image:
     name: $TRIVY_IMAGE
     entrypoint: [""]
-  <<: *rules-master
   variables:
     TRIVY_USERNAME: $CI_REGISTRY_USER
     TRIVY_PASSWORD: $CI_REGISTRY_PASSWORD
   script:
     - trivy --version
-    # Scan the SHA-tagged images that the build stage just pushed. Both
-    # images always exist by this stage because smart_build.sh either
-    # rebuilt or retagged. `|| true` on the second image lets the first
-    # image's findings be evaluated even if poller wasn't built (rare;
-    # smart_build always produces a SHA tag for every service).
     - >
       trivy image
       --ignore-unfixed
@@ -438,15 +437,21 @@ scan:trivy-images:
       --exit-code 1
       --no-progress
       --format table
-      "${REGISTRY}/${IMAGE_PREFIX}/api:${CI_COMMIT_SHORT_SHA}"
-    - >
-      trivy image
-      --ignore-unfixed
-      --severity HIGH,CRITICAL
-      --exit-code 1
-      --no-progress
-      --format table
-      "${REGISTRY}/${IMAGE_PREFIX}/poller:${CI_COMMIT_SHORT_SHA}"
+      "${REGISTRY}/${IMAGE_PREFIX}/${SERVICE}:${CI_COMMIT_SHORT_SHA}"
+
+scan:trivy-api:
+  extends: .scan-job
+  rules: !reference [.rules-api, rules]
+  needs: ["build:api"]
+  variables:
+    SERVICE: api
+
+scan:trivy-poller:
+  extends: .scan-job
+  rules: !reference [.rules-poller, rules]
+  needs: ["build:poller"]
+  variables:
+    SERVICE: poller
 
 # ===========================================================================
 # Stage 5: package — alias the SHA-tagged image as :latest, :VERSION,
@@ -457,7 +462,9 @@ scan:trivy-images:
 .package-job:
   stage: package
   extends: .docker-job
-  <<: *rules-master
+  # Per-service rules are applied on the concrete jobs below
+  # (package:api uses .rules-api, package:poller uses .rules-poller)
+  # so that a smart-skipped build also smart-skips its package step.
   script:
     - VERSION="$(cat VERSION | tr -d '[:space:]')"
     - SRC="${REGISTRY}/${IMAGE_PREFIX}/${SERVICE}:${CI_COMMIT_SHORT_SHA}"
@@ -477,13 +484,15 @@ scan:trivy-images:
 
 package:api:
   extends: .package-job
-  needs: ["scan:trivy-images"]
+  rules: !reference [.rules-api, rules]
+  needs: ["scan:trivy-api"]
   variables:
     SERVICE: api
 
 package:poller:
   extends: .package-job
-  needs: ["scan:trivy-images"]
+  rules: !reference [.rules-poller, rules]
+  needs: ["scan:trivy-poller"]
   variables:
     SERVICE: poller
 
