@@ -212,7 +212,18 @@ lint:go:
     paths: [.gocache/]
   script:
     - go version
-    - gofmt -l . | tee /tmp/gofmt.out
+    # Restrict gofmt to first-party Go files. The `.gocache/` cache
+    # path holds the downloaded module dependencies and they are not
+    # ours to reformat; the previous run can populate it before this
+    # job runs and then `gofmt -l .` would (correctly but uselessly)
+    # flag upstream files.
+    - >
+      gofmt -l
+      $(find . -type f -name '*.go'
+        -not -path './.gocache/*'
+        -not -path './web/node_modules/*'
+        -not -path './.gopath/*')
+      | tee /tmp/gofmt.out
     - test ! -s /tmp/gofmt.out || (echo "gofmt -s violations above" && exit 1)
     - go vet ./...
 
