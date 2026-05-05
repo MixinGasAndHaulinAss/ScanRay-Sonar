@@ -16,7 +16,7 @@
 // We do NOT track mouse-leave to keep the tooltip persistent — it
 // disappears as soon as the cursor leaves the SVG.
 
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 export interface LineSeries {
   /** Display name shown in the legend + tooltip. */
@@ -31,6 +31,7 @@ interface LineChartProps {
   /** Time values, one per index, used to label the X axis. */
   times: (Date | string)[];
   series: LineSeries[];
+  /** Optional fixed width. When omitted, the chart auto-fits its parent. */
   width?: number;
   height?: number;
   /** Force a Y minimum; default is data min (or 0 if all values >= 0). */
@@ -56,7 +57,7 @@ const DEFAULT_COLORS = [
 export default function LineChart({
   times,
   series,
-  width = 720,
+  width,
   height = 240,
   yMin,
   yMax,
@@ -67,16 +68,44 @@ export default function LineChart({
 }: LineChartProps) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
-  const padL = 44;
+  // Auto-fit the chart to its parent's width unless an explicit `width`
+  // prop is supplied. We measure synchronously in a layout effect so
+  // the first paint already uses the correct width — the previous
+  // bug was a fixed 720px width, which overflowed narrow tiles and
+  // clipped the y-axis labels on the SVG's left edge. ResizeObserver
+  // then keeps us in sync with parent resizes (window, sidebar, etc.).
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [measuredWidth, setMeasuredWidth] = useState<number>(0);
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el || width != null) return;
+    setMeasuredWidth(Math.round(el.getBoundingClientRect().width));
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const w = entry.contentRect.width;
+        if (w > 0) setMeasuredWidth(Math.round(w));
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [width]);
+  const effectiveWidth = width ?? (measuredWidth > 0 ? measuredWidth : 720);
+
+  // Left padding has to fit the widest y-axis label. The MB/s chart
+  // produces strings like "1.03 MB/s" (≈50px at 10px font), which
+  // doesn't fit the original 44px gutter — the leading "1." was
+  // clipped off the SVG. 56px leaves ~6px of breathing room on the
+  // longest unit + value combinations we ship today.
+  const padL = 56;
   const padR = 16;
   const padT = 12;
   const padB = 28;
 
   const inner = useMemo(() => {
-    const w = Math.max(1, width - padL - padR);
+    const w = Math.max(1, effectiveWidth - padL - padR);
     const h = Math.max(1, height - padT - padB);
     return { w, h };
-  }, [width, height]);
+  }, [effectiveWidth, height]);
 
   // Domain
   const { yLo, yHi } = useMemo(() => {
@@ -117,10 +146,12 @@ export default function LineChart({
   if (!times.length || series.every((s) => s.values.every((v) => v == null))) {
     return (
       <div
+        ref={containerRef}
         className={
-          "grid place-items-center text-xs text-slate-600 " + (className ?? "")
+          "grid w-full place-items-center text-xs text-slate-600 " +
+          (className ?? "")
         }
-        style={{ width, height }}
+        style={{ height }}
       >
         no data
       </div>
@@ -169,7 +200,7 @@ export default function LineChart({
 
   const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const px = ((e.clientX - rect.left) / rect.width) * width;
+    const px = ((e.clientX - rect.left) / rect.width) * effectiveWidth;
     if (px < padL || px > padL + inner.w) {
       setHoverIdx(null);
       return;
@@ -179,11 +210,15 @@ export default function LineChart({
   };
 
   return (
-    <div className={"flex flex-col " + (className ?? "")}>
+    <div
+      ref={containerRef}
+      className={"flex w-full flex-col overflow-hidden " + (className ?? "")}
+    >
       <svg
-        width={width}
+        width={effectiveWidth}
         height={height}
-        viewBox={`0 0 ${width} ${height}`}
+        viewBox={`0 0 ${effectiveWidth} ${height}`}
+        style={{ display: "block" }}
         role="img"
         aria-label={ariaLabel}
         onMouseMove={handleMove}
