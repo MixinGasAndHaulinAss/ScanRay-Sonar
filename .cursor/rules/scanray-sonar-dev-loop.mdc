@@ -1,0 +1,29 @@
+---
+description: >-
+  Streamlined GitLab CI + GLCR deploy loop for ScanRay-Sonar (push remotes,
+  CalVer, deploy-registry on dev). Apply on every task in this repo unless the
+  user explicitly scopes work to docs-only or local-only experiments.
+alwaysApply: true
+---
+
+# ScanRay-Sonar — dev loop
+
+When changing anything that affects **runtime** (Go API/poller, web bundled into API image, VERSION/OpenAPI, CI):
+
+1. **Bump CalVer** in lockstep: `VERSION`, `web/package.json`, `web/package-lock.json`, `web/src/components/Layout.tsx` (`APP_VERSION`), `internal/api/openapi.yaml`. Omit only if the user says this change must not advance version.
+
+2. **Push for CI** — prefer one shot:
+   - `make push-ci`, or
+   - `pwsh scripts/push-main-remotes.ps1`, or
+   - `bash scripts/push-main-remotes.sh`  
+   Order is **gitlab → origin** (GitLab is canonical CI; GitHub mirrors after green pipeline).
+
+3. **Wait for GitLab pipeline green** on `main`. Use GitLab UI or bridge-gitlab (`gitlab_api.py`) for traces. Do not tell the user that Ctrl+Shift+R fixes stale `/api/v1/version`.
+
+4. **Deploy docker dev** (`/opt/scanraysonar`): run `./scripts/deploy-registry.sh` (pull GLCR + `docker compose up -d --pull always --force-recreate`). Fleet hostname is often **`dev`** via Tendril.
+
+5. **Verify** `GET /api/v1/version` matches the new CalVer and commit.
+
+If the user only wants local compose iteration (`docker compose up --build`), skip steps 2–5 until they ask for CI/dev parity.
+
+Full narrative lives in personal skill **scanray-sonar-deployment** (`~/.cursor/skills/scanray-sonar-deployment/SKILL.md`).

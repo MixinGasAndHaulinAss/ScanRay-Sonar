@@ -9,7 +9,11 @@ LDFLAGS    := -s -w \
               -X github.com/NCLGISA/ScanRay-Sonar/internal/version.Commit=$(COMMIT) \
               -X github.com/NCLGISA/ScanRay-Sonar/internal/version.BuildTime=$(BUILD_TIME)
 
-.PHONY: all build api poller probe web test fmt vet tidy compose-up compose-down clean refresh-geoip
+.PHONY: all build api poller probe web test fmt vet tidy compose-up compose-down clean refresh-geoip push-ci
+
+# Push main → GitLab (runs CI) then GitHub mirror. Same as scripts/push-main-remotes.sh
+push-ci:
+	bash scripts/push-main-remotes.sh
 
 all: build
 
