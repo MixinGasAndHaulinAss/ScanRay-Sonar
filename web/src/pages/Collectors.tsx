@@ -565,6 +565,14 @@ function DocsPanel() {
             <strong>SONAR_MASTER_KEY</strong> must match central Sonar so the collector can
             decrypt the SNMP/SSH credentials it pulls down.
           </li>
+          <li>
+            Install commands ship with{" "}
+            <code className="font-mono">--network host</code> (
+            <code className="font-mono">network_mode: host</code> in compose) so SNMP/ICMP
+            source IPs aren&apos;t mangled by Docker&apos;s bridge NAT and so TLS to the central
+            Sonar uses the host&apos;s route — drop the flag if you specifically need the
+            container on a Docker network.
+          </li>
         </ul>
       </div>
 

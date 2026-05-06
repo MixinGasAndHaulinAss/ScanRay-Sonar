@@ -144,16 +144,27 @@ func (s *Server) collectorInstallBundle(r *http.Request, label, token string) co
 	if name == "" {
 		name = "collector"
 	}
+	// We default to --network host (network_mode: host in compose) for
+	// two reasons:
+	//   1. The collector dials the host's network gear directly (SNMP,
+	//      SSH, ICMP). Docker's default bridge NAT mangles source IPs
+	//      and breaks ARP/LLDP-adjacent discovery.
+	//   2. When the central Sonar is reached via a public hostname
+	//      that resolves back through the same edge proxy, bridge
+	//      networking has been observed to trigger SNI / cert-name
+	//      mismatches because the request egresses through Docker's
+	//      NAT instead of the host route. Host networking sidesteps
+	//      both.
 	enroll := fmt.Sprintf(
 		"docker volume create sonar-collector-config >/dev/null && "+
-			"docker run --rm "+
+			"docker run --rm --network host "+
 			"-v sonar-collector-config:/etc/sonar "+
 			"-e SONAR_MASTER_KEY=\"$SONAR_MASTER_KEY\" "+
 			"%s enroll --token=%q --base=%q --name=%q",
 		image, token, base, name,
 	)
 	run := fmt.Sprintf(
-		"docker run -d --name sonar-collector --restart unless-stopped "+
+		"docker run -d --name sonar-collector --restart unless-stopped --network host "+
 			"-v sonar-collector-config:/etc/sonar "+
 			"-e SONAR_MASTER_KEY=\"$SONAR_MASTER_KEY\" "+
 			"%s run",
@@ -167,6 +178,7 @@ services:
   sonar-collector:
     image: %s
     restart: unless-stopped
+    network_mode: host
     volumes:
       - sonar-collector-config:/etc/sonar
     environment:
