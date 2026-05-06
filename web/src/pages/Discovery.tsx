@@ -51,7 +51,7 @@ export default function Discovery() {
             <thead className="bg-ink-800/60 text-xs uppercase text-slate-400">
               <tr>
                 <th className="px-3 py-2">Site</th>
-                <th className="px-3 py-2">Subnets</th>
+                <th className="px-3 py-2">CIDR</th>
                 <th className="px-3 py-2">Interval</th>
                 <th className="px-3 py-2">Devices</th>
                 <th className="px-3 py-2">Last scan</th>
@@ -59,10 +59,10 @@ export default function Discovery() {
             </thead>
             <tbody>
               {networks.data?.map((row, i) => (
-                <tr key={`${row.siteId}-${i}`} className="border-t border-ink-800">
+                <tr key={`${row.siteId}-${row.cidr ?? i}`} className="border-t border-ink-800">
                   <td className="px-3 py-2">{siteLabel(row.siteId)}</td>
-                  <td className="max-w-lg px-3 py-2 font-mono text-[11px] text-slate-400">
-                    {JSON.stringify(row.subnets)}
+                  <td className="px-3 py-2 font-mono text-[11px] text-slate-400">
+                    {row.cidr ? String(row.cidr) : <span className="text-slate-600">no subnets configured</span>}
                   </td>
                   <td className="px-3 py-2 text-slate-400">{String(row.scanIntervalSeconds ?? "")}s</td>
                   <td className="px-3 py-2">{String(row.deviceCount ?? "")}</td>

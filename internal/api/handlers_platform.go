@@ -116,18 +116,11 @@ func (s *Server) handleDiscoveryDevices(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleDiscoveryNetworks(w http.ResponseWriter, r *http.Request) {
-	q := `
-		SELECT s.id::text,
-		       s.name,
-		       COALESCE(ds.subnets, '[]'::jsonb),
-		       COALESCE(ds.scan_interval_seconds, 3600),
-		       (SELECT COUNT(*) FROM discovered_devices d WHERE d.site_id = s.id),
-		       (SELECT MAX(d.last_seen_at) FROM discovered_devices d WHERE d.site_id = s.id),
-		       (SELECT string_agg(c.id::text, ',' ORDER BY c.name)
-		          FROM collectors c WHERE c.site_id = s.id AND c.is_active)
-		  FROM sites s
-		  LEFT JOIN site_discovery_settings ds ON ds.site_id = s.id
-		 WHERE 1=1`
+	// Per-network row: each subnet from site_discovery_settings.subnets gets its
+	// own aggregate (deviceCount, lastScanAt). Filters are applied to the joined
+	// discovered_devices, so e.g. ?protocol=ssh&identified=true narrows to
+	// "subnets where we successfully identified SSH-reachable devices."
+	deviceFilters := ``
 	args := []any{}
 	if v := r.URL.Query().Get("siteId"); v != "" {
 		if _, err := uuid.Parse(v); err != nil {
@@ -135,7 +128,7 @@ func (s *Server) handleDiscoveryNetworks(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		args = append(args, v)
-		q += ` AND s.id = $` + strconv.Itoa(len(args))
+		deviceFilters += ` AND d.site_id = $` + strconv.Itoa(len(args))
 	}
 	if v := r.URL.Query().Get("collectorId"); v != "" {
 		if _, err := uuid.Parse(v); err != nil {
@@ -143,9 +136,59 @@ func (s *Server) handleDiscoveryNetworks(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		args = append(args, v)
+		deviceFilters += ` AND d.collector_id = $` + strconv.Itoa(len(args))
+	}
+	if v := r.URL.Query().Get("vendor"); v != "" {
+		args = append(args, "%"+v+"%")
+		deviceFilters += ` AND d.vendor ILIKE $` + strconv.Itoa(len(args))
+	}
+	if v := r.URL.Query().Get("identified"); v == "true" || v == "false" {
+		args = append(args, v == "true")
+		deviceFilters += ` AND d.identified = $` + strconv.Itoa(len(args))
+	}
+	if v := r.URL.Query().Get("protocol"); v != "" {
+		args = append(args, v)
+		deviceFilters += ` AND $` + strconv.Itoa(len(args)) + ` = ANY(d.protocols)`
+	}
+
+	// Fan out subnets via jsonb_array_elements_text, then LEFT JOIN devices
+	// whose IP is contained by that CIDR. Sites with no subnets configured
+	// still surface (LATERAL with FROM (VALUES (NULL))) so operators see
+	// "configured but empty" rows distinctly.
+	q := `
+		SELECT s.id::text,
+		       s.name,
+		       sub.cidr,
+		       COALESCE(ds.scan_interval_seconds, 3600),
+		       (SELECT COUNT(*)
+		          FROM discovered_devices d
+		         WHERE d.site_id = s.id
+		           AND (sub.cidr IS NULL OR d.ip <<= sub.cidr::inet)
+		           ` + deviceFilters + `) AS device_count,
+		       (SELECT MAX(d.last_seen_at)
+		          FROM discovered_devices d
+		         WHERE d.site_id = s.id
+		           AND (sub.cidr IS NULL OR d.ip <<= sub.cidr::inet)
+		           ` + deviceFilters + `) AS last_scan,
+		       (SELECT string_agg(c.id::text, ',' ORDER BY c.name)
+		          FROM collectors c WHERE c.site_id = s.id AND c.is_active) AS collectors
+		  FROM sites s
+		  LEFT JOIN site_discovery_settings ds ON ds.site_id = s.id
+		  LEFT JOIN LATERAL (
+		     SELECT t.cidr
+		       FROM jsonb_array_elements_text(COALESCE(ds.subnets, '[]'::jsonb)) AS t(cidr)
+		  ) sub ON TRUE
+		 WHERE 1=1`
+	if v := r.URL.Query().Get("siteId"); v != "" {
+		// re-apply at the outer query (deviceFilters is only for the subqueries)
+		args = append(args, v)
+		q += ` AND s.id = $` + strconv.Itoa(len(args))
+	}
+	if v := r.URL.Query().Get("collectorId"); v != "" {
+		args = append(args, v)
 		q += ` AND EXISTS (SELECT 1 FROM collectors c WHERE c.site_id = s.id AND c.id = $` + strconv.Itoa(len(args)) + `)`
 	}
-	q += ` ORDER BY s.name`
+	q += ` ORDER BY s.name, sub.cidr NULLS FIRST`
 
 	rows, err := s.pool.Query(r.Context(), q, args...)
 	if err != nil {
@@ -156,19 +199,23 @@ func (s *Server) handleDiscoveryNetworks(w http.ResponseWriter, r *http.Request)
 	out := []map[string]any{}
 	for rows.Next() {
 		var sid, name string
-		var subnets []byte
+		var cidr *string
 		var scanInt int
 		var devCount int
 		var lastSeen *time.Time
 		var collAgg *string
-		if err := rows.Scan(&sid, &name, &subnets, &scanInt, &devCount, &lastSeen, &collAgg); err != nil {
+		if err := rows.Scan(&sid, &name, &cidr, &scanInt, &devCount, &lastSeen, &collAgg); err != nil {
 			writeErr(w, http.StatusInternalServerError, "server_error", "scan failed")
 			return
+		}
+		cidrStr := ""
+		if cidr != nil {
+			cidrStr = *cidr
 		}
 		row := map[string]any{
 			"siteId":              sid,
 			"siteName":            name,
-			"subnets":             json.RawMessage(subnets),
+			"cidr":                cidrStr,
 			"scanIntervalSeconds": scanInt,
 			"deviceCount":         devCount,
 			"lastScanAt":          lastSeen,
