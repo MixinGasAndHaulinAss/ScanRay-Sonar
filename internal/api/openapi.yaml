@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.5.6.13"
+  version: "2026.5.6.14"
   license:
     name: MIT
 servers:
@@ -1235,6 +1235,10 @@ paths:
     get:
       summary: List collectors visible to the caller
       tags: [Collectors]
+      parameters:
+        - in: query
+          name: siteId
+          schema: { type: string, format: uuid }
       responses:
         "200":
           description: collectors
@@ -1243,8 +1247,81 @@ paths:
               schema:
                 type: array
                 items: { type: object, additionalProperties: true }
+
+  /collectors/{id}:
+    get:
+      summary: Fetch a single collector
+      tags: [Collectors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: collector
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+    patch:
+      summary: Rename or activate/deactivate a collector
+      tags: [Collectors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                isActive: { type: boolean }
+      responses:
+        "200": { description: updated }
+    delete:
+      summary: Delete a collector
+      tags: [Collectors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: deleted }
+
+  /collectors/{id}/health:
+    get:
+      summary: Liveness summary for a single collector
+      tags: [Collectors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: health
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  collectorId: { type: string, format: uuid }
+                  online: { type: boolean }
+                  lastSeenAt: { type: string, format: date-time, nullable: true }
+                  isActive: { type: boolean }
+
+  /collectors/enroll:
     post:
-      summary: Enroll a new collector and return its bearer JWT
+      summary: Enroll a remote sonar-collector using a single-use token
+      description: >-
+        Called by the collector itself, not by operators. Operators mint
+        the token via POST /collectors/enrollment-tokens and paste the
+        returned install command on the collector host.
       tags: [Collectors]
       requestBody:
         required: true
@@ -1252,11 +1329,13 @@ paths:
           application/json:
             schema:
               type: object
-              required: [siteId, name]
+              required: [token, name, fingerprint]
               properties:
-                siteId: { type: string, format: uuid }
+                token: { type: string }
                 name: { type: string }
                 hostname: { type: string }
+                fingerprint: { type: string }
+                collectorVersion: { type: string }
       responses:
         "201":
           description: enrolled
@@ -1265,8 +1344,85 @@ paths:
               schema:
                 type: object
                 properties:
-                  id: { type: string, format: uuid }
+                  collectorId: { type: string, format: uuid }
+                  siteId: { type: string, format: uuid }
                   jwt: { type: string }
+                  ingestWs: { type: string }
+
+  /collectors/enrollment-tokens:
+    get:
+      summary: List collector enrollment tokens (active and historical)
+      tags: [Collectors]
+      responses:
+        "200":
+          description: tokens
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+    post:
+      summary: Mint a single-use enrollment token for a remote collector
+      tags: [Collectors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [siteId]
+              properties:
+                siteId: { type: string, format: uuid }
+                label: { type: string }
+                ttlHours: { type: integer, minimum: 1, maximum: 720, default: 72 }
+                maxUses: { type: integer, minimum: 1, maximum: 50, default: 1 }
+      responses:
+        "201":
+          description: token
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, siteId, label, token, expiresAt, maxUses, installCmd, install]
+                properties:
+                  id: { type: string, format: uuid }
+                  siteId: { type: string, format: uuid }
+                  label: { type: string }
+                  token:
+                    type: string
+                    description: "Plaintext bearer token. Returned once at creation; never persisted."
+                  expiresAt: { type: string, format: date-time }
+                  maxUses: { type: integer }
+                  installCmd:
+                    type: string
+                    description: "Legacy alias for install.enrollCmd."
+                  install:
+                    type: object
+                    required: [image, enrollCmd, runCmd, composeFile]
+                    properties:
+                      image: { type: string }
+                      enrollCmd:
+                        type: string
+                        description: "One-shot docker invocation that writes /etc/sonar/collector.json on the target host."
+                      runCmd:
+                        type: string
+                        description: "Long-running docker invocation that connects to the central API."
+                      composeFile:
+                        type: string
+                        description: "Self-contained docker-compose.yml the operator can drop in next to a .env."
+
+  /collectors/enrollment-tokens/{id}:
+    delete:
+      summary: Revoke a collector enrollment token
+      tags: [Collectors]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: revoked }
+        "404": { description: token not found or already revoked }
 
   /alarms:
     get:

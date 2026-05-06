@@ -547,7 +547,12 @@ This is a small internal project. PRs welcome from authorized contributors. Conv
 
 - `gofmt -s` + `go vet` clean before pushing.
 - `go test ./... -race` green.
-- One CalVer bump per release; PRs targeting `main` should not bump VERSION.
+- **Bump CalVer on every change to `main`.** Update `VERSION`,
+  `web/package.json`, `web/package-lock.json`, `internal/api/openapi.yaml`,
+  and `web/src/components/Layout.tsx` together — the operator-facing
+  version on the dev host should match the commit they last deployed.
+  This replaces the older "one bump per release" rule; we now run the
+  pull-only deploy on every merge.
 - Comments explain *why*, not *what*. The code says what.
 
 ## License

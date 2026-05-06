@@ -29,14 +29,29 @@ type createCollectorEnrollmentTokenReq struct {
 	MaxUses  int    `json:"maxUses"`
 }
 
+// collectorInstallBundle bundles every shape of "install one-liner" the
+// UI may want to surface so operators can copy whichever matches their
+// preferred deployment style. EnrollCmd is the one-shot enroll
+// invocation that writes /etc/sonar/collector.json; RunCmd is the
+// long-running container that reads it. ComposeFile is a self-contained
+// docker-compose YAML the operator can drop in next to a .env.
+type collectorInstallBundle struct {
+	Image       string `json:"image"`
+	EnrollCmd   string `json:"enrollCmd"`
+	RunCmd      string `json:"runCmd"`
+	ComposeFile string `json:"composeFile"`
+}
+
 type createCollectorEnrollmentTokenResp struct {
-	ID         string    `json:"id"`
-	SiteID     string    `json:"siteId"`
-	Label      string    `json:"label"`
-	Token      string    `json:"token"`
-	ExpiresAt  time.Time `json:"expiresAt"`
-	MaxUses    int       `json:"maxUses"`
-	InstallCmd string    `json:"installCmd"`
+	ID          string                 `json:"id"`
+	SiteID      string                 `json:"siteId"`
+	Label       string                 `json:"label"`
+	Token       string                 `json:"token"`
+	ExpiresAt   time.Time              `json:"expiresAt"`
+	MaxUses     int                    `json:"maxUses"`
+	InstallCmd  string                 `json:"installCmd"` // legacy alias of install.enrollCmd
+	Install     collectorInstallBundle `json:"install"`
+	CollectorIP string                 `json:"-"` // unused, here so compose can be back-filled later
 }
 
 func (s *Server) handleCreateCollectorEnrollmentToken(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +110,7 @@ func (s *Server) handleCreateCollectorEnrollmentToken(w http.ResponseWriter, r *
 	s.store.Audit(r.Context(), "user", "collector.enroll_token.create", &uid, clientIP(r),
 		map[string]any{"site_id": siteID.String(), "token_id": id.String()})
 
-	cmd := s.collectorDockerInstallHint(r, plaintext)
+	bundle := s.collectorInstallBundle(r, req.Label, plaintext)
 	writeJSON(w, http.StatusCreated, createCollectorEnrollmentTokenResp{
 		ID:         id.String(),
 		SiteID:     siteID.String(),
@@ -103,11 +118,17 @@ func (s *Server) handleCreateCollectorEnrollmentToken(w http.ResponseWriter, r *
 		Token:      plaintext,
 		ExpiresAt:  expires,
 		MaxUses:    req.MaxUses,
-		InstallCmd: cmd,
+		InstallCmd: bundle.EnrollCmd,
+		Install:    bundle,
 	})
 }
 
-func (s *Server) collectorDockerInstallHint(r *http.Request, token string) string {
+// collectorInstallBundle renders ready-to-paste docker invocations for a
+// freshly minted enrollment token. The actual sonar-collector binary
+// expects two commands ("enroll" then "run") and a persistent volume
+// for /etc/sonar/collector.json — surfacing all three forms here means
+// operators don't have to reverse-engineer the CLI from the README.
+func (s *Server) collectorInstallBundle(r *http.Request, label, token string) collectorInstallBundle {
 	base := s.cfg.PublicURL
 	if base == "" {
 		scheme := "https"
@@ -117,12 +138,62 @@ func (s *Server) collectorDockerInstallHint(r *http.Request, token string) strin
 		base = scheme + "://" + r.Host
 	}
 	base = strings.TrimRight(base, "/")
-	return fmt.Sprintf(
-		`docker run -d --name sonar-collector --restart unless-stopped `+
-			`-e SONAR_COLLECTOR_BASE=%q -e SONAR_COLLECTOR_TOKEN=%q `+
-			`ghcr.io/nclgisa/scanray-sonar/collector:latest`,
-		base, token,
+
+	image := s.collectorImageRef()
+	name := strings.TrimSpace(label)
+	if name == "" {
+		name = "collector"
+	}
+	enroll := fmt.Sprintf(
+		"docker volume create sonar-collector-config >/dev/null && "+
+			"docker run --rm "+
+			"-v sonar-collector-config:/etc/sonar "+
+			"-e SONAR_MASTER_KEY=\"$SONAR_MASTER_KEY\" "+
+			"%s enroll --token=%q --base=%q --name=%q",
+		image, token, base, name,
 	)
+	run := fmt.Sprintf(
+		"docker run -d --name sonar-collector --restart unless-stopped "+
+			"-v sonar-collector-config:/etc/sonar "+
+			"-e SONAR_MASTER_KEY=\"$SONAR_MASTER_KEY\" "+
+			"%s run",
+		image,
+	)
+	compose := fmt.Sprintf(`# Save as docker-compose.yml next to a .env that contains
+# SONAR_MASTER_KEY=<same value as central Sonar>
+# Then run "docker compose run --rm sonar-collector enroll --token=%s --base=%s --name=%s"
+# once, followed by "docker compose up -d sonar-collector".
+services:
+  sonar-collector:
+    image: %s
+    restart: unless-stopped
+    volumes:
+      - sonar-collector-config:/etc/sonar
+    environment:
+      SONAR_MASTER_KEY: ${SONAR_MASTER_KEY:?set SONAR_MASTER_KEY same as central Sonar}
+    command: ["run"]
+
+volumes:
+  sonar-collector-config:
+`, token, base, name, image)
+
+	return collectorInstallBundle{
+		Image:       image,
+		EnrollCmd:   enroll,
+		RunCmd:      run,
+		ComposeFile: compose,
+	}
+}
+
+// collectorImageRef returns the canonical image reference operators
+// pull when standing up a remote collector. SONAR_COLLECTOR_IMAGE lets
+// air-gapped or self-hosted lab installs override the default GLCR ref
+// without rebuilding the API.
+func (s *Server) collectorImageRef() string {
+	if v := strings.TrimSpace(s.cfg.CollectorImage); v != "" {
+		return v
+	}
+	return "glcr.nclgisa.org:443/striketeam/scanray-sonar/collector:latest"
 }
 
 type collectorEnrollmentTokenView struct {
