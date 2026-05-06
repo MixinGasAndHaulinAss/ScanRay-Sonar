@@ -13,7 +13,8 @@ var clauseRE = regexp.MustCompile(`^\s*device\.(\w+)\s*(>=|<=|==|!=|>|<)\s*(?:"(
 //
 //	device.FIELD cmp VALUE joined by && (no parentheses yet).
 //
-// Supported fields: cpu_pct (float), mem_used_ratio (float), criticality (string), vendor (string).
+// Supported fields: cpu_pct / cpuPct (float), mem_used_ratio / memUsedRatio (float),
+// criticality (string), vendor (string).
 func EvalMini(expr string, env map[string]any) (bool, error) {
 	expr = strings.TrimSpace(expr)
 	if expr == "" || expr == "false" {

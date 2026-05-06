@@ -2,11 +2,8 @@ package api
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"net/http"
-	"net/smtp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -52,46 +49,11 @@ func (s *Server) handleSMTPTest(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad_request", "SMTP not configured")
 		return
 	}
-	addr := host + ":" + strconv.Itoa(port)
-	msg := []byte("Subject: Sonar SMTP test\r\nTo: " + req.To + "\r\nFrom: " + from +
-		"\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nSonar SMTP test message.\r\n")
-
-	sendErr := func() error {
-		if useTLS {
-			tcfg := &tls.Config{ServerName: host}
-			c, err := smtp.Dial(addr)
-			if err != nil {
-				return err
-			}
-			defer c.Close()
-			if err := c.StartTLS(tcfg); err != nil {
-				return err
-			}
-			auth := smtp.PlainAuth("", user, pass, host)
-			if user != "" {
-				if err := c.Auth(auth); err != nil {
-					return err
-				}
-			}
-			if err := c.Mail(from); err != nil {
-				return err
-			}
-			if err := c.Rcpt(req.To); err != nil {
-				return err
-			}
-			wc, err := c.Data()
-			if err != nil {
-				return err
-			}
-			_, err = wc.Write(msg)
-			if err != nil {
-				return err
-			}
-			return wc.Close()
-		}
-		auth := smtp.PlainAuth("", user, pass, host)
-		return smtp.SendMail(addr, auth, from, []string{req.To}, msg)
-	}()
+	cfg := notify.SMTPConfig{
+		Host: host, Port: port, User: user, Pass: pass, From: from, UseTLS: useTLS,
+	}
+	sendErr := notify.SendMailMsg(r.Context(), cfg, []string{req.To},
+		"Sonar SMTP test", "Sonar SMTP test message.\r\n")
 	if sendErr != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", sendErr.Error())
 		return

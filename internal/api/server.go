@@ -29,6 +29,7 @@ import (
 	scrypto "github.com/NCLGISA/ScanRay-Sonar/internal/crypto"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/db"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/geoip"
+	"github.com/NCLGISA/ScanRay-Sonar/internal/notify"
 )
 
 // Server is the long-lived HTTP/WS service. Construct once via New and
@@ -365,7 +366,15 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 	errCh := make(chan error, 1)
 	if s.nats != nil && s.nats.IsConnected() {
-		eng := alarms.NewEngine(s.pool, s.log.With(slog.String("component", "alarms")), s.nats)
+		var smtpFB *notify.SMTPConfig
+		if s.cfg.SMTP.Host != "" && s.cfg.SMTP.Port > 0 && s.cfg.SMTP.From != "" {
+			smtpFB = &notify.SMTPConfig{
+				Host: s.cfg.SMTP.Host, Port: s.cfg.SMTP.Port,
+				User: s.cfg.SMTP.User, Pass: s.cfg.SMTP.Password,
+				From: s.cfg.SMTP.From, UseTLS: s.cfg.SMTP.TLS,
+			}
+		}
+		eng := alarms.NewEngine(s.pool, s.log.With(slog.String("component", "alarms")), s.nats, s.sealer, s.store, smtpFB)
 		go eng.Run(ctx)
 	}
 	go func() {

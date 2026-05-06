@@ -386,8 +386,37 @@ func (s *Server) ingestMetrics(ctx context.Context, agentID uuid.UUID, f metrics
 		}
 	}
 
+	var siteID uuid.UUID
+	var crit string
+	var hostname string
+	if err := tx.QueryRow(ctx, `
+		SELECT site_id, COALESCE(criticality, 'normal'), hostname FROM agents WHERE id = $1`,
+		agentID).Scan(&siteID, &crit, &hostname); err != nil {
+		return fmt.Errorf("read agent row: %w", err)
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit: %w", err)
+	}
+
+	memRatio := 0.0
+	if ps.Memory.TotalBytes > 0 {
+		memRatio = float64(ps.Memory.UsedBytes) / float64(ps.Memory.TotalBytes)
+	}
+	if s.nats != nil && s.nats.IsConnected() {
+		payload := map[string]any{
+			"agentId":       agentID.String(),
+			"siteId":        siteID.String(),
+			"cpuPct":        ps.CPU.UsagePct,
+			"memUsedRatio":  memRatio,
+			"criticality":   crit,
+			"vendor":        hostname,
+		}
+		if b, err := json.Marshal(payload); err == nil {
+			if err := s.nats.Publish("metrics.agent", b); err != nil {
+				s.log.Debug("metrics.agent publish failed", "err", err, "agent_id", agentID)
+			}
+		}
 	}
 	return nil
 }
