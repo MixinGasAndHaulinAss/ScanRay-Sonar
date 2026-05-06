@@ -26,11 +26,11 @@ type Config struct {
 }
 
 type enrollReqBody struct {
-	Token             string `json:"token"`
-	Name              string `json:"name"`
-	Hostname          string `json:"hostname"`
-	Fingerprint       string `json:"fingerprint"`
-	CollectorVersion  string `json:"collectorVersion"`
+	Token            string `json:"token"`
+	Name             string `json:"name"`
+	Hostname         string `json:"hostname"`
+	Fingerprint      string `json:"fingerprint"`
+	CollectorVersion string `json:"collectorVersion"`
 }
 
 type enrollRespBody struct {

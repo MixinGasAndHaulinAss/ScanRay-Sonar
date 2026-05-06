@@ -28,16 +28,16 @@ func (s *Server) handleGetSiteDiscoverySettings(w http.ResponseWriter, r *http.R
 		Scan(&subnets, &scanInt, &spp, &dod, &udd, &cbInt, &icmp, &cliFeat, &filt)
 	if errors.Is(qerr, pgx.ErrNoRows) {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"siteId":                       sid.String(),
-			"subnets":                      json.RawMessage(`[]`),
-			"scanIntervalSeconds":          3600,
-			"subnetsPerPeriod":             4,
-			"deviceOfflineDeleteDays":      30,
-			"unidentifiedDeleteDays":       7,
+			"siteId":                      sid.String(),
+			"subnets":                     json.RawMessage(`[]`),
+			"scanIntervalSeconds":         3600,
+			"subnetsPerPeriod":            4,
+			"deviceOfflineDeleteDays":     30,
+			"unidentifiedDeleteDays":      7,
 			"configBackupIntervalSeconds": 86400,
-			"icmpTimeoutMs":                2000,
-			"cliFeatures":                  map[string]any{},
-			"filterRules":                  json.RawMessage(`{"include":[],"exclude":[]}`),
+			"icmpTimeoutMs":               2000,
+			"cliFeatures":                 map[string]any{},
+			"filterRules":                 json.RawMessage(`{"include":[],"exclude":[]}`),
 		})
 		return
 	}
@@ -60,15 +60,15 @@ func (s *Server) handleGetSiteDiscoverySettings(w http.ResponseWriter, r *http.R
 }
 
 type putDiscoverySettingsReq struct {
-	Subnets                      json.RawMessage `json:"subnets"`
-	ScanIntervalSeconds          *int            `json:"scanIntervalSeconds,omitempty"`
-	SubnetsPerPeriod             *int            `json:"subnetsPerPeriod,omitempty"`
-	DeviceOfflineDeleteDays      *int            `json:"deviceOfflineDeleteDays,omitempty"`
-	UnidentifiedDeleteDays       *int            `json:"unidentifiedDeleteDays,omitempty"`
+	Subnets                     json.RawMessage `json:"subnets"`
+	ScanIntervalSeconds         *int            `json:"scanIntervalSeconds,omitempty"`
+	SubnetsPerPeriod            *int            `json:"subnetsPerPeriod,omitempty"`
+	DeviceOfflineDeleteDays     *int            `json:"deviceOfflineDeleteDays,omitempty"`
+	UnidentifiedDeleteDays      *int            `json:"unidentifiedDeleteDays,omitempty"`
 	ConfigBackupIntervalSeconds *int            `json:"configBackupIntervalSeconds,omitempty"`
-	IcmpTimeoutMs                *int            `json:"icmpTimeoutMs,omitempty"`
-	CliFeatures                  json.RawMessage `json:"cliFeatures,omitempty"`
-	FilterRules                  json.RawMessage `json:"filterRules,omitempty"`
+	IcmpTimeoutMs               *int            `json:"icmpTimeoutMs,omitempty"`
+	CliFeatures                 json.RawMessage `json:"cliFeatures,omitempty"`
+	FilterRules                 json.RawMessage `json:"filterRules,omitempty"`
 }
 
 func (s *Server) handlePutSiteDiscoverySettings(w http.ResponseWriter, r *http.Request) {

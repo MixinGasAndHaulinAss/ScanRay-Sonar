@@ -109,10 +109,10 @@ func firstNonEmpty(a, b string) string {
 }
 
 type patchWebhookReq struct {
-	Name           *string `json:"name,omitempty"`
-	URL            *string `json:"url,omitempty"`
-	IsActive       *bool   `json:"isActive,omitempty"`
-	SigningSecret  *string `json:"signingSecret,omitempty"`
+	Name          *string `json:"name,omitempty"`
+	URL           *string `json:"url,omitempty"`
+	IsActive      *bool   `json:"isActive,omitempty"`
+	SigningSecret *string `json:"signingSecret,omitempty"`
 }
 
 func (s *Server) handlePatchWebhook(w http.ResponseWriter, r *http.Request) {

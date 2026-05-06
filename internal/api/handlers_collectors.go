@@ -95,7 +95,7 @@ func (s *Server) handleCreateCollectorEnrollmentToken(w http.ResponseWriter, r *
 	s.store.Audit(r.Context(), "user", "collector.enroll_token.create", &uid, clientIP(r),
 		map[string]any{"site_id": siteID.String(), "token_id": id.String()})
 
-	cmd := collectorDockerInstallHint(r, plaintext)
+	cmd := s.collectorDockerInstallHint(r, plaintext)
 	writeJSON(w, http.StatusCreated, createCollectorEnrollmentTokenResp{
 		ID:         id.String(),
 		SiteID:     siteID.String(),
@@ -191,11 +191,11 @@ func (s *Server) handleRevokeCollectorEnrollmentToken(w http.ResponseWriter, r *
 // ---- Collector probe enrollment -------------------------------------------
 
 type collectorEnrollReq struct {
-	Token             string `json:"token"`
-	Name              string `json:"name"`
-	Hostname          string `json:"hostname"`
-	Fingerprint       string `json:"fingerprint"`
-	CollectorVersion  string `json:"collectorVersion"`
+	Token            string `json:"token"`
+	Name             string `json:"name"`
+	Hostname         string `json:"hostname"`
+	Fingerprint      string `json:"fingerprint"`
+	CollectorVersion string `json:"collectorVersion"`
 }
 
 type collectorEnrollResp struct {
@@ -378,14 +378,14 @@ func (s *Server) runCollectorHeartbeatTouch(ctx context.Context, collectorID uui
 // ---- Collector REST ---------------------------------------------------------
 
 type collectorView struct {
-	ID                 uuid.UUID  `json:"id"`
-	SiteID             uuid.UUID  `json:"siteId"`
-	Name               string     `json:"name"`
-	Hostname           string     `json:"hostname"`
-	CollectorVersion   string     `json:"collectorVersion"`
-	LastSeenAt         *time.Time `json:"lastSeenAt,omitempty"`
-	IsActive           bool       `json:"isActive"`
-	CreatedAt          time.Time  `json:"createdAt"`
+	ID               uuid.UUID  `json:"id"`
+	SiteID           uuid.UUID  `json:"siteId"`
+	Name             string     `json:"name"`
+	Hostname         string     `json:"hostname"`
+	CollectorVersion string     `json:"collectorVersion"`
+	LastSeenAt       *time.Time `json:"lastSeenAt,omitempty"`
+	IsActive         bool       `json:"isActive"`
+	CreatedAt        time.Time  `json:"createdAt"`
 }
 
 func (s *Server) handleListCollectors(w http.ResponseWriter, r *http.Request) {

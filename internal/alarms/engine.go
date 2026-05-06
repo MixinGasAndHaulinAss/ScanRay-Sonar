@@ -107,10 +107,10 @@ func (e *Engine) onMetric(msg *nats.Msg) {
 	memRatio, _ := toFloat64(payload["memUsedRatio"])
 	crit, _ := payload["criticality"].(string)
 	env := map[string]any{
-		"cpu_pct":          cpu,
-		"mem_used_ratio":   memRatio,
-		"criticality":      crit,
-		"vendor":           payload["vendor"],
+		"cpu_pct":        cpu,
+		"mem_used_ratio": memRatio,
+		"criticality":    crit,
+		"vendor":         payload["vendor"],
 	}
 
 	e.mu.RLock()

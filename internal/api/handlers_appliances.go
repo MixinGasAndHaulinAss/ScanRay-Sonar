@@ -228,6 +228,7 @@ type updateApplianceReq struct {
 	PollIntervalSeconds *int      `json:"pollIntervalSeconds,omitempty"`
 	IsActive            *bool     `json:"isActive,omitempty"`
 	Tags                *[]string `json:"tags,omitempty"`
+	Criticality         *string   `json:"criticality,omitempty"`
 
 	// Credential rotation. SNMPVersion alone is not enough to trigger
 	// a re-seal — the caller must also send the matching secret(s).

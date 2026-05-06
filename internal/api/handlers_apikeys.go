@@ -45,8 +45,8 @@ func (s *Server) handleListAPIKeys(w http.ResponseWriter, r *http.Request) {
 }
 
 type createAPIKeyReq struct {
-	Name      string    `json:"name"`
-	Scopes    []string  `json:"scopes"`
+	Name      string     `json:"name"`
+	Scopes    []string   `json:"scopes"`
 	ExpiresAt *time.Time `json:"expiresAt"`
 }
 

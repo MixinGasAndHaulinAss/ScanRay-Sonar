@@ -82,11 +82,11 @@ func (s *Server) handleDiscoveryDevices(w http.ResponseWriter, r *http.Request) 
 		var (
 			id, siteID, siteName, ip, hostname, vendor string
 			identified                                 bool
-			protocols                                []string
-			meta                                     []byte
-			lastSeen, firstSeen                      *time.Time
-			collID                                   *string
-			collName                                 *string
+			protocols                                  []string
+			meta                                       []byte
+			lastSeen, firstSeen                        *time.Time
+			collID                                     *string
+			collName                                   *string
 		)
 		if err := rows.Scan(&id, &siteID, &siteName, &ip, &hostname, &vendor,
 			&identified, &protocols, &meta, &lastSeen, &firstSeen, &collID, &collName); err != nil {
@@ -164,12 +164,12 @@ func (s *Server) handleDiscoveryNetworks(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		row := map[string]any{
-			"siteId":               sid,
-			"siteName":             name,
-			"subnets":              json.RawMessage(subnets),
-			"scanIntervalSeconds":  scanInt,
-			"deviceCount":          devCount,
-			"lastScanAt":           lastSeen,
+			"siteId":              sid,
+			"siteName":            name,
+			"subnets":             json.RawMessage(subnets),
+			"scanIntervalSeconds": scanInt,
+			"deviceCount":         devCount,
+			"lastScanAt":          lastSeen,
 		}
 		if collAgg != nil && *collAgg != "" {
 			row["collectorIds"] = strings.Split(*collAgg, ",")

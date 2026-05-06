@@ -10,12 +10,12 @@ import (
 
 func (s *Server) handleCreateAlarmRule(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		SiteID      *string   `json:"siteId"`
-		Name        string    `json:"name"`
-		Severity    string    `json:"severity"`
-		Expression  string    `json:"expression"`
-		ChannelIDs  []string  `json:"channelIds"`
-		Enabled     *bool     `json:"enabled"`
+		SiteID     *string  `json:"siteId"`
+		Name       string   `json:"name"`
+		Severity   string   `json:"severity"`
+		Expression string   `json:"expression"`
+		ChannelIDs []string `json:"channelIds"`
+		Enabled    *bool    `json:"enabled"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" || req.Expression == "" || req.Severity == "" {
 		writeErr(w, http.StatusBadRequest, "bad_request", "name, severity, expression required")

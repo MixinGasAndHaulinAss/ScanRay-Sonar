@@ -10,7 +10,9 @@ import (
 var clauseRE = regexp.MustCompile(`^\s*device\.(\w+)\s*(>=|<=|==|!=|>|<)\s*(?:"([^"]*)"|\s*([\d.+-eE]+))\s*$`)
 
 // EvalMini evaluates a constrained DSL used by alarm_rules.expression:
-//   device.FIELD cmp VALUE joined by && (no parentheses yet).
+//
+//	device.FIELD cmp VALUE joined by && (no parentheses yet).
+//
 // Supported fields: cpu_pct (float), mem_used_ratio (float), criticality (string), vendor (string).
 func EvalMini(expr string, env map[string]any) (bool, error) {
 	expr = strings.TrimSpace(expr)

@@ -23,8 +23,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 
-	"github.com/NCLGISA/ScanRay-Sonar/internal/auth"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/alarms"
+	"github.com/NCLGISA/ScanRay-Sonar/internal/auth"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/config"
 	scrypto "github.com/NCLGISA/ScanRay-Sonar/internal/crypto"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/db"

@@ -106,12 +106,12 @@ func (s *Server) handleCollectorSNMPResult(w http.ResponseWriter, r *http.Reques
 		memRatio = float64(*snap.Chassis.MemUsedBytes) / float64(*snap.Chassis.MemTotalBytes)
 	}
 	payload, _ := json.Marshal(map[string]any{
-		"applianceId":    aid.String(),
-		"siteId":         siteID.String(),
-		"vendor":         vendor,
-		"criticality":    crit,
-		"cpuPct":         cpu,
-		"memUsedRatio":   memRatio,
+		"applianceId":  aid.String(),
+		"siteId":       siteID.String(),
+		"vendor":       vendor,
+		"criticality":  crit,
+		"cpuPct":       cpu,
+		"memUsedRatio": memRatio,
 	})
 	if s.nats != nil && s.nats.IsConnected() {
 		_ = s.nats.Publish("metrics.appliance", payload)
