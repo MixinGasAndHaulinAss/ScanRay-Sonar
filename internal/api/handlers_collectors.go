@@ -155,9 +155,15 @@ func (s *Server) collectorInstallBundle(r *http.Request, label, token string) co
 	//      mismatches because the request egresses through Docker's
 	//      NAT instead of the host route. Host networking sidesteps
 	//      both.
+	// We deliberately do NOT pre-create the named volume — letting
+	// `docker run -v sonar-collector-config:/etc/sonar` auto-create it
+	// on first mount triggers Docker's volume-seeding behaviour, which
+	// copies the image's /etc/sonar directory (and its nonroot
+	// ownership) into the new volume. `docker volume create` produces
+	// a root-owned empty volume that the distroless nonroot user can't
+	// write to (manifests as "permission denied" on collector.json.tmp).
 	enroll := fmt.Sprintf(
-		"docker volume create sonar-collector-config >/dev/null && "+
-			"docker run --rm --network host "+
+		"docker run --rm --network host "+
 			"-v sonar-collector-config:/etc/sonar "+
 			"-e SONAR_MASTER_KEY=\"$SONAR_MASTER_KEY\" "+
 			"%s enroll --token=%q --base=%q --name=%q",
@@ -174,6 +180,11 @@ func (s *Server) collectorInstallBundle(r *http.Request, label, token string) co
 # SONAR_MASTER_KEY=<same value as central Sonar>
 # Then run "docker compose run --rm sonar-collector enroll --token=%s --base=%s --name=%s"
 # once, followed by "docker compose up -d sonar-collector".
+#
+# Upgrading from an older collector image? If you previously created
+# the sonar-collector-config volume manually, delete it once
+# (docker volume rm sonar-collector-config) so the new image can
+# re-seed it with the correct nonroot ownership.
 services:
   sonar-collector:
     image: %s

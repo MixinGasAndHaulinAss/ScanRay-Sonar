@@ -251,7 +251,7 @@ export default function Collectors() {
             </button>
             <span className="text-[11px] text-emerald-400/80">
               {issuedTab === "enroll" &&
-                "Sets SONAR_MASTER_KEY in your shell first, then run this to write /etc/sonar/collector.json into the docker volume."}
+                "Export SONAR_MASTER_KEY in your shell first, then run this to write /etc/sonar/collector.json into a freshly seeded docker volume. If you previously created sonar-collector-config by hand, run docker volume rm sonar-collector-config first."}
               {issuedTab === "run" &&
                 "Run after enrollment succeeds. Container reconnects automatically; auto-restarts on crash."}
               {issuedTab === "compose" &&
