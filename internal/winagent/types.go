@@ -21,12 +21,12 @@ type Inventory struct {
 }
 
 type OSInfo struct {
-	Name          string `json:"name"`          // Win32_OperatingSystem.Caption
-	Version       string `json:"version"`       // .Version
-	Architecture  string `json:"architecture"`  // .OSArchitecture
-	InstallDate   string `json:"installDate"`   // .InstallDate
-	LastBootUp    string `json:"lastBootUp"`    // .LastBootUpTime
-	BuildNumber   string `json:"buildNumber"`   // .BuildNumber
+	Name         string `json:"name"`         // Win32_OperatingSystem.Caption
+	Version      string `json:"version"`      // .Version
+	Architecture string `json:"architecture"` // .OSArchitecture
+	InstallDate  string `json:"installDate"`  // .InstallDate
+	LastBootUp   string `json:"lastBootUp"`   // .LastBootUpTime
+	BuildNumber  string `json:"buildNumber"`  // .BuildNumber
 }
 
 type Computer struct {
@@ -53,10 +53,10 @@ type NIC struct {
 }
 
 type Disk struct {
-	Mount       string `json:"mount"`
-	FSType      string `json:"fsType,omitempty"`
-	SizeBytes   int64  `json:"sizeBytes"`
-	FreeBytes   int64  `json:"freeBytes"`
+	Mount     string `json:"mount"`
+	FSType    string `json:"fsType,omitempty"`
+	SizeBytes int64  `json:"sizeBytes"`
+	FreeBytes int64  `json:"freeBytes"`
 }
 
 type Program struct {

@@ -127,10 +127,10 @@ func Collect(ctx context.Context) (*Inventory, error) {
 	}
 
 	var bios []struct {
-		Manufacturer  string
+		Manufacturer      string
 		SMBIOSBIOSVersion string
-		SerialNumber  string
-		ReleaseDate   string
+		SerialNumber      string
+		ReleaseDate       string
 	}
 	if err := wmi.Query("SELECT Manufacturer, SMBIOSBIOSVersion, SerialNumber, ReleaseDate FROM Win32_BIOS", &bios); err == nil && len(bios) > 0 {
 		inv.BIOS = BIOSInfo{
@@ -145,11 +145,11 @@ func Collect(ctx context.Context) (*Inventory, error) {
 	}
 
 	var nics []struct {
-		Description           string
-		MACAddress            string
-		IPAddress             []string
-		Speed                 uint64
-		NetConnectionStatus   uint16
+		Description         string
+		MACAddress          string
+		IPAddress           []string
+		Speed               uint64
+		NetConnectionStatus uint16
 	}
 	if err := wmi.Query("SELECT Description, MACAddress, IPAddress, Speed, NetConnectionStatus FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled=TRUE", &nics); err == nil {
 		for _, n := range nics {
@@ -164,10 +164,10 @@ func Collect(ctx context.Context) (*Inventory, error) {
 	}
 
 	var disks []struct {
-		Name      string
+		Name       string
 		FileSystem string
-		Size      uint64
-		FreeSpace uint64
+		Size       uint64
+		FreeSpace  uint64
 	}
 	if err := wmi.Query("SELECT Name, FileSystem, Size, FreeSpace FROM Win32_LogicalDisk WHERE DriveType=3", &disks); err == nil {
 		for _, d := range disks {

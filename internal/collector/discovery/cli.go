@@ -7,11 +7,11 @@ import "strings"
 // order until one returns output that looks like a config; the first matching
 // vendor wins for identification.
 type VendorProfile struct {
-	Name           string
-	IdentifyCmd    string
-	IdentifyMatch  []string
-	ConfigCmds     []string
-	NeedsEnable    bool
+	Name          string
+	IdentifyCmd   string
+	IdentifyMatch []string
+	ConfigCmds    []string
+	NeedsEnable   bool
 }
 
 // VendorProfiles is a small library that's good enough to identify the most

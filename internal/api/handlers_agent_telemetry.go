@@ -405,12 +405,12 @@ func (s *Server) ingestMetrics(ctx context.Context, agentID uuid.UUID, f metrics
 	}
 	if s.nats != nil && s.nats.IsConnected() {
 		payload := map[string]any{
-			"agentId":       agentID.String(),
-			"siteId":        siteID.String(),
-			"cpuPct":        ps.CPU.UsagePct,
-			"memUsedRatio":  memRatio,
-			"criticality":   crit,
-			"vendor":        hostname,
+			"agentId":      agentID.String(),
+			"siteId":       siteID.String(),
+			"cpuPct":       ps.CPU.UsagePct,
+			"memUsedRatio": memRatio,
+			"criticality":  crit,
+			"vendor":       hostname,
 		}
 		if b, err := json.Marshal(payload); err == nil {
 			if err := s.nats.Publish("metrics.agent", b); err != nil {

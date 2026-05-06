@@ -20,10 +20,10 @@ type VMwareCred struct {
 // VMwareInventory is the (intentionally narrow) shape the poller wants back
 // from vCenter: hosts, VMs, datacenters, and last-poll timestamp.
 type VMwareInventory struct {
-	Hosts       []VMwareHost   `json:"hosts"`
-	VMs         []VMwareVM     `json:"vms"`
-	Datacenters []string       `json:"datacenters"`
-	CollectedAt time.Time      `json:"collectedAt"`
+	Hosts       []VMwareHost `json:"hosts"`
+	VMs         []VMwareVM   `json:"vms"`
+	Datacenters []string     `json:"datacenters"`
+	CollectedAt time.Time    `json:"collectedAt"`
 }
 
 type VMwareHost struct {

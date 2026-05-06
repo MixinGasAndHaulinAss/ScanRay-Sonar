@@ -293,15 +293,15 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-	edges[k] = &topologyEdge{
-		From:     localID,
-		To:       remoteID,
-		FromPort: localPort,
-		ToPort:   remotePortID,
-		Protocol: proto,
-		OperUp:   operUp,
-		LinkKind: topologyLayer2Kind(proto, localPort),
-	}
+		edges[k] = &topologyEdge{
+			From:     localID,
+			To:       remoteID,
+			FromPort: localPort,
+			ToPort:   remotePortID,
+			Protocol: proto,
+			OperUp:   operUp,
+			LinkKind: topologyLayer2Kind(proto, localPort),
+		}
 
 		// Make sure foreign nodes exist in the response. We collect
 		// them here and merge after the loop so multiple appliances
