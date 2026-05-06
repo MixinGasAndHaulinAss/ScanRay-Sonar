@@ -15,10 +15,10 @@
 #   docker compose -f docker-compose.yml -f docker-compose.registry.yml pull
 #   docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d
 #
-# IMAGE_TAG defaults to `latest` (master HEAD) but can pin to any GLCR
-# tag — :<short-sha>, :<VERSION>, or a release tag — for rollbacks or
-# version freezing. Persist the pin by adding `IMAGE_TAG=2026.5.5.8`
-# (or whichever) to /opt/scanraysonar/.env on the deploy host.
+# IMAGE_TAG selects the GLCR tag for BOTH sonar-api and sonar-poller (keep them uniform).
+# `scripts/deploy-registry.sh` exports IMAGE_TAG from the repo VERSION file after git pull
+# unless IMAGE_TAG is already set (e.g. in the shell or `.env`). Manual compose without
+# that script still defaults IMAGE_TAG to `latest` here only if unset everywhere else.
 #
 # In Phase 1 (current) this file is committed but unused. dev still
 # runs the build-on-host scripts/deploy.sh.

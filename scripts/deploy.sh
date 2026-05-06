@@ -34,9 +34,10 @@ git pull --ff-only
 # Read VERSION *after* the pull so the image label matches the source
 # tree we just fetched. Reading earlier means a release-bumping commit
 # in the same pull would build with the previous image label.
-VERSION="$(cat VERSION)"
+VERSION="$(tr -d '[:space:]' < VERSION)"
 echo "Deploying ScanRay Sonar v${VERSION}"
 export SONAR_VERSION="$VERSION"
+export SCANRAY_STACK_VERSION="$VERSION"
 
 docker compose pull --ignore-pull-failures
 docker compose up -d --build --remove-orphans

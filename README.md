@@ -412,7 +412,8 @@ Today the dev host runs `git pull && docker compose up --build` (build-on-host).
 ```bash
 echo "$DEPLOY_TOKEN" | docker login glcr.nclgisa.org:443 -u sonar-read --password-stdin
 git remote set-url origin "https://sonar-read:$DEPLOY_TOKEN@gitlab.nclgisa.org/StrikeTeam/Scanray-Sonar.git"
-echo "IMAGE_TAG=latest" >> /opt/scanraysonar/.env
+# Optional explicit IMAGE_TAG (omit when using scripts/deploy-registry.sh — it pins to VERSION CalVer).
+# echo "IMAGE_TAG=latest" >> /opt/scanraysonar/.env
 
 # Replace deploy.sh contents with:
 git pull origin main
@@ -420,13 +421,13 @@ docker compose -f docker-compose.yml -f docker-compose.registry.yml pull
 docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d
 ```
 
-This shrinks deploys from ~3 min to ~10 seconds and removes the build toolchain from the deploy host. Pin a specific version for rollback by setting `IMAGE_TAG=2026.5.5.8` (or `:<short-sha>`) in `/opt/scanraysonar/.env`.
+This shrinks deploys from ~3 min to ~10 seconds and removes the build toolchain from the deploy host. **[`scripts/deploy-registry.sh`](scripts/deploy-registry.sh)** pulls **`:$VERSION`** from GLCR for **both** `sonar-api` and `sonar-poller` by default (`IMAGE_TAG` defaults from the repo `VERSION` after `git pull`), exports **`SCANRAY_STACK_VERSION`** so every stack container gets label **`com.scanraysonar.release`**, and runs **`docker compose up -d --pull always --force-recreate`**. Override with **`IMAGE_TAG=latest`** (shell env takes precedence over `.env`) only when you intentionally want the moving `:latest` tag.
 
 #### After each change on `main` (operators + automation)
 
-1. Wait for the GitLab pipeline on `main` to finish **green** (images published to GLCR, including `:latest`).
+1. Wait for the GitLab pipeline on `main` to finish **green** (images published to GLCR — `:latest`, `:short-sha`, and **`:$VERSION`** CalVer).
 2. On dev: `cd /opt/scanraysonar` and `git pull` so the checkout matches `main`. If you mirror only to GitHub, wait until `mirror:github` completes or pull from GitLab directly — a stale mirror leaves old `VERSION` and old compose refs even after CI publishes new images.
-3. Run **`./scripts/deploy-registry.sh`** — pulls `sonar-api` / `sonar-poller` from GLCR and **`docker compose up -d --force-recreate`** so running containers pick up new image digests.
+3. Run **`./scripts/deploy-registry.sh`** — pulls matching **`sonar-api`** / **`sonar-poller`** tags from GLCR and recreates containers (uniform binaries + uniform **`com.scanraysonar.release`** label across Postgres/NATS/MinIO/API/poller).
 
 Skipping step 3 after a code change means dev can keep running an older GLCR digest even when `git pull` advanced.
 

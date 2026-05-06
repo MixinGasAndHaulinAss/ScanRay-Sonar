@@ -10,6 +10,10 @@
 # Optional env:
 #   DEPLOY_REMOTE  git remote to pull (default: origin)
 #   DEPLOY_BRANCH  branch name (default: main)
+#   IMAGE_TAG      GLCR tag for api + poller (default: CalVer read from VERSION after git pull)
+#
+# Defaulting IMAGE_TAG from VERSION keeps sonar-api and sonar-poller on the same registry tag.
+# Override with IMAGE_TAG=latest if you intentionally want the moving :latest pointer.
 
 set -euo pipefail
 
@@ -27,7 +31,11 @@ COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.registry.yml)
 git fetch "$REMOTE" "$BRANCH"
 git pull --ff-only "$REMOTE" "$BRANCH"
 
-echo "Deploy registry mode — tree $(git rev-parse --short HEAD) VERSION $(cat VERSION)"
+STACK_VER="$(tr -d '[:space:]' < VERSION)"
+export SCANRAY_STACK_VERSION="$STACK_VER"
+export IMAGE_TAG="${IMAGE_TAG:-$STACK_VER}"
+
+echo "Deploy registry mode — tree $(git rev-parse --short HEAD) VERSION ${STACK_VER}  GLCR_IMAGE_TAG=${IMAGE_TAG}"
 
 # Pull tagged layers explicitly (logged digest summary), then up again with --pull always so
 # compose resolves :latest immediately before replacing containers — avoids stale local tags.

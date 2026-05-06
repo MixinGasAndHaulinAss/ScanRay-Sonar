@@ -17,11 +17,17 @@
 
 name: scanraysonar
 
+# Every stack container carries com.scanraysonar.release so operators see one CalVer string in
+# `docker inspect` / compatible tooling. `scripts/deploy-registry.sh` exports SCANRAY_STACK_VERSION
+# from VERSION after git pull; build-only hosts may omit it (defaults to label value `unknown`).
+
 services:
   sonar-postgres:
     image: timescale/timescaledb:2.17.2-pg16
     container_name: sonar-postgres
     restart: unless-stopped
+    labels:
+      com.scanraysonar.release: "${SCANRAY_STACK_VERSION:-unknown}"
     environment:
       POSTGRES_DB: ${SONAR_DB_NAME:-sonar}
       POSTGRES_USER: ${SONAR_DB_USER:-sonar}
@@ -41,6 +47,8 @@ services:
     image: nats:2.10-alpine
     container_name: sonar-nats
     restart: unless-stopped
+    labels:
+      com.scanraysonar.release: "${SCANRAY_STACK_VERSION:-unknown}"
     command:
       - "-js"
       - "-sd"
@@ -70,6 +78,8 @@ services:
         VERSION: ${SONAR_VERSION-}
     container_name: sonar-api
     restart: unless-stopped
+    labels:
+      com.scanraysonar.release: "${SCANRAY_STACK_VERSION:-unknown}"
     depends_on:
       sonar-postgres:
         condition: service_healthy
@@ -101,6 +111,8 @@ services:
         VERSION: ${SONAR_VERSION-}
     container_name: sonar-poller
     restart: unless-stopped
+    labels:
+      com.scanraysonar.release: "${SCANRAY_STACK_VERSION:-unknown}"
     depends_on:
       sonar-postgres:
         condition: service_healthy
@@ -115,6 +127,8 @@ services:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
     container_name: sonar-minio
     restart: unless-stopped
+    labels:
+      com.scanraysonar.release: "${SCANRAY_STACK_VERSION:-unknown}"
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${SONAR_MINIO_USER:-minio}
