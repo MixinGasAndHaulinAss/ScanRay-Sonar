@@ -415,12 +415,20 @@ git remote set-url origin "https://sonar-read:$DEPLOY_TOKEN@gitlab.nclgisa.org/S
 echo "IMAGE_TAG=latest" >> /opt/scanraysonar/.env
 
 # Replace deploy.sh contents with:
-git pull origin master
+git pull origin main
 docker compose -f docker-compose.yml -f docker-compose.registry.yml pull
 docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d
 ```
 
 This shrinks deploys from ~3 min to ~10 seconds and removes the build toolchain from the deploy host. Pin a specific version for rollback by setting `IMAGE_TAG=2026.5.5.8` (or `:<short-sha>`) in `/opt/scanraysonar/.env`.
+
+#### After each change on `main` (operators + automation)
+
+1. Wait for the GitLab pipeline on `main` to finish **green** (images published to GLCR, including `:latest`).
+2. On dev: `cd /opt/scanraysonar` and `git pull` so the checkout matches `main`. If you mirror only to GitHub, wait until `mirror:github` completes or pull from GitLab directly — a stale mirror leaves old `VERSION` and old compose refs even after CI publishes new images.
+3. Run **`./scripts/deploy-registry.sh`** — pulls `sonar-api` / `sonar-poller` from GLCR and **`docker compose up -d --force-recreate`** so running containers pick up new image digests.
+
+Skipping step 3 after a code change means dev can keep running an older GLCR digest even when `git pull` advanced.
 
 ### Deploy token rotation (`sonar-read`)
 
