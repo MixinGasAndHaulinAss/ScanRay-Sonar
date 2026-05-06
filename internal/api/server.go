@@ -227,6 +227,7 @@ func (s *Server) Routes() http.Handler {
 
 			r.Get("/documents", s.handleListDocuments)
 			r.Get("/documents/{id}/download", s.handleDownloadDocument)
+			r.Get("/documents/{id}/versions", s.handleListDocumentVersions)
 			r.With(requireRole(auth.RoleSiteAdmin)).Post("/sites/{id}/documents", s.handleUploadDocument)
 
 			r.With(requireRole(auth.RoleSiteAdmin)).Get("/sites/{id}/discovery-settings", s.handleGetSiteDiscoverySettings)

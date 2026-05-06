@@ -3,7 +3,9 @@ package api
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -526,22 +528,77 @@ func (s *Server) handleUploadDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	uid := userIDFromCtx(r.Context())
-	const shaPlaceholder = "sha256-pending"
+	sum := sha256.Sum256(raw)
+	sha := hex.EncodeToString(sum[:])
 	_, err = s.pool.Exec(r.Context(), `
 		INSERT INTO documents (id, site_id, title, mime_type, enc_body, sha256, size_bytes, uploaded_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		docID, siteID, req.Title, req.MimeType, sealed, shaPlaceholder, len(raw), nullableUID(uid))
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (id) DO UPDATE SET
+		  enc_body = EXCLUDED.enc_body,
+		  sha256 = EXCLUDED.sha256,
+		  size_bytes = EXCLUDED.size_bytes,
+		  mime_type = EXCLUDED.mime_type,
+		  title = EXCLUDED.title`,
+		docID, siteID, req.Title, req.MimeType, sealed, sha, len(raw), nullableUID(uid))
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", "insert failed")
 		return
 	}
-	_, _ = s.pool.Exec(r.Context(), `
-		INSERT INTO document_versions (document_id, enc_body, sha256, size_bytes, uploaded_by)
+	if _, verr := s.pool.Exec(r.Context(), `
+		INSERT INTO document_versions (document_id, enc_body, sha256, size_bytes, created_by)
 		VALUES ($1, $2, $3, $4, $5)`,
-		docID, sealed, shaPlaceholder, len(raw), nullableUID(uid))
+		docID, sealed, sha, len(raw), nullableUID(uid)); verr != nil {
+		s.log.Warn("document version insert failed", "err", verr, "documentId", docID)
+	}
 	s.store.Audit(r.Context(), "user", "document.upload", &uid, clientIP(r),
-		map[string]any{"document_id": docID.String(), "site_id": siteID.String()})
-	writeJSON(w, http.StatusCreated, map[string]any{"id": docID.String()})
+		map[string]any{"document_id": docID.String(), "site_id": siteID.String(), "sha256": sha, "size_bytes": len(raw)})
+	writeJSON(w, http.StatusCreated, map[string]any{"id": docID.String(), "sha256": sha, "sizeBytes": len(raw)})
+}
+
+// handleListDocumentVersions returns the upload history for a single document
+// so an operator can audit the chain of overwrites without retrieving bodies.
+func (s *Server) handleListDocumentVersions(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "invalid id")
+		return
+	}
+	var siteID uuid.UUID
+	if err := s.pool.QueryRow(r.Context(), `SELECT site_id FROM documents WHERE id = $1`, id).Scan(&siteID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeErr(w, http.StatusNotFound, "not_found", "document not found")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "server_error", "lookup failed")
+		return
+	}
+	if !apiKeyAllowsSite(r.Context(), siteID) {
+		writeErr(w, http.StatusForbidden, "forbidden", "API key not scoped to this site")
+		return
+	}
+	rows, err := s.pool.Query(r.Context(), `
+		SELECT id, sha256, size_bytes, COALESCE(created_by::text,''), created_at
+		  FROM document_versions WHERE document_id = $1 ORDER BY created_at DESC LIMIT 200`, id)
+	if err != nil {
+		writeJSON(w, http.StatusOK, []any{})
+		return
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	for rows.Next() {
+		var vid int64
+		var sha, by string
+		var sz int64
+		var t time.Time
+		if rows.Scan(&vid, &sha, &sz, &by, &t) != nil {
+			continue
+		}
+		out = append(out, map[string]any{
+			"id": vid, "sha256": sha, "sizeBytes": sz,
+			"createdBy": nullIfEmpty(by), "createdAt": t,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func nullableUID(u uuid.UUID) any {
