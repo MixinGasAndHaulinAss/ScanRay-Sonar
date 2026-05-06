@@ -441,7 +441,7 @@ build:api:
     - chmod +x ci/smart_build.sh
     - >
       ./ci/smart_build.sh api docker/api.Dockerfile
-      "cmd/sonar-api/ cmd/sonar-probe/ internal/api/ internal/auth/ internal/crypto/ internal/db/ internal/geoip/ internal/logging/ internal/probe/ internal/probebins/ internal/version/ web/ docker/api.Dockerfile go.mod go.sum"
+      "VERSION cmd/sonar-api/ cmd/sonar-probe/ internal/api/ internal/auth/ internal/crypto/ internal/db/ internal/geoip/ internal/logging/ internal/probe/ internal/probebins/ internal/version/ web/ docker/api.Dockerfile go.mod go.sum"
 
 build:poller:
   stage: build
@@ -452,7 +452,7 @@ build:poller:
     - chmod +x ci/smart_build.sh
     - >
       ./ci/smart_build.sh poller docker/poller.Dockerfile
-      "cmd/sonar-poller/ internal/poller/ internal/snmp/ internal/auth/ internal/config/ internal/crypto/ internal/db/ internal/logging/ internal/version/ docker/poller.Dockerfile go.mod go.sum"
+      "VERSION cmd/sonar-poller/ internal/poller/ internal/snmp/ internal/auth/ internal/config/ internal/crypto/ internal/db/ internal/logging/ internal/version/ docker/poller.Dockerfile go.mod go.sum"
 
 build:collector:
   stage: build
@@ -463,7 +463,7 @@ build:collector:
     - chmod +x ci/smart_build.sh
     - >
       ./ci/smart_build.sh collector docker/collector.Dockerfile
-      "cmd/sonar-collector/ cmd/sonar-collector-winagent/ internal/collector/ internal/poller/ internal/snmp/ internal/auth/ internal/config/ internal/crypto/ internal/db/ internal/logging/ internal/version/ docker/collector.Dockerfile go.mod go.sum"
+      "VERSION cmd/sonar-collector/ cmd/sonar-collector-winagent/ internal/collector/ internal/poller/ internal/snmp/ internal/auth/ internal/config/ internal/crypto/ internal/db/ internal/logging/ internal/version/ docker/collector.Dockerfile go.mod go.sum"
 
 build:winagent:
   stage: build

@@ -11,6 +11,10 @@
 #   1. Decide whether to do a real `docker build` or just retag the
 #      previous SHA's image as the current SHA. The decision is driven
 #      by a watched-paths diff between $CI_COMMIT_BEFORE_SHA and HEAD.
+#      Each service's watched paths in `.gitlab-ci.yml` must include the
+#      repo-root `VERSION` file so CalVer bumps always rebuild; otherwise
+#      retag-only publishes an image whose `/api/v1/version` still shows the
+#      previous ldflag-injected release.
 #   2. Always-rebuild gates override the diff check:
 #        FORCE_REBUILD=true                  (operator-set CI variable)
 #        $CI_COMMIT_TAG set                  (release pipeline)
@@ -29,7 +33,7 @@
 #
 # Example:
 #   ./ci/smart_build.sh api docker/api.Dockerfile \
-#     "cmd/sonar-api/ internal/api/ web/ docker/api.Dockerfile go.mod go.sum"
+#     "VERSION cmd/sonar-api/ internal/api/ web/ docker/api.Dockerfile go.mod go.sum"
 # =============================================================================
 
 set -euo pipefail
