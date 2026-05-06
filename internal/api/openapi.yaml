@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.5.6.10"
+  version: "2026.5.6.11"
   license:
     name: MIT
 servers:
@@ -1230,3 +1230,212 @@ paths:
       responses:
         "204":
           description: updated
+
+  /collectors:
+    get:
+      summary: List collectors visible to the caller
+      tags: [Collectors]
+      responses:
+        "200":
+          description: collectors
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+    post:
+      summary: Enroll a new collector and return its bearer JWT
+      tags: [Collectors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [siteId, name]
+              properties:
+                siteId: { type: string, format: uuid }
+                name: { type: string }
+                hostname: { type: string }
+      responses:
+        "201":
+          description: enrolled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  jwt: { type: string }
+
+  /alarms:
+    get:
+      summary: List recent alarms
+      tags: [Alarms]
+      responses:
+        "200":
+          description: alarms
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+
+  /alarms/{id}/ack:
+    post:
+      summary: Acknowledge an open alarm without closing it
+      tags: [Alarms]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        "204": { description: acknowledged }
+        "404": { description: alarm not found }
+        "409": { description: already cleared }
+
+  /alarms/{id}/clear:
+    post:
+      summary: Manually clear an open alarm
+      tags: [Alarms]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        "204": { description: cleared }
+        "404": { description: not found or already cleared }
+
+  /alarm-rules:
+    get:
+      summary: List alarm rules
+      tags: [Alarms]
+      responses:
+        "200":
+          description: rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+    post:
+      summary: Create alarm rule
+      tags: [Alarms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, severity, expression]
+              properties:
+                name: { type: string }
+                severity: { type: string, enum: [emergency, critical, warning, info] }
+                expression: { type: string }
+                siteId: { type: string, format: uuid, nullable: true }
+                channelIds:
+                  type: array
+                  items: { type: string, format: uuid }
+                enabled: { type: boolean }
+                forSeconds: { type: integer, minimum: 0 }
+                clearForSeconds: { type: integer, minimum: 0 }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { id: { type: string, format: uuid } }
+
+  /documents/{id}/versions:
+    get:
+      summary: List version history for a document
+      tags: [Documents]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: integer, format: int64 }
+                    sha256: { type: string }
+                    sizeBytes: { type: integer, format: int64 }
+                    createdBy: { type: string, format: uuid, nullable: true }
+                    createdAt: { type: string, format: date-time }
+        "403": { description: API key not scoped to this site }
+        "404": { description: document not found }
+
+  /audit-log:
+    get:
+      summary: Query the audit log with filters
+      tags: [Audit]
+      parameters:
+        - in: query
+          name: action
+          schema: { type: string }
+        - in: query
+          name: actorKind
+          schema: { type: string, enum: [user, api_key, agent, collector, system] }
+        - in: query
+          name: actorId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: since
+          schema: { type: string, format: date-time }
+        - in: query
+          name: until
+          schema: { type: string, format: date-time }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 200, maximum: 1000 }
+      responses:
+        "200":
+          description: audit rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+
+  /sites/{id}/discovery-settings:
+    get:
+      summary: Get site discovery settings
+      tags: [Discovery]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: settings
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+    put:
+      summary: Replace site discovery settings
+      tags: [Discovery]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "204": { description: updated }
