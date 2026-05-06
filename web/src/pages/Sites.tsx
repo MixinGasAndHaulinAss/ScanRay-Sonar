@@ -124,6 +124,12 @@ export default function Sites() {
                       >
                         Map
                       </Link>
+                      <Link
+                        to={`/sites/${s.id}/discovery`}
+                        className="rounded-full border border-ink-700 px-2 py-0.5 text-[10px] uppercase tracking-wide text-sonar-300 hover:bg-ink-800"
+                      >
+                        Discovery
+                      </Link>
                     </div>
                     {s.description && (
                       <div className="text-xs text-slate-500">{s.description}</div>
