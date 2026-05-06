@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import type { Appliance, Site } from "../api/types";
 import { formatRelative } from "../lib/format";
@@ -115,7 +116,15 @@ export default function Sites() {
               return (
                 <tr key={s.id} className="border-t border-ink-800 hover:bg-ink-800/30">
                   <td className="px-4 py-2">
-                    <div className="text-slate-100">{s.name}</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-slate-100">{s.name}</span>
+                      <Link
+                        to={`/sites/${s.id}/map`}
+                        className="rounded-full border border-ink-700 px-2 py-0.5 text-[10px] uppercase tracking-wide text-sonar-300 hover:bg-ink-800"
+                      >
+                        Map
+                      </Link>
+                    </div>
                     {s.description && (
                       <div className="text-xs text-slate-500">{s.description}</div>
                     )}

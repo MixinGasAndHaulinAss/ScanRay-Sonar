@@ -50,6 +50,8 @@ type applianceDetailView struct {
 	UplinkCount         *int            `json:"uplinkCount,omitempty"`
 	LastSnapshotAt      *time.Time      `json:"lastSnapshotAt,omitempty"`
 	LastSnapshot        json.RawMessage `json:"lastSnapshot,omitempty"`
+	CollectorID         *string         `json:"collectorId,omitempty"`
+	Criticality         string          `json:"criticality"`
 }
 
 func (s *Server) handleGetAppliance(w http.ResponseWriter, r *http.Request) {
@@ -65,13 +67,14 @@ func (s *Server) handleGetAppliance(w http.ResponseWriter, r *http.Request) {
 		       sys_descr, sys_name, uptime_seconds, cpu_pct,
 		       mem_used_bytes, mem_total_bytes, if_up_count, if_total_count,
 		       phys_total_count, phys_up_count, uplink_count,
-		       last_snapshot_at, last_snapshot
+		       last_snapshot_at, last_snapshot, collector_id, criticality
 		  FROM appliances
 		 WHERE id = $1
 	`
 	var (
 		v        applianceDetailView
 		lastSnap []byte
+		collID   *uuid.UUID
 	)
 	err = s.pool.QueryRow(r.Context(), q, id).Scan(
 		&v.ID, &v.SiteID, &v.Name, &v.Vendor, &v.Model, &v.Serial, &v.MgmtIP, &v.SNMPVersion,
@@ -80,6 +83,7 @@ func (s *Server) handleGetAppliance(w http.ResponseWriter, r *http.Request) {
 		&v.MemUsedBytes, &v.MemTotalBytes, &v.IfUpCount, &v.IfTotalCount,
 		&v.PhysTotalCount, &v.PhysUpCount, &v.UplinkCount,
 		&v.LastSnapshotAt, &lastSnap,
+		&collID, &v.Criticality,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeErr(w, http.StatusNotFound, "not_found", "appliance not found")
@@ -92,6 +96,10 @@ func (s *Server) handleGetAppliance(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(lastSnap) > 0 {
 		v.LastSnapshot = json.RawMessage(lastSnap)
+	}
+	if collID != nil {
+		s := collID.String()
+		v.CollectorID = &s
 	}
 	writeJSON(w, http.StatusOK, v)
 }

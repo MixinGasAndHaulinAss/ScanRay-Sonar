@@ -167,7 +167,7 @@ export default function Topology() {
   );
 }
 
-function TopologyGraph({ data }: { data: Topology }) {
+export function TopologyGraph({ data }: { data: Topology }) {
   const navigate = useNavigate();
   const [size, setSize] = useState({ w: 1200, h: 720 });
   const wrapRef = (el: HTMLDivElement | null) => {
@@ -219,19 +219,23 @@ function TopologyGraph({ data }: { data: Topology }) {
         edges={edges}
         width={size.w}
         height={size.h}
-        renderEdge={(e, a, b) => (
-          <line
-            key={`${e.from}->${e.to}`}
-            x1={a.x}
-            y1={a.y}
-            x2={b.x}
-            y2={b.y}
-            stroke={e.ref.operUp ? "#475569" : "#1e293b"}
-            strokeWidth={1.4}
-            strokeDasharray={e.ref.operUp ? undefined : "4 4"}
-            opacity={0.7}
-          />
-        )}
+        renderEdge={(e, a, b) => {
+          const layer = Number((e.ref.linkKind as { layer?: unknown } | undefined)?.layer);
+          const sw = layer === 2 ? 2 : 1.4;
+          return (
+            <line
+              key={`${e.from}->${e.to}`}
+              x1={a.x}
+              y1={a.y}
+              x2={b.x}
+              y2={b.y}
+              stroke={e.ref.operUp ? "#475569" : "#1e293b"}
+              strokeWidth={sw}
+              strokeDasharray={e.ref.operUp ? undefined : "4 4"}
+              opacity={0.75}
+            />
+          );
+        }}
         renderNode={(s) => <NodeBubble sim={s} />}
         onNodeClick={(n) => {
           if (n.ref.kind === "appliance") {
@@ -297,11 +301,17 @@ function NodeBubble({ sim }: { sim: SimNode<TopoNode> }) {
 
 function Legend() {
   return (
-    <div className="absolute bottom-3 right-3 flex items-center gap-3 rounded-md border border-ink-800 bg-ink-950/80 px-3 py-1.5 text-[10px] uppercase tracking-wider text-slate-400 backdrop-blur">
-      <Dot color={STATUS_FILL.up} /> up
-      <Dot color={STATUS_FILL.degraded} /> degraded
-      <Dot color={STATUS_FILL.down} /> down
-      <Dot color="#1e293b" ring="#475569" /> foreign
+    <div className="absolute bottom-3 right-3 flex max-w-sm flex-col gap-2 rounded-md border border-ink-800 bg-ink-950/85 px-3 py-2 text-[10px] uppercase tracking-wider text-slate-400 backdrop-blur">
+      <div className="flex flex-wrap items-center gap-3">
+        <Dot color={STATUS_FILL.up} /> up
+        <Dot color={STATUS_FILL.degraded} /> degraded
+        <Dot color={STATUS_FILL.down} /> down
+        <Dot color="#1e293b" ring="#475569" /> foreign
+      </div>
+      <div className="flex flex-wrap items-center gap-3 border-t border-ink-800 pt-2 normal-case tracking-normal text-slate-500">
+        <span className="text-[9px] uppercase tracking-wide text-slate-400">Edges</span>
+        <span>Thicker stroke = layer-2 (LLDP/CDP).</span>
+      </div>
     </div>
   );
 }

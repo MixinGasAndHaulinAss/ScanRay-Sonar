@@ -169,6 +169,49 @@ variables:
         - .gitlab-ci.yml
         - ci/smart_build.sh
 
+.rules-collector:
+  rules:
+    - if: '$FORCE_RUN_ALL == "true"'
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - cmd/sonar-collector/**/*
+        - cmd/sonar-collector-winagent/**/*
+        - internal/collector/**/*
+        - cmd/sonar-poller/**/*
+        - internal/poller/**/*
+        - internal/snmp/**/*
+        - internal/auth/**/*
+        - internal/config/**/*
+        - internal/crypto/**/*
+        - internal/db/**/*
+        - internal/logging/**/*
+        - internal/version/**/*
+        - docker/collector.Dockerfile
+        - go.mod
+        - go.sum
+        - .gitlab-ci.yml
+        - ci/smart_build.sh
+    - if: '$CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes:
+        - cmd/sonar-collector/**/*
+        - cmd/sonar-collector-winagent/**/*
+        - internal/collector/**/*
+        - cmd/sonar-poller/**/*
+        - internal/poller/**/*
+        - internal/snmp/**/*
+        - internal/auth/**/*
+        - internal/config/**/*
+        - internal/crypto/**/*
+        - internal/db/**/*
+        - internal/logging/**/*
+        - internal/version/**/*
+        - docker/collector.Dockerfile
+        - go.mod
+        - go.sum
+        - .gitlab-ci.yml
+        - ci/smart_build.sh
+
 # ---------------------------------------------------------------------------
 # DinD docker job template. The dependency-proxy'd dind image does NOT
 # auto-alias as `docker`, so we set it explicitly — without this,
@@ -253,7 +296,7 @@ lint:dockerfiles:
   <<: *rules-always
   script:
     # Hadolint reads .hadolint.yaml from the repo root automatically.
-    - hadolint docker/api.Dockerfile docker/poller.Dockerfile docker/probe.Dockerfile
+    - hadolint docker/api.Dockerfile docker/poller.Dockerfile docker/collector.Dockerfile docker/probe.Dockerfile
 
 secrets-scan:
   stage: validate
@@ -411,6 +454,29 @@ build:poller:
       ./ci/smart_build.sh poller docker/poller.Dockerfile
       "cmd/sonar-poller/ internal/poller/ internal/snmp/ internal/auth/ internal/config/ internal/crypto/ internal/db/ internal/logging/ internal/version/ docker/poller.Dockerfile go.mod go.sum"
 
+build:collector:
+  stage: build
+  extends: .docker-job
+  needs: ["test:go", "vuln-scan-fs", "secrets-scan", "lint:dockerfiles", "vuln-scan:govulncheck"]
+  rules: !reference [.rules-collector, rules]
+  script:
+    - chmod +x ci/smart_build.sh
+    - >
+      ./ci/smart_build.sh collector docker/collector.Dockerfile
+      "cmd/sonar-collector/ cmd/sonar-collector-winagent/ internal/collector/ internal/poller/ internal/snmp/ internal/auth/ internal/config/ internal/crypto/ internal/db/ internal/logging/ internal/version/ docker/collector.Dockerfile go.mod go.sum"
+
+build:winagent:
+  stage: build
+  image: $GO_IMAGE
+  needs: ["test:go"]
+  rules: !reference [.rules-collector, rules]
+  script:
+    - mkdir -p artifacts
+    - GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o artifacts/sonar-collector-winagent.exe ./cmd/sonar-collector-winagent
+  artifacts:
+    paths:
+      - artifacts/sonar-collector-winagent.exe
+
 # ===========================================================================
 # Stage 4: scan (re-scan the actually-pushed images)
 # ===========================================================================
@@ -452,6 +518,13 @@ scan:trivy-poller:
   needs: ["build:poller"]
   variables:
     SERVICE: poller
+
+scan:trivy-collector:
+  extends: .scan-job
+  rules: !reference [.rules-collector, rules]
+  needs: ["build:collector"]
+  variables:
+    SERVICE: collector
 
 # ===========================================================================
 # Stage 5: package — alias the SHA-tagged image as :latest, :VERSION,
@@ -495,6 +568,13 @@ package:poller:
   needs: ["scan:trivy-poller"]
   variables:
     SERVICE: poller
+
+package:collector:
+  extends: .package-job
+  rules: !reference [.rules-collector, rules]
+  needs: ["scan:trivy-collector"]
+  variables:
+    SERVICE: collector
 
 # ===========================================================================
 # Stage 6: sync — one-way mirror to GitHub

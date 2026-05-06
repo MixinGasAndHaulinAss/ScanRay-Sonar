@@ -2,12 +2,14 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // SNMPCreds is the structured form of `appliances.enc_snmp_creds`.
@@ -40,6 +42,8 @@ type createApplianceReq struct {
 	V3PrivPass          string   `json:"v3PrivPass,omitempty"`
 	PollIntervalSeconds int      `json:"pollIntervalSeconds"`
 	Tags                []string `json:"tags,omitempty"`
+	CollectorID         string   `json:"collectorId,omitempty"`
+	Criticality         string   `json:"criticality,omitempty"`
 }
 
 var validVendors = map[string]bool{
@@ -99,8 +103,45 @@ func (s *Server) handleCreateAppliance(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad_request", "pollIntervalSeconds must be >= 15")
 		return
 	}
+
+	var collectorUUID *uuid.UUID
+	if req.CollectorID != "" {
+		cid, perr := uuid.Parse(req.CollectorID)
+		if perr != nil {
+			writeErr(w, http.StatusBadRequest, "bad_request", "collectorId must be a UUID")
+			return
+		}
+		var collSite uuid.UUID
+		err := s.pool.QueryRow(r.Context(),
+			`SELECT site_id FROM collectors WHERE id = $1 AND is_active`, cid).Scan(&collSite)
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeErr(w, http.StatusBadRequest, "bad_request", "collector not found or inactive")
+			return
+		}
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "server_error", "collector lookup failed")
+			return
+		}
+		if collSite != siteID {
+			writeErr(w, http.StatusBadRequest, "bad_request", "collector belongs to a different site")
+			return
+		}
+		collectorUUID = &cid
+	}
+
 	if req.Tags == nil {
 		req.Tags = []string{}
+	}
+
+	crit := "normal"
+	if req.Criticality != "" {
+		switch req.Criticality {
+		case "low", "normal", "high", "critical":
+			crit = req.Criticality
+		default:
+			writeErr(w, http.StatusBadRequest, "bad_request", "invalid criticality")
+			return
+		}
 	}
 
 	creds := snmpCreds{
@@ -132,16 +173,16 @@ func (s *Server) handleCreateAppliance(w http.ResponseWriter, r *http.Request) {
 	const q = `
 		INSERT INTO appliances (
 		  id, site_id, name, vendor, model, serial, mgmt_ip,
-		  snmp_version, enc_snmp_creds, poll_interval_s, tags
+		  snmp_version, enc_snmp_creds, poll_interval_s, tags, collector_id, criticality
 		)
 		VALUES ($1, $2, $3, $4, NULLIF($5,''), NULLIF($6,''), $7::inet,
-		        $8, $9, $10, $11)
+		        $8, $9, $10, $11, $12, $13)
 		RETURNING id
 	`
 	var insertedID uuid.UUID
 	if err := s.pool.QueryRow(r.Context(), q,
 		id, siteID, req.Name, req.Vendor, req.Model, req.Serial, req.MgmtIP,
-		req.SNMPVersion, sealed, req.PollIntervalSeconds, req.Tags,
+		req.SNMPVersion, sealed, req.PollIntervalSeconds, req.Tags, collectorUUID, crit,
 	).Scan(&insertedID); err != nil {
 		s.log.Warn("create appliance failed", "err", err, "name", req.Name)
 		writeErr(w, http.StatusBadRequest, "bad_request", "appliance exists or invalid")
@@ -152,7 +193,7 @@ func (s *Server) handleCreateAppliance(w http.ResponseWriter, r *http.Request) {
 	s.store.Audit(r.Context(), "user", "appliance.create", &uid, clientIP(r),
 		map[string]any{"appliance_id": insertedID.String(), "name": req.Name, "site_id": siteID.String()})
 
-	writeJSON(w, http.StatusCreated, map[string]any{
+	resp := map[string]any{
 		"id":                  insertedID.String(),
 		"siteId":              siteID.String(),
 		"name":                req.Name,
@@ -163,8 +204,13 @@ func (s *Server) handleCreateAppliance(w http.ResponseWriter, r *http.Request) {
 		"snmpVersion":         req.SNMPVersion,
 		"pollIntervalSeconds": req.PollIntervalSeconds,
 		"tags":                req.Tags,
+		"criticality":         crit,
 		"isActive":            true,
-	})
+	}
+	if collectorUUID != nil {
+		resp["collectorId"] = collectorUUID.String()
+	}
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 // updateApplianceReq is a sparse PATCH body: every field is optional
@@ -192,6 +238,7 @@ type updateApplianceReq struct {
 	V3AuthPass  *string `json:"v3AuthPass,omitempty"`
 	V3PrivProto *string `json:"v3PrivProto,omitempty"`
 	V3PrivPass  *string `json:"v3PrivPass,omitempty"`
+	CollectorID *string `json:"collectorId,omitempty"`
 }
 
 func (s *Server) handleUpdateAppliance(w http.ResponseWriter, r *http.Request) {
@@ -203,6 +250,16 @@ func (s *Server) handleUpdateAppliance(w http.ResponseWriter, r *http.Request) {
 	var req updateApplianceReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		return
+	}
+
+	var curSite uuid.UUID
+	if err := s.pool.QueryRow(r.Context(), `SELECT site_id FROM appliances WHERE id = $1`, id).Scan(&curSite); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeErr(w, http.StatusNotFound, "not_found", "appliance not found")
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "server_error", "load appliance failed")
 		return
 	}
 
@@ -268,6 +325,52 @@ func (s *Server) handleUpdateAppliance(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Tags != nil {
 		add("tags", *req.Tags)
+	}
+	if req.Criticality != nil {
+		switch *req.Criticality {
+		case "low", "normal", "high", "critical":
+			add("criticality", *req.Criticality)
+		default:
+			writeErr(w, http.StatusBadRequest, "bad_request", "invalid criticality")
+			return
+		}
+	}
+
+	if req.CollectorID != nil {
+		effSite := curSite
+		if req.SiteID != nil {
+			sid, perr := uuid.Parse(*req.SiteID)
+			if perr != nil {
+				writeErr(w, http.StatusBadRequest, "bad_request", "siteId must be a UUID")
+				return
+			}
+			effSite = sid
+		}
+		if *req.CollectorID == "" {
+			sets = append(sets, "collector_id = NULL")
+		} else {
+			cid, perr := uuid.Parse(*req.CollectorID)
+			if perr != nil {
+				writeErr(w, http.StatusBadRequest, "bad_request", "collectorId must be a UUID")
+				return
+			}
+			var collSite uuid.UUID
+			err := s.pool.QueryRow(r.Context(),
+				`SELECT site_id FROM collectors WHERE id = $1 AND is_active`, cid).Scan(&collSite)
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeErr(w, http.StatusBadRequest, "bad_request", "collector not found or inactive")
+				return
+			}
+			if err != nil {
+				writeErr(w, http.StatusInternalServerError, "server_error", "collector lookup failed")
+				return
+			}
+			if collSite != effSite {
+				writeErr(w, http.StatusBadRequest, "bad_request", "collector belongs to a different site")
+				return
+			}
+			add("collector_id", cid)
+		}
 	}
 
 	// Credential rotation block — only enter if at least one cred
@@ -339,19 +442,21 @@ func (s *Server) handleUpdateAppliance(w http.ResponseWriter, r *http.Request) {
 	q := "UPDATE appliances SET " + join(sets, ", ") + " WHERE id = $" + itoa(len(args)) +
 		` RETURNING id, site_id, name, vendor, model, serial, host(mgmt_ip),
 		           snmp_version, poll_interval_s, is_active, tags, last_polled_at,
-		           last_error, created_at`
+		           last_error, created_at, collector_id, criticality`
 	var (
-		oid, sid, name, vendor, ip, snmpv string
-		model, serial, lastErr            *string
-		pollSec                           int
-		active                            bool
-		tags                              []string
-		lastPolled                        *time.Time
-		created                           time.Time
+		oid, sid, name, vendor, ip, snmpv, crit string
+		model, serial, lastErr                  *string
+		pollSec                                 int
+		active                                  bool
+		tags                                    []string
+		lastPolled                              *time.Time
+		created                                 time.Time
+		collectorID                             *uuid.UUID
 	)
 	if err := s.pool.QueryRow(r.Context(), q, args...).Scan(
 		&oid, &sid, &name, &vendor, &model, &serial, &ip, &snmpv,
 		&pollSec, &active, &tags, &lastPolled, &lastErr, &created,
+		&collectorID, &crit,
 	); err != nil {
 		s.log.Warn("update appliance failed", "err", err, "id", id.String())
 		writeErr(w, http.StatusBadRequest, "bad_request", "update failed (name/IP conflict?)")
@@ -362,7 +467,7 @@ func (s *Server) handleUpdateAppliance(w http.ResponseWriter, r *http.Request) {
 	s.store.Audit(r.Context(), "user", "appliance.update", &uid, clientIP(r),
 		map[string]any{"appliance_id": id.String(), "creds_rotated": credChange})
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	out := map[string]any{
 		"id":                  oid,
 		"siteId":              sid,
 		"name":                name,
@@ -377,7 +482,12 @@ func (s *Server) handleUpdateAppliance(w http.ResponseWriter, r *http.Request) {
 		"lastPolledAt":        lastPolled,
 		"lastError":           lastErr,
 		"createdAt":           created,
-	})
+		"criticality":         crit,
+	}
+	if collectorID != nil {
+		out["collectorId"] = collectorID.String()
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleDeleteAppliance(w http.ResponseWriter, r *http.Request) {

@@ -111,6 +111,20 @@ services:
       SONAR_DB_HOST: sonar-postgres
       SONAR_NATS_URL: nats://sonar-nats:4222
 
+  sonar-minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: sonar-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${SONAR_MINIO_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${SONAR_MINIO_PASSWORD:-changeme_minio_root}
+    expose:
+      - "9000"
+      - "9001"
+    volumes:
+      - sonar-minio-data:/data
+
 volumes:
   sonar-pgdata:
     name: sonar-pgdata
@@ -118,3 +132,5 @@ volumes:
     name: sonar-natsdata
   sonar-geoip:
     name: sonar-geoip
+  sonar-minio-data:
+    name: sonar-minio-data

@@ -40,6 +40,19 @@ func (s *Server) handleListSites(w http.ResponseWriter, r *http.Request) {
 			CreatedAt:   st.CreatedAt,
 		})
 	}
+	if sc := apiKeySiteScopeFromCtx(r.Context()); sc != nil && sc.Restrict {
+		filtered := make([]siteView, 0, len(out))
+		for _, v := range out {
+			sid, err := uuid.Parse(v.ID)
+			if err != nil {
+				continue
+			}
+			if _, ok := sc.Sites[sid]; ok {
+				filtered = append(filtered, v)
+			}
+		}
+		out = filtered
+	}
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -169,17 +182,18 @@ func (s *Server) handleDeleteSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var appCount, agCount int
+	var appCount, agCount, collCount int
 	if err := s.pool.QueryRow(r.Context(),
 		`SELECT (SELECT COUNT(*) FROM appliances WHERE site_id = $1),
-		        (SELECT COUNT(*) FROM agents WHERE site_id = $1)`, id).
-		Scan(&appCount, &agCount); err != nil {
+		        (SELECT COUNT(*) FROM agents WHERE site_id = $1),
+		        (SELECT COUNT(*) FROM collectors WHERE site_id = $1)`, id).
+		Scan(&appCount, &agCount, &collCount); err != nil {
 		writeErr(w, http.StatusInternalServerError, "server_error", "child count failed")
 		return
 	}
-	if appCount > 0 || agCount > 0 {
+	if appCount > 0 || agCount > 0 || collCount > 0 {
 		writeErr(w, http.StatusConflict, "site_not_empty",
-			"site still has appliances or agents; remove or reassign them first")
+			"site still has appliances, agents, or collectors; remove or reassign them first")
 		return
 	}
 
@@ -604,7 +618,8 @@ func (s *Server) handleListAppliances(w http.ResponseWriter, r *http.Request) {
 	             poll_interval_s, is_active, tags, last_polled_at, last_error, created_at,
 	             sys_name, uptime_seconds, cpu_pct, mem_used_bytes, mem_total_bytes,
 	             if_up_count, if_total_count,
-	             phys_total_count, phys_up_count, uplink_count
+	             phys_total_count, phys_up_count, uplink_count,
+	             collector_id, criticality
 	      FROM appliances`
 	args := []any{}
 	if siteID != "" {
@@ -636,14 +651,16 @@ func (s *Server) handleListAppliances(w http.ResponseWriter, r *http.Request) {
 			memUsed, memTotal                *int64
 			ifUp, ifTotal                    *int
 			physTotal, physUp, uplinks       *int
+			collectorID                      *uuid.UUID
+			criticality                      string
 		)
 		if err := rows.Scan(&id, &sid, &name, &vendor, &model, &serial, &ip, &snmpv, &pollSec, &active, &tags, &lastPolled, &lastErr, &created,
 			&sysName, &uptimeS, &cpuPct, &memUsed, &memTotal, &ifUp, &ifTotal,
-			&physTotal, &physUp, &uplinks); err != nil {
+			&physTotal, &physUp, &uplinks, &collectorID, &criticality); err != nil {
 			writeErr(w, http.StatusInternalServerError, "server_error", "scan failed")
 			return
 		}
-		out = append(out, map[string]any{
+		row := map[string]any{
 			"id":                  id,
 			"siteId":              sid,
 			"name":                name,
@@ -668,7 +685,12 @@ func (s *Server) handleListAppliances(w http.ResponseWriter, r *http.Request) {
 			"physTotalCount":      physTotal,
 			"physUpCount":         physUp,
 			"uplinkCount":         uplinks,
-		})
+			"criticality":         criticality,
+		}
+		if collectorID != nil {
+			row["collectorId"] = collectorID.String()
+		}
+		out = append(out, row)
 	}
 	writeJSON(w, http.StatusOK, out)
 }

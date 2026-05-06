@@ -129,6 +129,7 @@ func (s *Scheduler) reconcile(ctx context.Context) {
 		  FROM appliances
 		 WHERE is_active = TRUE
 		   AND enc_snmp_creds IS NOT NULL
+		   AND collector_id IS NULL
 	`)
 	if err != nil {
 		s.log.Warn("scheduler: list appliances failed", "err", err)
@@ -332,150 +333,11 @@ func bpsDelta(prev, cur uint64, dtSec float64) *uint64 {
 // a transaction so a dashboard reading mid-poll never sees the
 // snapshot updated but samples missing.
 func (s *Scheduler) persist(ctx context.Context, id uuid.UUID, snap snmp.Snapshot) error {
-	jsonBlob, err := json.Marshal(snap)
-	if err != nil {
-		return fmt.Errorf("marshal snapshot: %w", err)
-	}
-
-	var (
-		upCount        int
-		physTotalCount int
-		physUpCount    int
-		uplinkCount    int
-	)
-	for _, ifc := range snap.Interfaces {
-		if ifc.OperUp {
-			upCount++
-		}
-		if ifc.Kind == "physical" {
-			physTotalCount++
-			if ifc.OperUp {
-				physUpCount++
-			}
-		}
-		if ifc.IsUplink {
-			uplinkCount++
-		}
-	}
-
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return fmt.Errorf("begin: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	_, err = tx.Exec(ctx, `
-		UPDATE appliances
-		   SET last_snapshot     = $2::jsonb,
-		       last_snapshot_at  = $3,
-		       sys_descr         = NULLIF($4,''),
-		       sys_name          = NULLIF($5,''),
-		       uptime_seconds    = $6,
-		       cpu_pct           = $7,
-		       mem_used_bytes    = $8,
-		       mem_total_bytes   = $9,
-		       if_up_count       = $10,
-		       if_total_count    = $11,
-		       phys_total_count  = $12,
-		       phys_up_count     = $13,
-		       uplink_count      = $14,
-		       last_polled_at    = $3,
-		       last_error        = NULL
-		 WHERE id = $1
-	`,
-		id,
-		string(jsonBlob),
-		snap.CapturedAt,
-		snap.System.Description,
-		snap.System.Name,
-		snap.System.UptimeSecs,
-		floatPtr(snap.Chassis.CPUPct),
-		uint64Ptr(snap.Chassis.MemUsedBytes),
-		uint64Ptr(snap.Chassis.MemTotalBytes),
-		upCount,
-		len(snap.Interfaces),
-		physTotalCount,
-		physUpCount,
-		uplinkCount,
-	)
-	if err != nil {
-		return fmt.Errorf("update appliances: %w", err)
-	}
-
-	_, err = tx.Exec(ctx, `
-		INSERT INTO appliance_metric_samples
-		  (appliance_id, time, cpu_pct, mem_used_bytes, mem_total_bytes)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (appliance_id, time) DO UPDATE SET
-		  cpu_pct         = EXCLUDED.cpu_pct,
-		  mem_used_bytes  = EXCLUDED.mem_used_bytes,
-		  mem_total_bytes = EXCLUDED.mem_total_bytes
-	`,
-		id, snap.CapturedAt,
-		floatPtr(snap.Chassis.CPUPct),
-		uint64Ptr(snap.Chassis.MemUsedBytes),
-		uint64Ptr(snap.Chassis.MemTotalBytes),
-	)
-	if err != nil {
-		return fmt.Errorf("insert chassis sample: %w", err)
-	}
-
-	// Per-port samples — only emit rows where we computed a rate
-	// (otherwise the chart would just be zeros for the first poll
-	// after a poller restart).
-	batch := &pgx.Batch{}
-	for _, ifc := range snap.Interfaces {
-		if ifc.InBps == nil && ifc.OutBps == nil {
-			continue
-		}
-		batch.Queue(`
-			INSERT INTO appliance_iface_samples
-			  (appliance_id, if_index, time, in_bps, out_bps,
-			   in_errors, out_errors, in_discards, out_discards)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			ON CONFLICT (appliance_id, if_index, time) DO NOTHING
-		`,
-			id, ifc.Index, snap.CapturedAt,
-			uint64Ptr(ifc.InBps), uint64Ptr(ifc.OutBps),
-			int64(ifc.InErrors), int64(ifc.OutErrors),
-			int64(ifc.InDiscards), int64(ifc.OutDiscards),
-		)
-	}
-	if batch.Len() > 0 {
-		br := tx.SendBatch(ctx, batch)
-		for i := 0; i < batch.Len(); i++ {
-			if _, err := br.Exec(); err != nil {
-				_ = br.Close()
-				return fmt.Errorf("iface sample %d: %w", i, err)
-			}
-		}
-		if err := br.Close(); err != nil {
-			return fmt.Errorf("close iface batch: %w", err)
-		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit: %w", err)
-	}
-	return nil
+	return PersistSnapshot(ctx, s.pool, id, snap)
 }
 
-// recordPollError writes the failure to appliances.last_error so
-// operators see it in the list view without having to read logs.
 func (s *Scheduler) recordPollError(ctx context.Context, id uuid.UUID, pollErr error) {
-	if pollErr == nil {
-		return
-	}
-	s.log.Warn("appliance poll failed", "appliance_id", id, "err", pollErr)
-	_, err := s.pool.Exec(ctx, `
-		UPDATE appliances
-		   SET last_error     = $2,
-		       last_polled_at = NOW()
-		 WHERE id = $1
-	`, id, truncate(pollErr.Error(), 500))
-	if err != nil && !errors.Is(err, context.Canceled) {
-		s.log.Warn("recordPollError: db update failed", "appliance_id", id, "err", err)
-	}
+	RecordPollError(ctx, s.pool, s.log, id, pollErr)
 }
 
 func (s *Scheduler) openCreds(id uuid.UUID, sealed []byte) (snmp.Creds, error) {
@@ -500,23 +362,4 @@ func (s *Scheduler) stopAllWorkers() {
 		h.cancel()
 		delete(s.workers, id)
 	}
-}
-
-func floatPtr(p *float64) any {
-	if p == nil {
-		return nil
-	}
-	return *p
-}
-func uint64Ptr(p *uint64) any {
-	if p == nil {
-		return nil
-	}
-	return int64(*p)
-}
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n]
 }

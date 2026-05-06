@@ -451,9 +451,10 @@ func (s *Server) runAgentHeartbeatTouch(ctx context.Context, agentID uuid.UUID) 
 // (omitempty / pointers) leave the corresponding column untouched —
 // the caller can rename, re-tag, or activate independently.
 type updateAgentReq struct {
-	Tags     *[]string `json:"tags,omitempty"`
-	IsActive *bool     `json:"isActive,omitempty"`
-	SiteID   *string   `json:"siteId,omitempty"` // move agent between sites
+	Tags          *[]string `json:"tags,omitempty"`
+	IsActive      *bool     `json:"isActive,omitempty"`
+	SiteID        *string   `json:"siteId,omitempty"` // move agent between sites
+	Criticality   *string   `json:"criticality,omitempty"`
 }
 
 // handleUpdateAgent applies a partial update to an agent row. Used
@@ -510,6 +511,15 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		}
 		add("site_id", *req.SiteID)
 	}
+	if req.Criticality != nil {
+		switch *req.Criticality {
+		case "low", "normal", "high", "critical":
+			add("criticality", *req.Criticality)
+		default:
+			writeErr(w, http.StatusBadRequest, "bad_request", "invalid criticality")
+			return
+		}
+	}
 	if len(sets) == 0 {
 		writeErr(w, http.StatusBadRequest, "bad_request", "no fields to update")
 		return
@@ -517,13 +527,13 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 
 	args = append(args, id)
 	q := "UPDATE agents SET " + join(sets, ", ") + " WHERE id = $" + itoa(len(args)) +
-		` RETURNING id, site_id, hostname, tags, is_active`
+		` RETURNING id, site_id, hostname, tags, is_active, criticality`
 	var (
-		oid, sid, host string
-		tags           []string
-		active         bool
+		oid, sid, host, crit string
+		tags                   []string
+		active                 bool
 	)
-	if err := s.pool.QueryRow(r.Context(), q, args...).Scan(&oid, &sid, &host, &tags, &active); err != nil {
+	if err := s.pool.QueryRow(r.Context(), q, args...).Scan(&oid, &sid, &host, &tags, &active, &crit); err != nil {
 		s.log.Warn("update agent failed", "err", err, "id", id.String())
 		writeErr(w, http.StatusBadRequest, "bad_request", "update failed")
 		return
@@ -532,11 +542,12 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 	s.store.Audit(r.Context(), "user", "agent.update", &uid, clientIP(r),
 		map[string]any{"agent_id": oid, "fields": sets})
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":       oid,
-		"siteId":   sid,
-		"hostname": host,
-		"tags":     tags,
-		"isActive": active,
+		"id":           oid,
+		"siteId":       sid,
+		"hostname":     host,
+		"tags":         tags,
+		"isActive":     active,
+		"criticality":  crit,
 	})
 }
 

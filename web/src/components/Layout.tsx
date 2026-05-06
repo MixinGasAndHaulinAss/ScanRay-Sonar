@@ -10,14 +10,21 @@ import ThemeToggle from "./ThemeToggle";
 // embedded VERSION, fetched below via useQuery.
 const APP_VERSION = "2026.5.5.9";
 
-const navItems: { to: string; label: string; role?: User["role"] }[] = [
+const navItems: { to: string; label: string; roles?: User["role"][] }[] = [
   { to: "/", label: "Dashboard" },
   { to: "/sites", label: "Sites" },
   { to: "/agents", label: "Agents" },
   { to: "/appliances", label: "Appliances" },
+  { to: "/collectors", label: "Collectors" },
   { to: "/topology", label: "Topology" },
   { to: "/world", label: "World" },
-  { to: "/users", label: "Users", role: "superadmin" },
+  { to: "/documents", label: "Documents" },
+  { to: "/alarms", label: "Alarms" },
+  { to: "/api-keys", label: "API keys" },
+  { to: "/settings", label: "Settings", roles: ["siteadmin", "superadmin"] },
+  { to: "/discovery", label: "Discovery", roles: ["superadmin"] },
+  { to: "/audit-log", label: "Audit", roles: ["superadmin"] },
+  { to: "/users", label: "Users", roles: ["superadmin"] },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -75,7 +82,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
           <nav className="flex flex-1 items-center gap-1">
             {navItems
-              .filter((n) => !n.role || me?.role === n.role)
+              .filter((n) => !n.roles || (me?.role != null && n.roles.includes(me.role)))
               .map((n) => (
                 <NavLink
                   key={n.to}

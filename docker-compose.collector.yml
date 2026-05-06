@@ -1,0 +1,25 @@
+# Remote-site ScanRay Sonar collector — enroll once, then `run`.
+#
+#   docker run -d --name sonar-collector --restart unless-stopped \
+#     -e SONAR_MASTER_KEY=<same-as-central> \
+#     -v collector-config:/etc/sonar \
+#     ghcr.io/nclgisa/scanray-sonar/collector:latest \
+#     enroll --token=... --base=https://sonar.example.com --name=site-a
+#
+#   docker run -d ... ghcr.io/nclgisa/scanray-sonar/collector:latest run
+#
+name: sonar-collector-remote
+
+services:
+  sonar-collector:
+    image: ghcr.io/nclgisa/scanray-sonar/collector:${SONAR_VERSION:-latest}
+    restart: unless-stopped
+    volumes:
+      - collector-config:/etc/sonar
+    environment:
+      SONAR_COLLECTOR_CONFIG: /etc/sonar/collector.json
+      SONAR_MASTER_KEY: ${SONAR_MASTER_KEY:?set SONAR_MASTER_KEY same as central Sonar}
+    command: ["run"]
+
+volumes:
+  collector-config:

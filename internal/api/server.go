@@ -24,6 +24,7 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"github.com/NCLGISA/ScanRay-Sonar/internal/auth"
+	"github.com/NCLGISA/ScanRay-Sonar/internal/alarms"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/config"
 	scrypto "github.com/NCLGISA/ScanRay-Sonar/internal/crypto"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/db"
@@ -126,6 +127,16 @@ func (s *Server) Routes() http.Handler {
 		// by an operator. Probe binary download is also unauthenticated
 		// because the install one-liner runs before any JWT exists.
 		r.Post("/agents/enroll", s.handleAgentEnroll)
+		r.Post("/collectors/enroll", s.handleCollectorEnroll)
+
+		r.With(s.collectorAuthRequired).Get("/collectors/me", s.handleCollectorMe)
+		r.With(s.collectorAuthRequired).Get("/collectors/me/jobs", s.handleCollectorJobs)
+		r.With(s.collectorAuthRequired).Get("/collectors/me/snmp-targets", s.handleCollectorSNMPTargets)
+		r.With(s.collectorAuthRequired).Post("/collectors/me/snmp-result", s.handleCollectorSNMPResult)
+		r.With(s.collectorAuthRequired).Post("/collectors/me/snmp-error", s.handleCollectorSNMPError)
+		r.With(s.collectorAuthRequired).Get("/collectors/me/site-credentials", s.handleCollectorSiteCredentials)
+		r.With(s.collectorAuthRequired).Post("/collectors/me/discovery-results", s.handleCollectorDiscoveryResults)
+
 		r.Get("/probe/download/{os}/{arch}", s.handleProbeDownload)
 		r.Get("/probe/install.sh", s.handleProbeInstallScript)
 		r.Get("/probe/install.ps1", s.handleProbeInstallScriptPS1)
@@ -170,6 +181,15 @@ func (s *Server) Routes() http.Handler {
 			r.With(requireRole(auth.RoleSiteAdmin)).Post("/agents/enrollment-tokens", s.handleCreateEnrollmentToken)
 			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/agents/enrollment-tokens/{id}", s.handleRevokeEnrollmentToken)
 
+			r.Get("/collectors", s.handleListCollectors)
+			r.Get("/collectors/{id}", s.handleGetCollector)
+			r.Get("/collectors/{id}/health", s.handleCollectorHealth)
+			r.With(requireRole(auth.RoleSiteAdmin)).Patch("/collectors/{id}", s.handlePatchCollector)
+			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/collectors/{id}", s.handleDeleteCollector)
+			r.With(requireRole(auth.RoleSiteAdmin)).Post("/collectors/enrollment-tokens", s.handleCreateCollectorEnrollmentToken)
+			r.With(requireRole(auth.RoleSiteAdmin)).Get("/collectors/enrollment-tokens", s.handleListCollectorEnrollmentTokens)
+			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/collectors/enrollment-tokens/{id}", s.handleRevokeCollectorEnrollmentToken)
+
 			r.Get("/appliances", s.handleListAppliances)
 			r.With(requireRole(auth.RoleSiteAdmin)).Post("/appliances", s.handleCreateAppliance)
 			r.Get("/appliances/{id}", s.handleGetAppliance)
@@ -177,6 +197,53 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/appliances/{id}/interfaces/{ifIndex}/metrics", s.handleApplianceIfaceMetrics)
 			r.With(requireRole(auth.RoleSiteAdmin)).Patch("/appliances/{id}", s.handleUpdateAppliance)
 			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/appliances/{id}", s.handleDeleteAppliance)
+
+			r.With(requireRole(auth.RoleSuperAdmin)).Get("/audit-log", s.handleAuditLog)
+			r.With(requireRole(auth.RoleSuperAdmin)).Get("/discovery/devices", s.handleDiscoveryDevices)
+			r.With(requireRole(auth.RoleSuperAdmin)).Get("/discovery/networks", s.handleDiscoveryNetworks)
+
+			r.With(requireRole(auth.RoleSiteAdmin)).Get("/settings/smtp", s.handleGetSMTPSettings)
+			r.With(requireRole(auth.RoleSiteAdmin)).Put("/settings/smtp", s.handlePutSMTPSettings)
+			r.With(requireRole(auth.RoleSiteAdmin)).Post("/settings/smtp/test", s.handleSMTPTest)
+			r.With(requireRole(auth.RoleSiteAdmin)).Get("/settings/webhooks", s.handleListWebhooks)
+			r.With(requireRole(auth.RoleSiteAdmin)).Post("/settings/webhooks", s.handleCreateWebhook)
+			r.With(requireRole(auth.RoleSiteAdmin)).Patch("/settings/webhooks/{id}", s.handlePatchWebhook)
+			r.With(requireRole(auth.RoleSiteAdmin)).Post("/settings/webhooks/{id}/test", s.handleWebhookTest)
+			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/settings/webhooks/{id}", s.handleDeleteWebhook)
+
+			r.Get("/alarm-rules", s.handleListAlarmRules)
+			r.With(requireRole(auth.RoleSiteAdmin)).Post("/alarm-rules", s.handleCreateAlarmRule)
+			r.With(requireRole(auth.RoleSiteAdmin)).Patch("/alarm-rules/{id}", s.handlePatchAlarmRule)
+			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/alarm-rules/{id}", s.handleDeleteAlarmRule)
+
+			r.Get("/notification-channels", s.handleListNotificationChannels)
+			r.With(requireRole(auth.RoleSiteAdmin)).Post("/notification-channels", s.handleCreateNotificationChannel)
+			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/notification-channels/{id}", s.handleDeleteNotificationChannel)
+
+			r.Get("/alarms", s.handleListAlarms)
+
+			r.Get("/documents", s.handleListDocuments)
+			r.Get("/documents/{id}/download", s.handleDownloadDocument)
+			r.With(requireRole(auth.RoleSiteAdmin)).Post("/sites/{id}/documents", s.handleUploadDocument)
+
+			r.With(requireRole(auth.RoleSiteAdmin)).Get("/sites/{id}/discovery-settings", s.handleGetSiteDiscoverySettings)
+			r.With(requireRole(auth.RoleSiteAdmin)).Put("/sites/{id}/discovery-settings", s.handlePutSiteDiscoverySettings)
+			r.With(requireRole(auth.RoleSiteAdmin)).Get("/sites/{id}/credentials", s.handleListSiteCredentials)
+			r.With(requireRole(auth.RoleSiteAdmin)).Post("/sites/{id}/credentials", s.handleCreateSiteCredential)
+			r.With(requireRole(auth.RoleSiteAdmin)).Patch("/sites/{id}/credentials/{credId}", s.handlePatchSiteCredential)
+			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/sites/{id}/credentials/{credId}", s.handleDeleteSiteCredential)
+
+			r.Get("/sites/{id}/network-map", s.handleSiteNetworkMap)
+
+			r.Get("/query/devices", s.handleQueryDevices)
+			r.Get("/query/alarms", s.handleQueryAlarms)
+			r.Get("/query/metrics", s.handleQueryMetrics)
+
+			r.Get("/api-keys", s.handleListAPIKeys)
+			r.Post("/api-keys", s.handleCreateAPIKey)
+			r.Put("/api-keys/{id}/sites", s.handlePutAPIKeySites)
+			r.Delete("/api-keys/{id}", s.handleRevokeAPIKey)
+			r.With(requireRole(auth.RoleSuperAdmin)).Get("/admin/api-keys", s.handleSuperListAPIKeys)
 
 			r.Get("/topology", s.handleTopology)
 		})
@@ -188,6 +255,7 @@ func (s *Server) Routes() http.Handler {
 	// require a custom client because most websocket libraries don't
 	// expose them on Upgrade).
 	r.HandleFunc("/agent/ws", s.handleAgentWS)
+	r.HandleFunc("/collector/ws", s.handleCollectorWS)
 
 	// UI live-updates websocket (authenticated).
 	r.With(s.authRequired).HandleFunc("/ws", func(w http.ResponseWriter, req *http.Request) {
@@ -296,6 +364,10 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	}
 
 	errCh := make(chan error, 1)
+	if s.nats != nil && s.nats.IsConnected() {
+		eng := alarms.NewEngine(s.pool, s.log.With(slog.String("component", "alarms")), s.nats)
+		go eng.Run(ctx)
+	}
 	go func() {
 		s.log.Info("listening", "addr", s.cfg.BindAddr, "env", s.cfg.Env)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

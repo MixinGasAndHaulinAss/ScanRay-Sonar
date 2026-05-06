@@ -748,6 +748,8 @@ export interface TopologyEdge {
   /** "both" means the same link was reported by both LLDP and CDP (or by both ends). */
   protocol: "lldp" | "cdp" | "both";
   operUp: boolean;
+  /** Layered link metadata when provided by the API (site network map). */
+  linkKind?: Record<string, unknown>;
 }
 
 export interface Topology {

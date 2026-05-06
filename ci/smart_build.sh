@@ -34,7 +34,7 @@
 
 set -euo pipefail
 
-SERVICE="${1:?service name required (api|poller)}"
+SERVICE="${1:?service name required (api|poller|collector)}"
 DOCKERFILE="${2:?dockerfile path required}"
 WATCHED_PATHS="${3:?space-separated watched paths required}"
 

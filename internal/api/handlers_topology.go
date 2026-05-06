@@ -54,18 +54,27 @@ type topologyNode struct {
 // always "from local-side appliance to remote neighbor" because that's
 // the side we have rich port info for.
 type topologyEdge struct {
-	From     string `json:"from"` // node ID
-	To       string `json:"to"`   // node ID
-	FromPort string `json:"fromPort,omitempty"`
-	ToPort   string `json:"toPort,omitempty"`
-	Protocol string `json:"protocol"` // "lldp" | "cdp" | "both"
-	OperUp   bool   `json:"operUp"`   // local interface oper state
+	From     string         `json:"from"` // node ID
+	To       string         `json:"to"`   // node ID
+	FromPort string         `json:"fromPort,omitempty"`
+	ToPort   string         `json:"toPort,omitempty"`
+	Protocol string         `json:"protocol"` // "lldp" | "cdp" | "both"
+	OperUp   bool           `json:"operUp"`   // local interface oper state
+	LinkKind map[string]any `json:"linkKind,omitempty"`
 }
 
 type topologyResp struct {
 	Nodes       []topologyNode `json:"nodes"`
 	Edges       []topologyEdge `json:"edges"`
 	GeneratedAt time.Time      `json:"generatedAt"`
+}
+
+func topologyLayer2Kind(protocol string) map[string]any {
+	p := strings.ToLower(protocol)
+	if p == "both" {
+		return map[string]any{"layer": float64(2), "protocol": "lldp_cdp"}
+	}
+	return map[string]any{"layer": float64(2), "protocol": p}
 }
 
 // handleTopology builds the graph in three passes:
@@ -228,6 +237,7 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 			// upgrade the protocol marker to "both" when applicable.
 			if existing.Protocol != proto {
 				existing.Protocol = "both"
+				existing.LinkKind = topologyLayer2Kind("both")
 			}
 			if existing.FromPort == "" && localID == existing.From {
 				existing.FromPort = localPort
@@ -247,6 +257,7 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 			ToPort:   remotePortID,
 			Protocol: proto,
 			OperUp:   operUp,
+			LinkKind: topologyLayer2Kind(proto),
 		}
 
 		// Make sure foreign nodes exist in the response. We collect
