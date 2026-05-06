@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net"
@@ -11,6 +10,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// handleCollectorSiteCredentials returns the site's stored credentials with
+// the secret unsealed in plaintext. The collector-auth bearer JWT proves
+// authorization; transit is HTTPS. Audited so a misuse is investigable.
 func (s *Server) handleCollectorSiteCredentials(w http.ResponseWriter, r *http.Request) {
 	cid := collectorIDFromCtx(r.Context())
 	var siteID uuid.UUID
@@ -35,16 +37,27 @@ func (s *Server) handleCollectorSiteCredentials(w http.ResponseWriter, r *http.R
 		ID     string `json:"id"`
 		Kind   string `json:"kind"`
 		Name   string `json:"name"`
-		EncB64 string `json:"encSecretBase64"`
+		Secret string `json:"secret"`
 	}
 	out := []row{}
+	delivered := []string{}
 	for rows.Next() {
 		var id, kind, name string
 		var sealed []byte
 		if rows.Scan(&id, &kind, &name, &sealed) != nil {
 			continue
 		}
-		out = append(out, row{ID: id, Kind: kind, Name: name, EncB64: base64.StdEncoding.EncodeToString(sealed)})
+		plain, err := s.sealer.Open(sealed, []byte("credential:"+id))
+		if err != nil {
+			s.log.Warn("collector cred unseal failed", "credId", id, "err", err)
+			continue
+		}
+		out = append(out, row{ID: id, Kind: kind, Name: name, Secret: string(plain)})
+		delivered = append(delivered, id)
+	}
+	if len(delivered) > 0 {
+		s.store.Audit(r.Context(), "collector", "site_credential.delivered", &cid, clientIP(r),
+			map[string]any{"site_id": siteID.String(), "credential_ids": delivered})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"credentials": out})
 }

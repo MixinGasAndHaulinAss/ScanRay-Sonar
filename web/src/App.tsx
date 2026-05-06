@@ -15,6 +15,7 @@ import ApiKeys from "./pages/ApiKeys";
 import Alarms from "./pages/Alarms";
 import AuditLog from "./pages/AuditLog";
 import SiteDocuments from "./pages/SiteDocuments";
+import SiteDiscoverySettings from "./pages/SiteDiscoverySettings";
 import SiteNetworkMap from "./pages/SiteNetworkMap";
 import World from "./pages/World";
 import Users from "./pages/Users";
@@ -89,6 +90,14 @@ export default function App() {
             <ErrorBoundary label="Site map crashed">
               <SiteNetworkMap />
             </ErrorBoundary>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/sites/:siteId/discovery"
+        element={
+          <RequireAuth>
+            <SiteDiscoverySettings />
           </RequireAuth>
         }
       />
