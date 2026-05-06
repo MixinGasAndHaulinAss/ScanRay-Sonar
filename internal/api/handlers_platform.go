@@ -410,7 +410,9 @@ func nullIfEmpty(s string) any {
 func (s *Server) handleListAlarms(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.pool.Query(r.Context(), `
 		SELECT id, COALESCE(rule_id::text,''), COALESCE(site_id::text,''), target_kind, target_id::text,
-		       severity, title, opened_at, cleared_at
+		       severity, title, opened_at, cleared_at, acked_at,
+		       COALESCE(acked_by::text,''), COALESCE(cleared_by::text,''),
+		       COALESCE(auto_cleared, FALSE)
 		  FROM alarms ORDER BY opened_at DESC LIMIT 500`)
 	if err != nil {
 		writeJSON(w, http.StatusOK, []any{})
@@ -420,16 +422,22 @@ func (s *Server) handleListAlarms(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for rows.Next() {
 		var id int64
-		var ruleID, siteID, tgtKind, tgtID, sev, title string
+		var ruleID, siteID, tgtKind, tgtID, sev, title, ackedBy, clearedBy string
 		var opened time.Time
-		var cleared *time.Time
-		if err := rows.Scan(&id, &ruleID, &siteID, &tgtKind, &tgtID, &sev, &title, &opened, &cleared); err != nil {
+		var cleared, acked *time.Time
+		var autoCleared bool
+		if err := rows.Scan(&id, &ruleID, &siteID, &tgtKind, &tgtID, &sev, &title, &opened, &cleared, &acked, &ackedBy, &clearedBy, &autoCleared); err != nil {
 			continue
 		}
 		out = append(out, map[string]any{
 			"id": id, "ruleId": nullIfEmpty(ruleID), "siteId": nullIfEmpty(siteID),
 			"targetKind": tgtKind, "targetId": tgtID, "severity": sev, "title": title,
-			"openedAt": opened, "clearedAt": cleared,
+			"openedAt":    opened,
+			"clearedAt":   cleared,
+			"ackedAt":     acked,
+			"ackedBy":     nullIfEmpty(ackedBy),
+			"clearedBy":   nullIfEmpty(clearedBy),
+			"autoCleared": autoCleared,
 		})
 	}
 	writeJSON(w, http.StatusOK, out)

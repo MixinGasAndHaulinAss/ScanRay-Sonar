@@ -10,12 +10,14 @@ import (
 
 func (s *Server) handleCreateAlarmRule(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		SiteID     *string  `json:"siteId"`
-		Name       string   `json:"name"`
-		Severity   string   `json:"severity"`
-		Expression string   `json:"expression"`
-		ChannelIDs []string `json:"channelIds"`
-		Enabled    *bool    `json:"enabled"`
+		SiteID          *string  `json:"siteId"`
+		Name            string   `json:"name"`
+		Severity        string   `json:"severity"`
+		Expression      string   `json:"expression"`
+		ChannelIDs      []string `json:"channelIds"`
+		Enabled         *bool    `json:"enabled"`
+		ForSeconds      *int     `json:"forSeconds,omitempty"`
+		ClearForSeconds *int     `json:"clearForSeconds,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" || req.Expression == "" || req.Severity == "" {
 		writeErr(w, http.StatusBadRequest, "bad_request", "name, severity, expression required")
@@ -44,11 +46,19 @@ func (s *Server) handleCreateAlarmRule(w http.ResponseWriter, r *http.Request) {
 		}
 		sitePtr = &sid
 	}
+	forSec := 0
+	if req.ForSeconds != nil && *req.ForSeconds >= 0 {
+		forSec = *req.ForSeconds
+	}
+	clearSec := 0
+	if req.ClearForSeconds != nil && *req.ClearForSeconds >= 0 {
+		clearSec = *req.ClearForSeconds
+	}
 	var id uuid.UUID
 	err := s.pool.QueryRow(r.Context(), `
-		INSERT INTO alarm_rules (site_id, name, severity, expression, channel_ids, enabled, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-		sitePtr, req.Name, req.Severity, req.Expression, chIDs, enabled, nullableUID(uid)).Scan(&id)
+		INSERT INTO alarm_rules (site_id, name, severity, expression, channel_ids, enabled, created_by, for_seconds, clear_for_seconds)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+		sitePtr, req.Name, req.Severity, req.Expression, chIDs, enabled, nullableUID(uid), forSec, clearSec).Scan(&id)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", "insert failed")
 		return
@@ -64,10 +74,12 @@ func (s *Server) handlePatchAlarmRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Name       *string `json:"name,omitempty"`
-		Severity   *string `json:"severity,omitempty"`
-		Expression *string `json:"expression,omitempty"`
-		Enabled    *bool   `json:"enabled,omitempty"`
+		Name            *string `json:"name,omitempty"`
+		Severity        *string `json:"severity,omitempty"`
+		Expression      *string `json:"expression,omitempty"`
+		Enabled         *bool   `json:"enabled,omitempty"`
+		ForSeconds      *int    `json:"forSeconds,omitempty"`
+		ClearForSeconds *int    `json:"clearForSeconds,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", "invalid JSON")
@@ -90,6 +102,12 @@ func (s *Server) handlePatchAlarmRule(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Enabled != nil {
 		add("enabled", *req.Enabled)
+	}
+	if req.ForSeconds != nil && *req.ForSeconds >= 0 {
+		add("for_seconds", *req.ForSeconds)
+	}
+	if req.ClearForSeconds != nil && *req.ClearForSeconds >= 0 {
+		add("clear_for_seconds", *req.ClearForSeconds)
 	}
 	if len(sets) == 0 {
 		writeErr(w, http.StatusBadRequest, "bad_request", "no fields")

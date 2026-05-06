@@ -222,6 +222,8 @@ func (s *Server) Routes() http.Handler {
 			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/notification-channels/{id}", s.handleDeleteNotificationChannel)
 
 			r.Get("/alarms", s.handleListAlarms)
+			r.With(requireRole(auth.RoleSiteAdmin)).Post("/alarms/{id}/ack", s.handleAckAlarm)
+			r.With(requireRole(auth.RoleSiteAdmin)).Post("/alarms/{id}/clear", s.handleClearAlarm)
 
 			r.Get("/documents", s.handleListDocuments)
 			r.Get("/documents/{id}/download", s.handleDownloadDocument)

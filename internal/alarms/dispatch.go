@@ -23,19 +23,22 @@ type AuditSink interface {
 
 // AlarmNotifyEvent carries everything needed to notify channels after an alarm row exists.
 type AlarmNotifyEvent struct {
-	AlarmID          int64
-	RuleID           uuid.UUID
-	RuleName         string
-	RuleExpression   string
-	Severity         string
-	SiteID           uuid.UUID
-	TargetKind       string
-	TargetID         uuid.UUID
-	Title            string
-	DedupKey         string
-	LastValue        json.RawMessage
-	ChannelIDs       []uuid.UUID
-	SMTPFallback     *notify.SMTPConfig // optional env/.ini fallback when DB SMTP empty
+	AlarmID        int64
+	RuleID         uuid.UUID
+	RuleName       string
+	RuleExpression string
+	Severity       string
+	SiteID         uuid.UUID
+	TargetKind     string
+	TargetID       uuid.UUID
+	Title          string
+	DedupKey       string
+	LastValue      json.RawMessage
+	ChannelIDs     []uuid.UUID
+	SMTPFallback   *notify.SMTPConfig // optional env/.ini fallback when DB SMTP empty
+	// Event is "alarm.opened" (default) or "alarm.cleared" — drives subject prefix
+	// and webhook payload `event` field so downstream automations can react.
+	Event string
 }
 
 // Fire resolves channels and sends email + webhook deliveries (best-effort).
@@ -93,7 +96,11 @@ func sendEmailNotify(ctx context.Context, store AuditSink, log *slog.Logger, smt
 		log.Warn("alarm notify: skip email — SMTP incomplete", "channel", ch.ID)
 		return
 	}
-	subject := fmt.Sprintf("[%s] %s", evt.Severity, evt.Title)
+	prefix := evt.Severity
+	if evt.Event == "alarm.cleared" {
+		prefix = "RESOLVED " + evt.Severity
+	}
+	subject := fmt.Sprintf("[%s] %s", prefix, evt.Title)
 	body := buildAlarmEmailBody(evt)
 	sendCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
@@ -115,8 +122,12 @@ func sendWebhookNotify(ctx context.Context, store AuditSink, httpCli *http.Clien
 			map[string]any{"alarmId": evt.AlarmID, "channelId": ch.ID.String(), "kind": "webhook", "error": "missing config.url"})
 		return
 	}
+	event := evt.Event
+	if event == "" {
+		event = "alarm.opened"
+	}
 	payload := map[string]any{
-		"event":      "alarm.opened",
+		"event":      event,
 		"alarmId":    evt.AlarmID,
 		"ruleId":     evt.RuleID.String(),
 		"ruleName":   evt.RuleName,
@@ -195,7 +206,11 @@ func extractEmailRecipients(cfg map[string]any) []string {
 
 func buildAlarmEmailBody(evt AlarmNotifyEvent) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Sonar alarm\r\n\r\n")
+	if evt.Event == "alarm.cleared" {
+		fmt.Fprintf(&b, "Sonar alarm RESOLVED\r\n\r\n")
+	} else {
+		fmt.Fprintf(&b, "Sonar alarm\r\n\r\n")
+	}
 	fmt.Fprintf(&b, "Rule: %s\r\n", evt.RuleName)
 	fmt.Fprintf(&b, "Expression: %s\r\n", evt.RuleExpression)
 	fmt.Fprintf(&b, "Severity: %s\r\n", evt.Severity)

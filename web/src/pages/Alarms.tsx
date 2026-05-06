@@ -89,6 +89,15 @@ export default function Alarms() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notification-channels"] }),
   });
 
+  const ackAlarm = useMutation({
+    mutationFn: (id: string | number) => api.post(`/alarms/${id}/ack`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["alarms"] }),
+  });
+  const clearAlarm = useMutation({
+    mutationFn: (id: string | number) => api.post(`/alarms/${id}/clear`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["alarms"] }),
+  });
+
   if (!me.data) return <p className="text-sm text-slate-500">Loading…</p>;
 
   return (
@@ -126,21 +135,54 @@ export default function Alarms() {
                 <th className="px-3 py-2">Title</th>
                 <th className="px-3 py-2">Target</th>
                 <th className="px-3 py-2">Opened</th>
+                <th className="px-3 py-2">State</th>
+                <th className="px-3 py-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {alarms.data?.map((a) => (
-                <tr key={String(a.id)} className="border-t border-ink-800">
-                  <td className="px-3 py-2">{String(a.severity ?? "")}</td>
-                  <td className="px-3 py-2">{String(a.title ?? "")}</td>
-                  <td className="px-3 py-2 font-mono text-[11px] text-slate-400">
-                    {String(a.targetKind ?? "")}:{String(a.targetId ?? "")}
-                  </td>
-                  <td className="px-3 py-2 text-slate-500">
-                    {a.openedAt ? formatRelative(String(a.openedAt)) : "—"}
-                  </td>
-                </tr>
-              ))}
+              {alarms.data?.map((a) => {
+                const cleared = a.clearedAt as string | null | undefined;
+                const acked = a.ackedAt as string | null | undefined;
+                const auto = a.autoCleared as boolean | undefined;
+                let state = "open";
+                if (cleared) state = auto ? "auto-cleared" : "cleared";
+                else if (acked) state = "acked";
+                return (
+                  <tr key={String(a.id)} className="border-t border-ink-800">
+                    <td className="px-3 py-2">{String(a.severity ?? "")}</td>
+                    <td className="px-3 py-2">{String(a.title ?? "")}</td>
+                    <td className="px-3 py-2 font-mono text-[11px] text-slate-400">
+                      {String(a.targetKind ?? "")}:{String(a.targetId ?? "")}
+                    </td>
+                    <td className="px-3 py-2 text-slate-500">
+                      {a.openedAt ? formatRelative(String(a.openedAt)) : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-slate-400">{state}</td>
+                    <td className="px-3 py-2 text-right">
+                      {canEdit && !cleared && (
+                        <div className="flex justify-end gap-2 text-xs">
+                          {!acked && (
+                            <button
+                              type="button"
+                              className="text-sonar-300 hover:underline"
+                              onClick={() => ackAlarm.mutate(String(a.id))}
+                            >
+                              Ack
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="text-red-400 hover:underline"
+                            onClick={() => clearAlarm.mutate(String(a.id))}
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {!alarms.data?.length && !alarms.isLoading && (
