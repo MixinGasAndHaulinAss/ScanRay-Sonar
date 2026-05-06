@@ -69,12 +69,55 @@ type topologyResp struct {
 	GeneratedAt time.Time      `json:"generatedAt"`
 }
 
-func topologyLayer2Kind(protocol string) map[string]any {
+// topologyLayer2Kind builds the linkKind shape the UI legend keys off of.
+// Layer is 1 (physical / wireless association), 2 (LLDP/CDP discovered
+// neighbors, the common case), or 3 (routing adjacency — populated once
+// Phase 2 OSPF/BGP collection lands). The "wired" / "wireless" subtype is
+// inferred from local interface name; this is a heuristic until SNMP-side
+// wireless association tables are scraped.
+func topologyLayer2Kind(protocol, localPortName string) map[string]any {
 	p := strings.ToLower(protocol)
 	if p == "both" {
-		return map[string]any{"layer": float64(2), "protocol": "lldp_cdp"}
+		p = "lldp_cdp"
 	}
-	return map[string]any{"layer": float64(2), "protocol": p}
+	subtype := "wired"
+	if isWirelessIfName(localPortName) {
+		subtype = "wireless"
+	}
+	return map[string]any{
+		"layer":    float64(2),
+		"protocol": p,
+		"medium":   subtype,
+	}
+}
+
+// topologyLayer3Kind is reserved for OSPF/BGP/static-route adjacencies once
+// the routing collector lands. Exposed here so the UI legend can be wired
+// before the data path catches up.
+func topologyLayer3Kind(routingProto string) map[string]any { //nolint:unused // future-use, keeps legend stable
+	return map[string]any{
+		"layer":    float64(3),
+		"protocol": strings.ToLower(routingProto),
+		"medium":   "routing",
+	}
+}
+
+// isWirelessIfName matches the most common interface naming patterns for
+// wireless trunks (Cisco "Dot11Radio", Aruba "wlan", Mikrotik "wlan").
+func isWirelessIfName(name string) bool {
+	if name == "" {
+		return false
+	}
+	low := strings.ToLower(name)
+	switch {
+	case strings.HasPrefix(low, "dot11radio"),
+		strings.HasPrefix(low, "wlan"),
+		strings.HasPrefix(low, "ath"),
+		strings.Contains(low, "wireless"),
+		strings.Contains(low, "wifi"):
+		return true
+	}
+	return false
 }
 
 // handleTopology builds the graph in three passes:
@@ -237,7 +280,7 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 			// upgrade the protocol marker to "both" when applicable.
 			if existing.Protocol != proto {
 				existing.Protocol = "both"
-				existing.LinkKind = topologyLayer2Kind("both")
+				existing.LinkKind = topologyLayer2Kind("both", localPort)
 			}
 			if existing.FromPort == "" && localID == existing.From {
 				existing.FromPort = localPort
@@ -250,15 +293,15 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		edges[k] = &topologyEdge{
-			From:     localID,
-			To:       remoteID,
-			FromPort: localPort,
-			ToPort:   remotePortID,
-			Protocol: proto,
-			OperUp:   operUp,
-			LinkKind: topologyLayer2Kind(proto),
-		}
+	edges[k] = &topologyEdge{
+		From:     localID,
+		To:       remoteID,
+		FromPort: localPort,
+		ToPort:   remotePortID,
+		Protocol: proto,
+		OperUp:   operUp,
+		LinkKind: topologyLayer2Kind(proto, localPort),
+	}
 
 		// Make sure foreign nodes exist in the response. We collect
 		// them here and merge after the loop so multiple appliances

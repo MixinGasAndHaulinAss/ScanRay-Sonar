@@ -37,6 +37,35 @@ export default function SiteNetworkMap() {
         </div>
       )}
       {data && <TopologyGraph data={data} />}
+      {data && <LinkKindLegend />}
     </div>
+  );
+}
+
+function LinkKindLegend() {
+  return (
+    <div className="flex flex-wrap gap-3 rounded-md border border-ink-800 bg-ink-900/60 p-3 text-xs text-slate-300">
+      <span className="font-semibold text-slate-200">Link kinds:</span>
+      <Swatch color="bg-emerald-500" label="L1 wired" />
+      <Swatch color="bg-cyan-400" label="L1 wireless" />
+      <Swatch color="bg-sonar-400" label="L2 LLDP" />
+      <Swatch color="bg-amber-400" label="L2 CDP" />
+      <Swatch color="bg-violet-400" label="L2 LLDP+CDP (both)" />
+      <Swatch color="bg-rose-500" label="L3 OSPF" />
+      <Swatch color="bg-pink-500" label="L3 BGP" />
+      <Swatch color="bg-orange-500" label="L3 static" />
+      <span className="ml-auto text-[11px] text-slate-500">
+        Layer 3 entries appear once routing-adjacency collection lands in Phase 2.
+      </span>
+    </div>
+  );
+}
+
+function Swatch({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`inline-block h-2.5 w-5 rounded ${color}`} />
+      <span>{label}</span>
+    </span>
   );
 }
