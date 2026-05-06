@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WiX manifest for sonar-collector-winagent. Builds an MSI that installs
+  the agent under %ProgramFiles%\ScanRay\Sonar\winagent and registers a
+  service that runs as LOCAL_SYSTEM. Build inside CI:
+
+    candle -nologo installer\winagent.wxs -o build\winagent.wixobj
+    light -nologo build\winagent.wixobj -o dist\sonar-collector-winagent.msi
+
+  The .exe is expected at build\sonar-collector-winagent.exe before light.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product
+    Id="*"
+    Name="ScanRay Sonar WMI Agent"
+    Language="1033"
+    Version="2026.5.6.12"
+    Manufacturer="NCLGISA"
+    UpgradeCode="C9E3F040-1C2A-4C3F-A65D-7B0C8E1E9D11">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="ScanRayDir" Name="ScanRay">
+          <Directory Id="SonarDir" Name="Sonar">
+            <Directory Id="WinAgentDir" Name="winagent">
+              <Component Id="WinAgentExe" Guid="3C8B1F3F-5E9B-4AD0-83C7-6F6F8B1A6A11">
+                <File Id="winagent.exe"
+                      Source="build\sonar-collector-winagent.exe"
+                      KeyPath="yes" />
+                <ServiceInstall Id="WinAgentSvc"
+                                Name="SonarWinAgent"
+                                DisplayName="ScanRay Sonar WMI Agent"
+                                Description="Local WMI bridge for ScanRay Sonar collector"
+                                Type="ownProcess"
+                                Start="auto"
+                                Account="LocalSystem"
+                                ErrorControl="normal"
+                                Vital="yes" />
+                <ServiceControl Id="WinAgentSvcCtl"
+                                Name="SonarWinAgent"
+                                Start="install"
+                                Stop="both"
+                                Remove="uninstall"
+                                Wait="yes" />
+              </Component>
+            </Directory>
+          </Directory>
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <Feature Id="MainFeature" Title="WMI Agent" Level="1">
+      <ComponentRef Id="WinAgentExe" />
+    </Feature>
+  </Product>
+</Wix>

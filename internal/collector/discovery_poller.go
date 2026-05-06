@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NCLGISA/ScanRay-Sonar/internal/collector/discovery"
+	"github.com/NCLGISA/ScanRay-Sonar/internal/winagent"
 )
 
 type collectorJobWire struct {
@@ -149,6 +150,29 @@ func buildDevice(ctx context.Context, log *slog.Logger, ip string, rtt float64, 
 			// govmomi not yet wired in. The vmware.go module returns ErrVMwareNotImplemented;
 			// we log once per device so an operator knows credentials are present but unused.
 			log.Debug("vmware credential present but govmomi not yet wired", "ip", ip)
+		case "winagent":
+			_, pass, _ := parseCredSecret(c.Secret)
+			cli := winagent.NewInsecureClient(ip, pass, perStep)
+			fctx, cancel := context.WithTimeout(ctx, perStep)
+			inv, err := cli.FetchInventory(fctx)
+			cancel()
+			if err != nil {
+				continue
+			}
+			meta["identifiedBy"] = "winagent"
+			dev["identified"] = true
+			if inv.Computer.Manufacturer != "" {
+				dev["vendor"] = inv.Computer.Manufacturer
+			} else {
+				dev["vendor"] = "windows"
+			}
+			if inv.Computer.Hostname != "" {
+				dev["hostname"] = inv.Computer.Hostname
+			}
+			meta["winagent"] = inv
+			protocols = appendUniq(protocols, "winagent")
+			dev["protocols"] = protocols
+			return dev
 		}
 	}
 	return dev
