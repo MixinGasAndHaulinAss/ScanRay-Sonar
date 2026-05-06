@@ -8,7 +8,7 @@ import ThemeToggle from "./ThemeToggle";
 // APP_VERSION is just the static fallback shown if /version hasn't
 // returned yet (or fails). The real source of truth is the Go binary's
 // embedded VERSION, fetched below via useQuery.
-const APP_VERSION = "2026.5.6.3";
+const APP_VERSION = "2026.5.6.4";
 
 const navItems: { to: string; label: string; roles?: User["role"][] }[] = [
   { to: "/", label: "Dashboard" },

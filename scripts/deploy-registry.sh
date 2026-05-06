@@ -29,8 +29,11 @@ git pull --ff-only "$REMOTE" "$BRANCH"
 
 echo "Deploy registry mode — tree $(git rev-parse --short HEAD) VERSION $(cat VERSION)"
 
+# Pull tagged layers explicitly (logged digest summary), then up again with --pull always so
+# compose resolves :latest immediately before replacing containers — avoids stale local tags.
 "${COMPOSE[@]}" pull sonar-api sonar-poller
-"${COMPOSE[@]}" up -d --force-recreate --remove-orphans
+echo "Recreating containers (new processes from pulled images)…"
+"${COMPOSE[@]}" up -d --pull always --force-recreate --remove-orphans
 "${COMPOSE[@]}" ps
 
 echo
