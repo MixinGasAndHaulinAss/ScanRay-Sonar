@@ -17,6 +17,22 @@ func IPv4Hosts(cidr string, maxHosts int) ([]string, error) {
 	if network == nil || broadcast == nil {
 		return nil, fmt.Errorf("discovery: only IPv4 CIDRs supported for now")
 	}
+	ones, _ := ipnet.Mask.Size()
+	switch ones {
+	case 32:
+		// Host route — scan the single address. /32 is the natural way
+		// to target one device when the operator wants a fast, low-noise
+		// poll instead of sweeping a whole subnet.
+		return []string{network.String()}, nil
+	case 31:
+		// RFC 3021 point-to-point — both addresses are usable hosts;
+		// there is no network or broadcast to skip.
+		out := []string{network.String()}
+		if maxHosts >= 2 && !network.Equal(broadcast) {
+			out = append(out, broadcast.String())
+		}
+		return out, nil
+	}
 	start := ipToUint32(network) + 1
 	end := ipToUint32(broadcast) - 1
 	if end < start {

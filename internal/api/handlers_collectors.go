@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -697,21 +698,49 @@ func (s *Server) handleCollectorJobs(w http.ResponseWriter, r *http.Request) {
 			Description: name,
 		})
 	}
-	var dSubnets []byte
-	var dIcmp int
+	// Discovery: only return the discovery_scan job when the site's
+	// configured scan_interval_seconds has elapsed since central last
+	// dispatched one. Without this gate, the collector's polling cadence
+	// (every 60s) would silently drive scans much faster than the
+	// operator wants, ignoring scan_interval_seconds entirely.
+	var (
+		dSubnets        []byte
+		dIcmp           int
+		dIntervalSec    int
+		dLastDispatched *time.Time
+		dSiteID         string
+	)
 	if qerr := s.pool.QueryRow(r.Context(), `
-		SELECT ds.subnets, ds.icmp_timeout_ms
+		SELECT ds.subnets, ds.icmp_timeout_ms, ds.scan_interval_seconds,
+		       ds.last_discovery_dispatched_at, c.site_id::text
 		  FROM site_discovery_settings ds
 		  JOIN collectors c ON c.site_id = ds.site_id
-		 WHERE c.id = $1`, id).Scan(&dSubnets, &dIcmp); qerr == nil {
+		 WHERE c.id = $1`, id).Scan(&dSubnets, &dIcmp, &dIntervalSec, &dLastDispatched, &dSiteID); qerr == nil {
 		if len(dSubnets) > 0 && string(dSubnets) != "[]" && string(dSubnets) != "null" {
-			payload := fmt.Sprintf(`{"subnets":%s,"icmpTimeoutMs":%d}`, string(dSubnets), dIcmp)
-			jobs = append(jobs, collectorJob{
-				ID:          "discovery",
-				Kind:        "discovery_scan",
-				Description: "ICMP/TCP discovery sweep",
-				Payload:     json.RawMessage(payload),
-			})
+			interval := time.Duration(dIntervalSec) * time.Second
+			if interval <= 0 {
+				interval = 5 * time.Minute
+			}
+			due := dLastDispatched == nil || time.Since(*dLastDispatched) >= interval
+			if due {
+				payload := fmt.Sprintf(`{"subnets":%s,"icmpTimeoutMs":%d}`, string(dSubnets), dIcmp)
+				jobs = append(jobs, collectorJob{
+					ID:          "discovery",
+					Kind:        "discovery_scan",
+					Description: "ICMP/TCP discovery sweep",
+					Payload:     json.RawMessage(payload),
+				})
+				if _, uerr := s.pool.Exec(r.Context(), `
+					UPDATE site_discovery_settings
+					   SET last_discovery_dispatched_at = NOW()
+					 WHERE site_id = $1`, dSiteID); uerr != nil {
+					// Log-only: failing to record the dispatch would
+					// just mean the next poll re-queues. Better to ship
+					// the job we already decided to send than to hide it
+					// because of an unrelated UPDATE error.
+					slog.Default().Warn("discovery dispatch timestamp update failed", "err", uerr)
+				}
+			}
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"jobs": jobs})

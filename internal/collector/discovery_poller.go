@@ -29,9 +29,16 @@ type siteCredWire struct {
 }
 
 // RunDiscoveryPoller periodically executes discovery_scan jobs delegated by central Sonar.
+//
+// The collector polls central every 60s for queued jobs. Central is the
+// authority on cadence: it returns a discovery_scan job only when the
+// site's configured scan_interval_seconds has elapsed since the last
+// dispatch, so a fast collector poll cannot exceed the operator-set
+// interval. Keeping the collector tick short (60s) lets short intervals
+// (e.g. 60–120s for testing a single host) materialise quickly.
 func RunDiscoveryPoller(ctx context.Context, log *slog.Logger, cfg *Config) {
 	cli := &http.Client{Timeout: 120 * time.Second}
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
