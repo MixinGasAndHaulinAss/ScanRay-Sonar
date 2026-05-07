@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.5.6.18"
+  version: "2026.5.6.19"
   license:
     name: MIT
 servers:
@@ -1595,3 +1595,191 @@ paths:
             schema: { type: object, additionalProperties: true }
       responses:
         "204": { description: updated }
+
+  # ---- Passive SNMP discovery ------------------------------------------
+  /sites/{id}/passive-snmp:
+    get:
+      summary: List passive-SNMP inventory for a site
+      description: |
+        Inventory of devices a collector has heard upstream tooling polling
+        (UDP/161 destinations), classified once per capture by a single
+        public-OID SNMP GET.
+      tags: [Discovery]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: status
+          description: filter by status (default = active)
+          schema: { type: string, enum: [active, retired, all] }
+      responses:
+        "200":
+          description: device list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+  /sites/{id}/passive-snmp/changes:
+    get:
+      summary: Per-site passive-SNMP change feed
+      description: Last ~500 add/retire/change/reactivated events for the site.
+      tags: [Discovery]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: change list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  changes:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+
+  # ---- Reports ---------------------------------------------------------
+  /report-templates:
+    get:
+      summary: List available report templates
+      tags: [Reports]
+      responses:
+        "200":
+          description: templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  templates:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        slug:        { type: string }
+                        title:       { type: string }
+                        vendorScope: { type: string }
+                        description: { type: string }
+  /reports:
+    get:
+      summary: List previously generated reports
+      tags: [Reports]
+      parameters:
+        - in: query
+          name: templateSlug
+          schema: { type: string }
+        - in: query
+          name: siteId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 500 }
+      responses:
+        "200":
+          description: reports
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reports:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+    post:
+      summary: Generate a report (server-renders Markdown, persists, returns id)
+      tags: [Reports]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [templateSlug, siteId]
+              properties:
+                templateSlug: { type: string }
+                siteId:       { type: string, format: uuid }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: integer, format: int64 }
+  /reports/{id}:
+    get:
+      summary: Get a single report (with rendered content)
+      tags: [Reports]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: report
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "404": { description: not found }
+  /reports/{id}/download:
+    get:
+      summary: Download a report body as text/markdown
+      tags: [Reports]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: report body
+          content:
+            text/markdown:
+              schema: { type: string }
+            text/html:
+              schema: { type: string }
+            text/plain:
+              schema: { type: string }
+        "404": { description: not found }
+
+  # ---- Collector passive-SNMP endpoints (collector auth) ---------------
+  /collectors/me/passive-snmp-settings:
+    get:
+      summary: Settings the collector polls before each passive-SNMP run
+      tags: [Collectors]
+      responses:
+        "200":
+          description: settings
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /collectors/me/passive-snmp:
+    post:
+      summary: Ingest a passive-SNMP capture batch from a collector
+      tags: [Collectors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [devices]
+              properties:
+                capturedAt:  { type: string, format: date-time }
+                retireAfter: { type: integer, minimum: 1 }
+                devices:
+                  type: array
+                  items: { type: object, additionalProperties: true }
+      responses:
+        "204": { description: merged }

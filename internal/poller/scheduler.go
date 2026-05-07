@@ -251,11 +251,7 @@ func (s *Scheduler) pollOnce(ctx context.Context, id uuid.UUID, ip, vendor strin
 	defer c.Close()
 
 	snap := snmp.CollectAll(pctx, c)
-
-	switch vendor {
-	case "cisco":
-		snap.Chassis = snmp.CollectCiscoChassis(pctx, c)
-	}
+	snmp.CollectVendor(pctx, c, vendor, &snap)
 
 	s.computeRates(id, &snap)
 

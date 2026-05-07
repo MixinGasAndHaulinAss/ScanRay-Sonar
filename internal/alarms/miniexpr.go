@@ -48,27 +48,28 @@ func evalClause(clause string, env map[string]any) (bool, error) {
 		return false, nil
 	}
 
-	switch field {
-	case "criticality", "vendor":
+	// String-typed fields use string compare; everything else (and
+	// any value the env happens to hold as a string) coerces to the
+	// expected shape from the RHS.
+	if qStr != "" {
 		ls, ok1 := rv.(string)
-		if !ok1 || qStr == "" {
-			return false, fmt.Errorf("alarms: string compare requires quoted RHS for %s", field)
+		if !ok1 {
+			return false, fmt.Errorf("alarms: string compare requires string LHS for %s", field)
 		}
 		return compareString(ls, op, qStr), nil
-	default:
-		lf, err := toFloat64(rv)
-		if err != nil {
-			return false, err
-		}
-		if numStr == "" {
-			return false, fmt.Errorf("alarms: numeric RHS required for %s", field)
-		}
-		rf, err := strconv.ParseFloat(numStr, 64)
-		if err != nil {
-			return false, fmt.Errorf("alarms: float RHS: %w", err)
-		}
-		return compareFloat(lf, op, rf), nil
 	}
+	lf, err := toFloat64(rv)
+	if err != nil {
+		return false, err
+	}
+	if numStr == "" {
+		return false, fmt.Errorf("alarms: numeric RHS required for %s", field)
+	}
+	rf, err := strconv.ParseFloat(numStr, 64)
+	if err != nil {
+		return false, fmt.Errorf("alarms: float RHS: %w", err)
+	}
+	return compareFloat(lf, op, rf), nil
 }
 
 func toFloat64(v any) (float64, error) {

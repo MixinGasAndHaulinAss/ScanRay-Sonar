@@ -19,6 +19,8 @@ import SiteDiscoverySettings from "./pages/SiteDiscoverySettings";
 import SiteNetworkMap from "./pages/SiteNetworkMap";
 import World from "./pages/World";
 import Users from "./pages/Users";
+import Reports from "./pages/Reports";
+import PassiveSnmp from "./pages/PassiveSnmp";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 
@@ -182,6 +184,22 @@ export default function App() {
         element={
           <RequireAuth>
             <Users />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/reports"
+        element={
+          <RequireAuth>
+            <Reports />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/passive-snmp"
+        element={
+          <RequireAuth>
+            <PassiveSnmp />
           </RequireAuth>
         }
       />

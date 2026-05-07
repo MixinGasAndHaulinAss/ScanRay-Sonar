@@ -24,7 +24,7 @@ import (
 func CollectAll(ctx context.Context, c *Client) Snapshot {
 	start := time.Now()
 	s := Snapshot{
-		SchemaVersion: 1,
+		SchemaVersion: 2,
 		CapturedAt:    start.UTC(),
 		Interfaces:    []Interface{},
 	}

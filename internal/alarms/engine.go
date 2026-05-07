@@ -158,6 +158,11 @@ func (e *Engine) onApplianceMetric(msg *nats.Msg) {
 		"criticality":    crit,
 		"vendor":         payload["vendor"],
 	}
+	// Forward every numeric/string field on the payload so vendor
+	// health metrics (battery_charge_pct, session_util_pct,
+	// volume_used_pct_max, ...) become available to alarm rules
+	// without per-field plumbing here.
+	addVendorEnv(env, payload)
 	e.evaluate(metricEval{
 		siteID:      siteUUID,
 		targetKind:  "appliance",
@@ -166,6 +171,27 @@ func (e *Engine) onApplianceMetric(msg *nats.Msg) {
 		env:         env,
 		payloadJSON: append(json.RawMessage(nil), msg.Data...),
 	})
+}
+
+// addVendorEnv copies every additional numeric or string field from
+// the NATS payload into env so alarm rules can read them. Standard
+// fields (cpuPct, memUsedRatio, criticality, vendor) are already
+// handled by the caller.
+func addVendorEnv(env, payload map[string]any) {
+	skip := map[string]struct{}{
+		"applianceId": {}, "siteId": {}, "agentId": {},
+		"vendor": {}, "criticality": {},
+		"cpuPct": {}, "memUsedRatio": {},
+	}
+	for k, v := range payload {
+		if _, drop := skip[k]; drop {
+			continue
+		}
+		switch v.(type) {
+		case float64, float32, int, int32, int64, uint, uint32, uint64, string:
+			env[k] = v
+		}
+	}
 }
 
 func (e *Engine) onAgentMetric(msg *nats.Msg) {
@@ -197,6 +223,7 @@ func (e *Engine) onAgentMetric(msg *nats.Msg) {
 		"criticality":    crit,
 		"vendor":         payload["vendor"],
 	}
+	addVendorEnv(env, payload)
 	e.evaluate(metricEval{
 		siteID:      siteUUID,
 		targetKind:  "agent",

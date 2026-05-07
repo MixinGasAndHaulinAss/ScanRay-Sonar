@@ -25,11 +25,116 @@ type Snapshot struct {
 	LLDP       []LLDP      `json:"lldp,omitempty"`
 	CDP        []CDP       `json:"cdp,omitempty"`
 
+	// Vendor carries optional vendor-specific health structures
+	// populated by CollectVendor based on the appliance vendor row.
+	// Each sub-field is nil unless we successfully collected at
+	// least one OID for it. Schema version 2 added this field.
+	Vendor *VendorHealth `json:"vendor,omitempty"`
+
 	// CollectionWarnings accumulates non-fatal issues (timeouts on a
 	// single MIB, unsupported OID on this vendor, etc.) so an operator
 	// can see why the snapshot is partial without us failing the
 	// whole poll.
 	CollectionWarnings []string `json:"collectionWarnings,omitempty"`
+}
+
+// VendorHealth is the umbrella for everything we collect that doesn't
+// fit the universal IF-MIB / ENTITY-MIB / LLDP shape. Each pointer is
+// nil unless the matching collector ran and got at least one value.
+type VendorHealth struct {
+	UPS      *UPSHealth      `json:"ups,omitempty"`
+	Synology *SynologyHealth `json:"synology,omitempty"`
+	PaloAlto *PaloAltoHealth `json:"paloAlto,omitempty"`
+	Alletra  *AlletraHealth  `json:"alletra,omitempty"`
+	Cisco    *CiscoExtras    `json:"ciscoExtras,omitempty"`
+}
+
+// UPSHealth covers RFC1628 UPS-MIB plus APC enterprise extensions.
+// Pointers everywhere because most fields are independently optional.
+type UPSHealth struct {
+	Model                 string   `json:"model,omitempty"`
+	FirmwareVersion       string   `json:"firmwareVersion,omitempty"`
+	SerialNumber          string   `json:"serialNumber,omitempty"`
+	ManufactureDate       string   `json:"manufactureDate,omitempty"`
+	BatteryReplaceDate    string   `json:"batteryReplaceDate,omitempty"`
+	BatteryStatus         *int32   `json:"batteryStatus,omitempty"`         // 1=unknown 2=normal 3=low 4=depleted
+	BatteryReplaceNeeded  *bool    `json:"batteryReplaceNeeded,omitempty"`  // upsAdvBatteryReplaceIndicator
+	OutputStatus          *int32   `json:"outputStatus,omitempty"`          // upsBasicOutputStatus
+	InputLineFailCause    *int32   `json:"inputLineFailCause,omitempty"`    // last transfer reason
+	EstRuntimeMin         *int32   `json:"estRuntimeMin,omitempty"`         // upsEstimatedMinutesRemaining
+	EstChargePct          *int32   `json:"estChargePct,omitempty"`          // upsEstimatedChargeRemaining
+	BatteryTempC          *float64 `json:"batteryTempC,omitempty"`          // upsBatteryTemperature
+	OutputLoadPct         *int32   `json:"outputLoadPct,omitempty"`         // upsOutputPercentLoad / advanced
+	InputVoltage          *float64 `json:"inputVoltageV,omitempty"`         // upsInputVoltage
+	OutputVoltage         *float64 `json:"outputVoltageV,omitempty"`        // upsAdvOutputVoltage
+}
+
+// SynologyHealth covers .1.3.6.1.4.1.6574.{1,2,3} — system, disks, RAID.
+type SynologyHealth struct {
+	Model        string                  `json:"model,omitempty"`
+	Serial       string                  `json:"serial,omitempty"`
+	DSMVersion   string                  `json:"dsmVersion,omitempty"`
+	SystemStatus *int32                  `json:"systemStatus,omitempty"` // 1=normal 2=failed
+	PowerStatus  *int32                  `json:"powerStatus,omitempty"`  // 1=normal 2=failed
+	TempC        *float64                `json:"tempC,omitempty"`
+	Disks        []SynologyDisk          `json:"disks,omitempty"`
+	Volumes      []SynologyRAIDVolume    `json:"volumes,omitempty"`
+}
+
+type SynologyDisk struct {
+	Index  int32   `json:"index"`
+	ID     string  `json:"id,omitempty"`
+	Model  string  `json:"model,omitempty"`
+	Type   string  `json:"type,omitempty"`
+	Status int32   `json:"status"` // 1=normal 2=initialized 3=notInitialized 4=systemPartitionFailed 5=crashed
+	TempC  float64 `json:"tempC,omitempty"`
+}
+
+type SynologyRAIDVolume struct {
+	Index  int32  `json:"index"`
+	Name   string `json:"name,omitempty"`
+	Status int32  `json:"status"` // 1=normal 11=degraded 12=crashed; see synology MIB
+}
+
+// PaloAltoHealth covers PAN-COMMON-MIB session table.
+type PaloAltoHealth struct {
+	SessionActive    *int64   `json:"sessionActive,omitempty"`
+	SessionMax       *int64   `json:"sessionMax,omitempty"`
+	SessionActiveTcp *int64   `json:"sessionActiveTcp,omitempty"`
+	SessionActiveUdp *int64   `json:"sessionActiveUdp,omitempty"`
+	SessionUtilPct   *float64 `json:"sessionUtilPct,omitempty"` // derived
+}
+
+// AlletraHealth covers Nimble/HPE Alletra .1.3.6.1.4.1.37447.
+type AlletraHealth struct {
+	GlobalVolCount  *int64           `json:"globalVolCount,omitempty"`
+	GlobalSnapCount *int64           `json:"globalSnapCount,omitempty"`
+	Volumes         []AlletraVolume  `json:"volumes,omitempty"`
+}
+
+type AlletraVolume struct {
+	Index      int32   `json:"index"`
+	Name       string  `json:"name,omitempty"`
+	SizeBytes  uint64  `json:"sizeBytes,omitempty"`
+	UsageBytes uint64  `json:"usageBytes,omitempty"`
+	UsedPct    float64 `json:"usedPct,omitempty"`
+	Online     bool    `json:"online"`
+}
+
+// CiscoExtras carries the Cisco-only counters that don't have a clean
+// home in Chassis (which is universal). VLAN inventory and CPU
+// breakdown live here.
+type CiscoExtras struct {
+	VLANs   []CiscoVLAN `json:"vlans,omitempty"`
+	CPU5sec *float64    `json:"cpu5secPct,omitempty"`
+	CPU1min *float64    `json:"cpu1minPct,omitempty"`
+	CPU5min *float64    `json:"cpu5minPct,omitempty"`
+}
+
+type CiscoVLAN struct {
+	ID    int32  `json:"id"`
+	Name  string `json:"name,omitempty"`
+	State int32  `json:"state"` // 1=operational 2=suspended
 }
 
 // System is the standard SNMPv2-MIB::system group.

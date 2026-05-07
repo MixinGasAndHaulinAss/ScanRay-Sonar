@@ -1,5 +1,5 @@
 // SiteDiscoveryAdmin — per-site discovery configuration. Two top-level
-// tabs (Auvik-style):
+// tabs:
 //
 //   Manage Credentials  Manage SNMP / SSH / Telnet / WMI / WinAgent /
 //                       VMware / generic API credentials. Each kind has
@@ -14,8 +14,8 @@
 //
 // We deliberately never echo existing secrets back to the UI; Edit
 // only lets the operator rotate the secret (paste a new one) or
-// rename the credential. This mirrors the Auvik "Reset" affordance and
-// avoids re-introducing plaintext into the wire.
+// rename the credential. This avoids re-introducing plaintext into
+// the wire on every edit.
 
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";

@@ -116,6 +116,10 @@ func cmdRun(args []string) error {
 		}
 	}()
 
+	go func() {
+		collector.RunPassiveSNMPDiscovery(ctx, log, cfg)
+	}()
+
 	return collector.Run(ctx, log, cfg)
 }
 

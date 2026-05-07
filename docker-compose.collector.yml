@@ -14,6 +14,17 @@ services:
   sonar-collector:
     image: ghcr.io/nclgisa/scanray-sonar/collector:${SONAR_VERSION:-latest}
     restart: unless-stopped
+    # network_mode: host + CAP_NET_RAW are required by the passive
+    # SNMP discovery feature, which opens a raw AF_PACKET socket on
+    # the local NIC to capture UDP/161 destinations from upstream
+    # monitoring traffic. If passive discovery is disabled in the
+    # site settings this container will still log a one-time
+    # "permission denied" if neither flag is set; flip them off to
+    # silence it on tightly-locked-down hosts that don't run passive
+    # discovery.
+    network_mode: host
+    cap_add:
+      - NET_RAW
     volumes:
       - collector-config:/etc/sonar
     environment:

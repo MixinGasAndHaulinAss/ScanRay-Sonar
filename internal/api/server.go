@@ -137,6 +137,8 @@ func (s *Server) Routes() http.Handler {
 		r.With(s.collectorAuthRequired).Post("/collectors/me/snmp-error", s.handleCollectorSNMPError)
 		r.With(s.collectorAuthRequired).Get("/collectors/me/site-credentials", s.handleCollectorSiteCredentials)
 		r.With(s.collectorAuthRequired).Post("/collectors/me/discovery-results", s.handleCollectorDiscoveryResults)
+		r.With(s.collectorAuthRequired).Get("/collectors/me/passive-snmp-settings", s.handleCollectorPassiveSNMPSettings)
+		r.With(s.collectorAuthRequired).Post("/collectors/me/passive-snmp", s.handleCollectorPassiveSNMP)
 
 		r.Get("/probe/download/{os}/{arch}", s.handleProbeDownload)
 		r.Get("/probe/install.sh", s.handleProbeInstallScript)
@@ -238,6 +240,8 @@ func (s *Server) Routes() http.Handler {
 			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/sites/{id}/credentials/{credId}", s.handleDeleteSiteCredential)
 
 			r.Get("/sites/{id}/network-map", s.handleSiteNetworkMap)
+			r.Get("/sites/{id}/passive-snmp", s.handleListPassiveSNMP)
+			r.Get("/sites/{id}/passive-snmp/changes", s.handleListPassiveSNMPChanges)
 
 			r.Get("/query/devices", s.handleQueryDevices)
 			r.Get("/query/alarms", s.handleQueryAlarms)
@@ -250,6 +254,12 @@ func (s *Server) Routes() http.Handler {
 			r.With(requireRole(auth.RoleSuperAdmin)).Get("/admin/api-keys", s.handleSuperListAPIKeys)
 
 			r.Get("/topology", s.handleTopology)
+
+			r.Get("/report-templates", s.handleListReportTemplates)
+			r.With(requireRole(auth.RoleSiteAdmin)).Post("/reports", s.handleGenerateReport)
+			r.Get("/reports", s.handleListReports)
+			r.Get("/reports/{id}", s.handleGetReport)
+			r.Get("/reports/{id}/download", s.handleDownloadReport)
 		})
 	})
 

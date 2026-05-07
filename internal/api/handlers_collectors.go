@@ -716,3 +716,75 @@ func (s *Server) handleCollectorJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"jobs": jobs})
 }
+
+// handleCollectorPassiveSNMPSettings returns the passive-SNMP capture
+// settings for the site this collector belongs to. The collector polls
+// this on a slow ticker and uses it to decide when (and whether) to
+// run a capture pass.
+func (s *Server) handleCollectorPassiveSNMPSettings(w http.ResponseWriter, r *http.Request) {
+	id := collectorIDFromCtx(r.Context())
+	var (
+		enabled         bool
+		iface           string
+		captureSec      int
+		retireAfter     int
+		runIntervalSecs int
+	)
+	err := s.pool.QueryRow(r.Context(), `
+		SELECT COALESCE(ds.passive_snmp_enabled, false),
+		       COALESCE(ds.passive_snmp_interface, ''),
+		       COALESCE(ds.passive_snmp_capture_seconds, 60),
+		       COALESCE(ds.passive_snmp_retire_after, 3),
+		       COALESCE(ds.passive_snmp_run_interval_seconds, 21600)
+		  FROM collectors c
+		  LEFT JOIN site_discovery_settings ds ON ds.site_id = c.site_id
+		 WHERE c.id = $1`, id).
+		Scan(&enabled, &iface, &captureSec, &retireAfter, &runIntervalSecs)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeJSON(w, http.StatusOK, map[string]any{"enabled": false})
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "server_error", "load failed")
+		return
+	}
+	// Find a v2c community in the site's stored credentials. The
+	// passive probe uses whatever the operator already configured for
+	// active SNMP polling — typically the same string. If multiple
+	// snmp creds exist we pick the first by name; this is a fallback
+	// only, since most sites use one community.
+	var community string
+	credRows, _ := s.pool.Query(r.Context(), `
+		SELECT enc_secret FROM site_credentials
+		 WHERE site_id = (SELECT site_id FROM collectors WHERE id = $1)
+		   AND kind = 'snmp'
+		 ORDER BY name LIMIT 1`, id)
+	if credRows != nil {
+		defer credRows.Close()
+		if credRows.Next() {
+			var sealed []byte
+			if credRows.Scan(&sealed) == nil {
+				// Site SNMP credentials are stored as JSON like
+				// {"version":"v2c","community":"…"}. Best-effort
+				// unseal+parse; on failure we fall back to "public".
+				if plain, err := s.sealer.Open(sealed, []byte("credential:"+id.String())); err == nil {
+					var c struct {
+						Community string `json:"community"`
+					}
+					if json.Unmarshal(plain, &c) == nil {
+						community = c.Community
+					}
+				}
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"enabled":            enabled,
+		"interface":          iface,
+		"captureSeconds":     captureSec,
+		"retireAfter":        retireAfter,
+		"runIntervalSeconds": runIntervalSecs,
+		"snmpCommunity":      community,
+	})
+}

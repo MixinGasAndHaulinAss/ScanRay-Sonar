@@ -118,10 +118,7 @@ func pollOne(ctx context.Context, cli *http.Client, cfg *Config, sealer *scrypto
 	defer c.Close()
 
 	snap := snmp.CollectAll(ctx, c)
-	switch t.Vendor {
-	case "cisco":
-		snap.Chassis = snmp.CollectCiscoChassis(ctx, c)
-	}
+	snmp.CollectVendor(ctx, c, t.Vendor, &snap)
 
 	rt.applyRates(t.ID, &snap)
 
