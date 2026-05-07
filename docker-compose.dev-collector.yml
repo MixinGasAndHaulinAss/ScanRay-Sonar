@@ -26,6 +26,10 @@
 
 services:
   sonar-collector:
+    # Pin the container name so it lines up with the install/log docs
+    # (e.g. `docker logs sonar-collector`) instead of getting compose's
+    # default `<project>-<service>-1` prefix.
+    container_name: sonar-collector
     image: glcr.nclgisa.org:443/striketeam/scanray-sonar/collector:${IMAGE_TAG:-latest}
     restart: unless-stopped
     # Host networking matches the install commands we generate in the
@@ -48,4 +52,12 @@ services:
     # config the moment the operator finishes the one-shot enroll.
 
 volumes:
+  # Override compose's default project-scoped naming so the volume keeps
+  # its bare name `sonar-collector-config`. That matches the install
+  # commands the UI generates (`docker run -v sonar-collector-config:
+  # /etc/sonar ...`), so the same volume is shared between the one-shot
+  # `enroll` container and this long-running compose service. Compose
+  # still creates it if it does not exist, so brand-new dev hosts work
+  # without manual volume setup.
   sonar-collector-config:
+    name: sonar-collector-config
