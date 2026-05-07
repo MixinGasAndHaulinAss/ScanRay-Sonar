@@ -14,11 +14,18 @@ package discovery
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
 	"github.com/NCLGISA/ScanRay-Sonar/internal/snmp"
 )
+
+// ErrPassiveCaptureUnsupported is returned by CapturePassiveSNMP on
+// platforms that lack a raw-socket capture path (anything other than
+// Linux today). Callers can errors.Is against it to suppress repeat
+// warnings instead of treating it as a real failure.
+var ErrPassiveCaptureUnsupported = errors.New("passive SNMP capture only supported on Linux")
 
 // PassiveDevice is one classified result from a passive-discovery
 // sweep. Every field except IP is best-effort: a device that didn't

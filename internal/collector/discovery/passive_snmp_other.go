@@ -9,13 +9,7 @@ package discovery
 
 import (
 	"context"
-	"errors"
 )
-
-// ErrPassiveCaptureUnsupported is returned by CapturePassiveSNMP on
-// any non-Linux build. Callers can errors.Is against it to suppress
-// repeat warnings.
-var ErrPassiveCaptureUnsupported = errors.New("passive SNMP capture only supported on Linux")
 
 // CapturePassiveSNMP — non-Linux stub.
 func CapturePassiveSNMP(_ context.Context, _ PassiveCaptureOpts, _ SNMPClassifier) ([]PassiveDevice, error) {
