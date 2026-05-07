@@ -87,7 +87,7 @@ func CapturePassiveSNMP(ctx context.Context, opts PassiveCaptureOpts, cls SNMPCl
 		bpf.JumpIf{Cond: bpf.JumpEqual, Val: 17, SkipFalse: 6}, // 17 = UDP
 		// fragment offset at 20: skip non-first fragments
 		bpf.LoadAbsolute{Off: 20, Size: 2},
-		bpf.JumpIf{Cond: bpf.JumpSet, Val: 0x1fff, SkipTrue: 4},
+		bpf.JumpIf{Cond: bpf.JumpBitsSet, Val: 0x1fff, SkipTrue: 4},
 		// IHL into X — 14 (eth) + IP header → load IP[0] & 0x0f << 2
 		bpf.LoadMemShift{Off: 14},
 		// UDP dst port at IHL + 14 + 2
