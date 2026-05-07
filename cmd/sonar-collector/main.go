@@ -100,6 +100,19 @@ func cmdRun(args []string) error {
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
+	// Refresh on-disk CollectorVersion to the running binary's build
+	// version. The enroll step writes whatever was current at first
+	// install, but later upgrades just swap the image — the JSON file
+	// (and therefore the `hello` payload to central) would otherwise
+	// stay frozen at the enroll-time version forever.
+	if buildVer := version.Get().Version; buildVer != "" && cfg.CollectorVersion != buildVer {
+		cfg.CollectorVersion = buildVer
+		if err := collector.SaveConfig(*cfgPath, cfg); err != nil {
+			// Non-fatal: we'll still report the correct version in
+			// the live `hello` frame this run.
+			fmt.Fprintf(os.Stderr, "warn: persist updated collector version: %v\n", err)
+		}
+	}
 	log := logging.Setup(*logLevel, "sonar-collector", version.Get().Version)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
