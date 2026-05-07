@@ -1,0 +1,51 @@
+# =============================================================================
+# docker-compose.dev-collector.yml — dev-host test collector overlay.
+#
+# The dev box runs the central api+poller AND a test collector that
+# enrolls back against the same Sonar instance. Without this overlay
+# the collector container is managed by hand and drifts every time we
+# publish a new collector image. With it, scripts/deploy-registry.sh
+# pulls and recreates all three images (api / poller / collector) at
+# the same CalVer tag every release.
+#
+# First-time bootstrap: the operator mints an enrollment token from
+# /collectors and runs the one-shot `enroll` command from the UI
+# (still uses `docker run --rm --network host -v sonar-collector-config:
+# /etc/sonar ... enroll --token=… --base=… --name=…`). That writes
+# /etc/sonar/collector.json into the named volume.
+#
+# After that, this compose service owns the long-running container —
+# DO NOT also run the `docker run -d ... run` long-running command
+# from the UI on dev, or you'll have two processes fighting for the
+# same volume / collector identity.
+#
+# Subsequent deploys: deploy-registry.sh re-runs `compose pull` +
+# `compose up -d --pull always --force-recreate` against this overlay
+# too, so the collector is always on the same CalVer as api+poller.
+# =============================================================================
+
+services:
+  sonar-collector:
+    image: glcr.nclgisa.org:443/striketeam/scanray-sonar/collector:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    # Host networking matches the install commands we generate in the
+    # UI: collectors need the host's source IP for SNMP/ICMP fidelity
+    # and to avoid SNI/cert mismatches when reaching the central API
+    # via the public hostname.
+    network_mode: host
+    volumes:
+      - sonar-collector-config:/etc/sonar
+    environment:
+      SONAR_MASTER_KEY: ${SONAR_MASTER_KEY:?set SONAR_MASTER_KEY same as central Sonar}
+      SONAR_COLLECTOR_LOG_LEVEL: ${SONAR_COLLECTOR_LOG_LEVEL:-info}
+    command: ["run"]
+    labels:
+      com.scanraysonar.release: "${SCANRAY_STACK_VERSION:-dev}"
+      com.scanraysonar.role: "dev-collector"
+    # Without an enrollment, /etc/sonar/collector.json is missing and
+    # `sonar-collector run` exits immediately. We rely on docker's
+    # restart policy to keep retrying so the container picks up the
+    # config the moment the operator finishes the one-shot enroll.
+
+volumes:
+  sonar-collector-config:

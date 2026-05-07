@@ -585,6 +585,21 @@ function DocsPanel() {
           listed in the middle table — revoke any you no longer plan to redeem.
         </p>
       </div>
+
+      <div className="space-y-2 rounded-md border border-amber-700/40 bg-amber-950/20 p-3 text-xs">
+        <div className="font-semibold text-amber-200">Dev host (co-resident collector)</div>
+        <p className="text-amber-100/80">
+          On the central Sonar host itself we run a test collector alongside the api/poller via
+          the <code className="font-mono">docker-compose.dev-collector.yml</code> overlay. Mint a
+          token here once and run only the <strong>Enroll</strong> step (it is{" "}
+          <code className="font-mono">--rm</code> and just seeds the volume). The next{" "}
+          <code className="font-mono">scripts/deploy-registry.sh</code> brings the long-running
+          collector container up via compose and rotates its image to the current CalVer on every
+          subsequent deploy — no manual <code className="font-mono">docker run -d</code> needed.
+          Skip the overlay with <code className="font-mono">SKIP_DEV_COLLECTOR=1</code> on hosts
+          that should not run a self-collector.
+        </p>
+      </div>
     </div>
   );
 }
