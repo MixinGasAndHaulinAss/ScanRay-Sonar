@@ -16,25 +16,25 @@ import "context"
 
 const (
 	// RFC1628 UPS-MIB scalars
-	oidUPSIdentModel             = "1.3.6.1.2.1.33.1.1.2.0"
-	oidUPSIdentAgentSWVersion    = "1.3.6.1.2.1.33.1.1.3.0"
-	oidUPSBatteryStatus          = "1.3.6.1.2.1.33.1.2.1.0"
-	oidUPSEstMinutesRemaining    = "1.3.6.1.2.1.33.1.2.3.0"
-	oidUPSEstChargeRemaining     = "1.3.6.1.2.1.33.1.2.4.0"
-	oidUPSBatteryTemperature     = "1.3.6.1.2.1.33.1.2.7.0"
-	oidUPSInputVoltage           = "1.3.6.1.2.1.33.1.3.3.1.3.1"
-	oidUPSOutputPercentLoad      = "1.3.6.1.2.1.33.1.4.4.1.5.1"
+	oidUPSIdentModel          = "1.3.6.1.2.1.33.1.1.2.0"
+	oidUPSIdentAgentSWVersion = "1.3.6.1.2.1.33.1.1.3.0"
+	oidUPSBatteryStatus       = "1.3.6.1.2.1.33.1.2.1.0"
+	oidUPSEstMinutesRemaining = "1.3.6.1.2.1.33.1.2.3.0"
+	oidUPSEstChargeRemaining  = "1.3.6.1.2.1.33.1.2.4.0"
+	oidUPSBatteryTemperature  = "1.3.6.1.2.1.33.1.2.7.0"
+	oidUPSInputVoltage        = "1.3.6.1.2.1.33.1.3.3.1.3.1"
+	oidUPSOutputPercentLoad   = "1.3.6.1.2.1.33.1.4.4.1.5.1"
 
 	// APC enterprise (.1.3.6.1.4.1.318.1.1.1)
-	oidAPCIdentModel             = "1.3.6.1.4.1.318.1.1.1.1.1.1.0"
+	oidAPCIdentModel              = "1.3.6.1.4.1.318.1.1.1.1.1.1.0"
 	oidAPCAdvIdentManufactureDate = "1.3.6.1.4.1.318.1.1.1.1.2.2.0"
-	oidAPCAdvIdentSerialNumber   = "1.3.6.1.4.1.318.1.1.1.1.2.3.0"
-	oidAPCAdvBatteryReplaceDate  = "1.3.6.1.4.1.318.1.1.1.2.1.3.0"
-	oidAPCAdvBatteryReplaceInd   = "1.3.6.1.4.1.318.1.1.1.2.2.4.0"
-	oidAPCAdvInputLineFailCause  = "1.3.6.1.4.1.318.1.1.1.3.2.5.0"
-	oidAPCBasicOutputStatus      = "1.3.6.1.4.1.318.1.1.1.4.1.1.0"
-	oidAPCAdvOutputVoltage       = "1.3.6.1.4.1.318.1.1.1.4.2.1.0"
-	oidAPCAdvOutputLoadPct       = "1.3.6.1.4.1.318.1.1.1.4.2.3.0"
+	oidAPCAdvIdentSerialNumber    = "1.3.6.1.4.1.318.1.1.1.1.2.3.0"
+	oidAPCAdvBatteryReplaceDate   = "1.3.6.1.4.1.318.1.1.1.2.1.3.0"
+	oidAPCAdvBatteryReplaceInd    = "1.3.6.1.4.1.318.1.1.1.2.2.4.0"
+	oidAPCAdvInputLineFailCause   = "1.3.6.1.4.1.318.1.1.1.3.2.5.0"
+	oidAPCBasicOutputStatus       = "1.3.6.1.4.1.318.1.1.1.4.1.1.0"
+	oidAPCAdvOutputVoltage        = "1.3.6.1.4.1.318.1.1.1.4.2.1.0"
+	oidAPCAdvOutputLoadPct        = "1.3.6.1.4.1.318.1.1.1.4.2.3.0"
 )
 
 // CollectUPS does one GET of all known UPS scalars and assembles a

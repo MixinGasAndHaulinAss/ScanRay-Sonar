@@ -49,10 +49,10 @@ func CollectAlletra(_ context.Context, c *Client) *AlletraHealth {
 	}
 
 	type volAcc struct {
-		name                                  string
-		sizeLow, sizeHigh, useLow, useHigh    uint64
-		online                                bool
-		onlinePresent                         bool
+		name                               string
+		sizeLow, sizeHigh, useLow, useHigh uint64
+		online                             bool
+		onlinePresent                      bool
 	}
 	rows := map[int32]*volAcc{}
 	row := func(idx int32) *volAcc {

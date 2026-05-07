@@ -184,15 +184,15 @@ func (s *Server) handleGetReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":            id,
-		"templateSlug":  slug,
-		"siteId":        siteID,
-		"generatedAt":   generatedAt,
-		"generatedBy":   by,
-		"format":        format,
-		"sizeBytes":     size,
-		"content":       content,
-		"metadata":      json.RawMessage(metaText),
+		"id":           id,
+		"templateSlug": slug,
+		"siteId":       siteID,
+		"generatedAt":  generatedAt,
+		"generatedBy":  by,
+		"format":       format,
+		"sizeBytes":    size,
+		"content":      content,
+		"metadata":     json.RawMessage(metaText),
 	})
 }
 

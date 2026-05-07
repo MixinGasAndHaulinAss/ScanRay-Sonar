@@ -89,15 +89,15 @@ func (s *Server) handleCollectorPassiveSNMP(w http.ResponseWriter, r *http.Reque
 // change-feed logic. Runs in a single transaction so a partial
 // failure leaves the inventory unchanged.
 //
-//   1. Insert/update each captured IP. New row → "added" event;
-//      existing row with changed sys_descr/vendor/type → "changed";
-//      previously retired row → "reactivated".
-//   2. For IPs that were active before this run but absent in the
-//      batch, increment miss_count. When miss_count reaches the
-//      configured retire_after, flip status='retired' + emit a
-//      "retired" event.
-//   3. After the merge, trim passive_snmp_changes to the most recent
-//      500 entries per site.
+//  1. Insert/update each captured IP. New row → "added" event;
+//     existing row with changed sys_descr/vendor/type → "changed";
+//     previously retired row → "reactivated".
+//  2. For IPs that were active before this run but absent in the
+//     batch, increment miss_count. When miss_count reaches the
+//     configured retire_after, flip status='retired' + emit a
+//     "retired" event.
+//  3. After the merge, trim passive_snmp_changes to the most recent
+//     500 entries per site.
 func mergePassiveSNMPBatch(ctx context.Context, pool *pgxpool.Pool, siteID uuid.UUID, req passiveSNMPIngestReq) error {
 	tx, err := pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {

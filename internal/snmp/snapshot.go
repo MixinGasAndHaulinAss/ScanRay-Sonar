@@ -52,33 +52,33 @@ type VendorHealth struct {
 // UPSHealth covers RFC1628 UPS-MIB plus APC enterprise extensions.
 // Pointers everywhere because most fields are independently optional.
 type UPSHealth struct {
-	Model                 string   `json:"model,omitempty"`
-	FirmwareVersion       string   `json:"firmwareVersion,omitempty"`
-	SerialNumber          string   `json:"serialNumber,omitempty"`
-	ManufactureDate       string   `json:"manufactureDate,omitempty"`
-	BatteryReplaceDate    string   `json:"batteryReplaceDate,omitempty"`
-	BatteryStatus         *int32   `json:"batteryStatus,omitempty"`         // 1=unknown 2=normal 3=low 4=depleted
-	BatteryReplaceNeeded  *bool    `json:"batteryReplaceNeeded,omitempty"`  // upsAdvBatteryReplaceIndicator
-	OutputStatus          *int32   `json:"outputStatus,omitempty"`          // upsBasicOutputStatus
-	InputLineFailCause    *int32   `json:"inputLineFailCause,omitempty"`    // last transfer reason
-	EstRuntimeMin         *int32   `json:"estRuntimeMin,omitempty"`         // upsEstimatedMinutesRemaining
-	EstChargePct          *int32   `json:"estChargePct,omitempty"`          // upsEstimatedChargeRemaining
-	BatteryTempC          *float64 `json:"batteryTempC,omitempty"`          // upsBatteryTemperature
-	OutputLoadPct         *int32   `json:"outputLoadPct,omitempty"`         // upsOutputPercentLoad / advanced
-	InputVoltage          *float64 `json:"inputVoltageV,omitempty"`         // upsInputVoltage
-	OutputVoltage         *float64 `json:"outputVoltageV,omitempty"`        // upsAdvOutputVoltage
+	Model                string   `json:"model,omitempty"`
+	FirmwareVersion      string   `json:"firmwareVersion,omitempty"`
+	SerialNumber         string   `json:"serialNumber,omitempty"`
+	ManufactureDate      string   `json:"manufactureDate,omitempty"`
+	BatteryReplaceDate   string   `json:"batteryReplaceDate,omitempty"`
+	BatteryStatus        *int32   `json:"batteryStatus,omitempty"`        // 1=unknown 2=normal 3=low 4=depleted
+	BatteryReplaceNeeded *bool    `json:"batteryReplaceNeeded,omitempty"` // upsAdvBatteryReplaceIndicator
+	OutputStatus         *int32   `json:"outputStatus,omitempty"`         // upsBasicOutputStatus
+	InputLineFailCause   *int32   `json:"inputLineFailCause,omitempty"`   // last transfer reason
+	EstRuntimeMin        *int32   `json:"estRuntimeMin,omitempty"`        // upsEstimatedMinutesRemaining
+	EstChargePct         *int32   `json:"estChargePct,omitempty"`         // upsEstimatedChargeRemaining
+	BatteryTempC         *float64 `json:"batteryTempC,omitempty"`         // upsBatteryTemperature
+	OutputLoadPct        *int32   `json:"outputLoadPct,omitempty"`        // upsOutputPercentLoad / advanced
+	InputVoltage         *float64 `json:"inputVoltageV,omitempty"`        // upsInputVoltage
+	OutputVoltage        *float64 `json:"outputVoltageV,omitempty"`       // upsAdvOutputVoltage
 }
 
 // SynologyHealth covers .1.3.6.1.4.1.6574.{1,2,3} — system, disks, RAID.
 type SynologyHealth struct {
-	Model        string                  `json:"model,omitempty"`
-	Serial       string                  `json:"serial,omitempty"`
-	DSMVersion   string                  `json:"dsmVersion,omitempty"`
-	SystemStatus *int32                  `json:"systemStatus,omitempty"` // 1=normal 2=failed
-	PowerStatus  *int32                  `json:"powerStatus,omitempty"`  // 1=normal 2=failed
-	TempC        *float64                `json:"tempC,omitempty"`
-	Disks        []SynologyDisk          `json:"disks,omitempty"`
-	Volumes      []SynologyRAIDVolume    `json:"volumes,omitempty"`
+	Model        string               `json:"model,omitempty"`
+	Serial       string               `json:"serial,omitempty"`
+	DSMVersion   string               `json:"dsmVersion,omitempty"`
+	SystemStatus *int32               `json:"systemStatus,omitempty"` // 1=normal 2=failed
+	PowerStatus  *int32               `json:"powerStatus,omitempty"`  // 1=normal 2=failed
+	TempC        *float64             `json:"tempC,omitempty"`
+	Disks        []SynologyDisk       `json:"disks,omitempty"`
+	Volumes      []SynologyRAIDVolume `json:"volumes,omitempty"`
 }
 
 type SynologyDisk struct {
@@ -107,9 +107,9 @@ type PaloAltoHealth struct {
 
 // AlletraHealth covers Nimble/HPE Alletra .1.3.6.1.4.1.37447.
 type AlletraHealth struct {
-	GlobalVolCount  *int64           `json:"globalVolCount,omitempty"`
-	GlobalSnapCount *int64           `json:"globalSnapCount,omitempty"`
-	Volumes         []AlletraVolume  `json:"volumes,omitempty"`
+	GlobalVolCount  *int64          `json:"globalVolCount,omitempty"`
+	GlobalSnapCount *int64          `json:"globalSnapCount,omitempty"`
+	Volumes         []AlletraVolume `json:"volumes,omitempty"`
 }
 
 type AlletraVolume struct {
