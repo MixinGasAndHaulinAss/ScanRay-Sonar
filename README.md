@@ -424,7 +424,7 @@ docker compose -f docker-compose.yml -f docker-compose.registry.yml pull
 docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d
 ```
 
-This shrinks deploys from ~3 min to ~10 seconds and removes the build toolchain from the deploy host. **[`scripts/deploy-registry.sh`](scripts/deploy-registry.sh)** pulls **`:$VERSION`** from GLCR for **both** `sonar-api` and `sonar-poller` by default (`IMAGE_TAG` defaults from the repo `VERSION` after `git pull`), exports **`SCANRAY_STACK_VERSION`** so every stack container gets label **`com.scanraysonar.release`**, and runs **`docker compose up -d --pull always --force-recreate`**. Override with **`IMAGE_TAG=latest`** (shell env takes precedence over `.env`) only when you intentionally want the moving `:latest` tag.
+This shrinks deploys from ~3 min to ~10 seconds and removes the build toolchain from the deploy host. **[`scripts/deploy-registry.sh`](scripts/deploy-registry.sh)** pulls **`:latest`** from GLCR for `sonar-api`, `sonar-poller`, and `sonar-collector` by default, exports **`SCANRAY_STACK_VERSION`** (read from the repo `VERSION` file) so every stack container gets label **`com.scanraysonar.release`**, and runs **`docker compose up -d --pull always --force-recreate`**. CI publishes `:latest`, `:$VERSION`, and `:$CI_COMMIT_SHORT_SHA` for every green main pipeline, so `:latest` always points at the most recent packaged digest. Override with **`IMAGE_TAG=2026.5.6.20`** (or any CalVer / SHA) when you want a deliberate, reproducible pin — typically for rollback or external customer hand-off. `/api/v1/version` stays honest regardless: each binary embeds its build-time CalVer.
 
 #### After each change on `main` (operators + automation)
 

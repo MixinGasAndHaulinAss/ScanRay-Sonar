@@ -12,14 +12,19 @@
 # Optional env:
 #   DEPLOY_REMOTE       git remote to pull (default: origin)
 #   DEPLOY_BRANCH       branch name (default: main)
-#   IMAGE_TAG           GLCR tag for api + poller + collector (default: CalVer read from VERSION
-#                       after git pull). Override with IMAGE_TAG=latest if you intentionally want
-#                       the moving :latest pointer.
+#   IMAGE_TAG           GLCR tag for api + poller + collector (default: latest). Set
+#                       IMAGE_TAG=2026.5.6.20 (or whatever CalVer) to pin a specific release
+#                       for rollback or production hand-off.
 #   SKIP_DEV_COLLECTOR  set to 1 to skip the dev-test collector overlay (useful on hosts that
 #                       are NOT supposed to run a co-resident collector against themselves).
 #
-# Defaulting IMAGE_TAG from VERSION keeps every image on the same registry tag so api/poller/
-# collector advance together and you never end up with a v+1 api talking to a v-1 collector.
+# Default :latest is intentional. CI publishes :latest, :$VERSION, and :$CI_COMMIT_SHORT_SHA
+# every green pipeline; :latest always points at the most recent successfully-packaged digest.
+# Pin to :$VERSION (i.e. IMAGE_TAG="$(cat VERSION)") only when you want a deliberate, stable
+# release tag — typically when handing an installer to an external customer or rolling back.
+#
+# /api/v1/version stays honest regardless: each binary embeds its build-time CalVer at compile,
+# so the UI footer + central reporting reflect what is actually running, not what tag was pulled.
 
 set -euo pipefail
 
@@ -49,7 +54,10 @@ git pull --ff-only "$REMOTE" "$BRANCH"
 
 STACK_VER="$(tr -d '[:space:]' < VERSION)"
 export SCANRAY_STACK_VERSION="$STACK_VER"
-export IMAGE_TAG="${IMAGE_TAG:-$STACK_VER}"
+# Default to the moving :latest pointer so day-to-day deploys are just "merge → recreate"
+# and don't require coordinating a VERSION bump. Override with IMAGE_TAG=$STACK_VER (or any
+# other CalVer / SHA) when you want a pinned, reproducible roll.
+export IMAGE_TAG="${IMAGE_TAG:-latest}"
 
 echo "Deploy registry mode — tree $(git rev-parse --short HEAD) VERSION ${STACK_VER}  GLCR_IMAGE_TAG=${IMAGE_TAG}  dev-collector=${WITH_COLLECTOR}"
 
