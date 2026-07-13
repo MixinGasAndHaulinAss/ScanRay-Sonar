@@ -10,15 +10,15 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.18.1
 	github.com/google/uuid v1.6.0
 	github.com/gosnmp/gosnmp v1.43.1
-	github.com/jackc/pgx/v5 v5.9.0
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/nats-io/nats.go v1.37.0
 	github.com/oschwald/maxminddb-golang v1.13.1
 	github.com/pquerna/otp v1.4.0
 	github.com/shirou/gopsutil/v4 v4.24.10
 	github.com/yusufpapurcu/wmi v1.2.4
-	golang.org/x/crypto v0.35.0
-	golang.org/x/net v0.36.0
-	golang.org/x/sys v0.40.0
+	golang.org/x/crypto v0.52.0
+	golang.org/x/net v0.55.0
+	golang.org/x/sys v0.45.0
 )
 
 require (
@@ -39,6 +39,6 @@ require (
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/text v0.32.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 )
