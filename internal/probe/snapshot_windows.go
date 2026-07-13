@@ -27,6 +27,7 @@ func collectOSExtras(ctx context.Context, s *Snapshot) {
 		s.PendingRebootReason = reason
 	}
 	s.StoppedAutoServices = enumerateStoppedAutoServices(s)
+	s.Services = enumerateAllServices(s)
 }
 
 // windowsPendingRebootReason returns a non-empty human-readable string
@@ -138,6 +139,62 @@ func enumerateStoppedAutoServices(s *Snapshot) []ServiceRow {
 			DisplayName: cfg.DisplayName,
 			StartType:   "auto",
 			Status:      strings.ToLower(svcStateName(uint32(status.State))),
+		})
+	}
+	return out
+}
+
+// enumerateAllServices lists Windows services (auto + currently running)
+// for the Services device tab. Caps at 200 rows to keep snapshot size
+// reasonable.
+func enumerateAllServices(s *Snapshot) []ServiceRow {
+	m, err := mgr.Connect()
+	if err != nil {
+		s.warn("svc.mgr.Connect(all): " + err.Error())
+		return nil
+	}
+	defer m.Disconnect()
+
+	names, err := m.ListServices()
+	if err != nil {
+		s.warn("svc.mgr.ListServices(all): " + err.Error())
+		return nil
+	}
+
+	var out []ServiceRow
+	for _, name := range names {
+		if len(out) >= 200 {
+			break
+		}
+		svc, err := m.OpenService(name)
+		if err != nil {
+			continue
+		}
+		cfg, errCfg := svc.Config()
+		status, errStat := svc.Query()
+		svc.Close()
+		if errCfg != nil || errStat != nil {
+			continue
+		}
+		startType := "other"
+		switch cfg.StartType {
+		case 2:
+			startType = "auto"
+		case 3:
+			startType = "manual"
+		case 4:
+			startType = "disabled"
+		}
+		st := strings.ToLower(svcStateName(uint32(status.State)))
+		// Prefer auto services + anything currently running.
+		if startType != "auto" && st != "running" {
+			continue
+		}
+		out = append(out, ServiceRow{
+			Name:        name,
+			DisplayName: cfg.DisplayName,
+			StartType:   startType,
+			Status:      st,
 		})
 	}
 	return out

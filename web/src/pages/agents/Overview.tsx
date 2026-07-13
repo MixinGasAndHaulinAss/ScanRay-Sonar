@@ -58,7 +58,7 @@ export default function Overview() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <KPITile label="Total agents" value={total} />
+        <KPITile label="Total devices" value={total} />
         <KPITile
           label="Online (5m)"
           value={online}

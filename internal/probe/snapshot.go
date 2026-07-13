@@ -48,7 +48,11 @@ type Snapshot struct {
 	Hardware  *Hardware    `json:"hardware,omitempty"`
 	TopByCPU  []ProcessRow `json:"topByCpu"`
 	TopByMem  []ProcessRow `json:"topByMem"`
-	Listeners []Listener   `json:"listeners"`
+	// ActiveProcesses is a larger live process table (union of high
+	// CPU/mem) for the ControlUp-style Active Processes device tab.
+	// Schema v5+. Older UIs ignore it and keep using TopBy*.
+	ActiveProcesses []ProcessRow `json:"activeProcesses,omitempty"`
+	Listeners       []Listener   `json:"listeners"`
 	// Conversations are aggregated active TCP/UDP peer pairs (one row
 	// per (proto, direction, remote, process)). Schema v2+.
 	Conversations []Conversation `json:"conversations,omitempty"`
@@ -67,8 +71,23 @@ type Snapshot struct {
 
 	// Windows-only.
 	StoppedAutoServices []ServiceRow `json:"stoppedAutoServices,omitempty"`
+	// Services is the fuller Windows service inventory (auto + running
+	// manual). Schema v5+. StoppedAutoServices remains the high-signal
+	// subset for overview badges.
+	Services []ServiceRow `json:"services,omitempty"`
 	// Linux-only.
 	FailedUnits []string `json:"failedUnits,omitempty"`
+
+	// DEX device-tab payloads (schema v5+). Slow inventory is filled
+	// from the 5-minute extras cache; rings update every snapshot.
+	InstalledApps    []InstalledApp     `json:"installedApps,omitempty"`
+	MissingPatches   []MissingPatch     `json:"missingPatches,omitempty"`
+	Win11Readiness   *Win11Readiness    `json:"win11Readiness,omitempty"`
+	TopApps          []AppFocusRow      `json:"topApps,omitempty"`
+	StoppedProcesses []ProcessStopEvent `json:"stoppedProcesses,omitempty"`
+	EventLog         []EventLogRow      `json:"eventLog,omitempty"`
+	PowerEvents      []PowerEvent       `json:"powerEvents,omitempty"`
+	StorageIO        []StorageIOEvent   `json:"storageIo,omitempty"`
 
 	// CollectionWarnings collects non-fatal errors (e.g. one disk
 	// counter unavailable, ports enumeration denied) so the UI can
@@ -172,6 +191,12 @@ type ProcessRow struct {
 	NetSentBps   uint64  `json:"netSentBps,omitempty"`
 	NetRecvBps   uint64  `json:"netRecvBps,omitempty"`
 	OpenConns    int     `json:"openConns,omitempty"`
+	// Schema v5+ fields for the Active Processes console table.
+	StartedAt    string `json:"startedAt,omitempty"` // RFC3339
+	Architecture string `json:"architecture,omitempty"`
+	Elevated     *bool  `json:"elevated,omitempty"`
+	Priority     string `json:"priority,omitempty"` // Normal, High, ...
+	IsService    *bool  `json:"isService,omitempty"`
 }
 
 type Listener struct {
@@ -193,11 +218,13 @@ type Conversation struct {
 	RemoteIP    string `json:"remoteIp"`
 	RemoteHost  string `json:"remoteHost,omitempty"` // reverse-DNS, best-effort
 	RemotePort  uint32 `json:"remotePort"`
+	LocalIP     string `json:"localIp,omitempty"`   // schema v5+
 	LocalPort   uint32 `json:"localPort,omitempty"` // populated for inbound (the listener port)
 	State       string `json:"state,omitempty"`     // ESTABLISHED, CLOSE_WAIT, ...
 	PID         int32  `json:"pid,omitempty"`
 	ProcessName string `json:"processName,omitempty"`
-	Count       int    `json:"count"` // number of socket rows aggregated
+	User        string `json:"user,omitempty"` // schema v5+
+	Count       int    `json:"count"`         // number of socket rows aggregated
 }
 
 type SessionRow struct {
@@ -231,19 +258,20 @@ type ServiceRow struct {
 func CollectSnapshot(ctx context.Context, hostname string) Snapshot {
 	start := time.Now()
 	s := Snapshot{
-		SchemaVersion: 4, // v4 adds NIC.Kind/bps, Latency, HealthSignals, richer SessionRow
+		SchemaVersion: 5, // v5: ActiveProcesses, process meta, Services, richer Conversations
 		CapturedAt:    start.UTC().Format(time.RFC3339Nano),
 		// Pre-allocate every collection-typed field so JSON always
 		// emits `[]` instead of `null` even when a collector is a
 		// no-op for this OS (e.g. host.Users() is "not implemented"
 		// on Windows). The UI depends on these being arrays.
-		Disks:         []Disk{},
-		NICs:          []NIC{},
-		TopByCPU:      []ProcessRow{},
-		TopByMem:      []ProcessRow{},
-		Listeners:     []Listener{},
-		Conversations: []Conversation{},
-		LoggedInUsers: []SessionRow{},
+		Disks:           []Disk{},
+		NICs:            []NIC{},
+		TopByCPU:        []ProcessRow{},
+		TopByMem:        []ProcessRow{},
+		ActiveProcesses: []ProcessRow{},
+		Listeners:       []Listener{},
+		Conversations:   []Conversation{},
+		LoggedInUsers:   []SessionRow{},
 	}
 
 	if hi, err := host.InfoWithContext(ctx); err == nil {
@@ -295,6 +323,28 @@ func CollectSnapshot(ctx context.Context, hostname string) Snapshot {
 		s.warn("latency: ICMP probe unavailable on this host (no raw-socket privilege)")
 	}
 	s.Health = extras.LatestHealth()
+
+	// DEX inventory + live rings.
+	if inv := dex.latestInventory(); inv != nil {
+		s.InstalledApps = inv.InstalledApps
+		s.MissingPatches = inv.MissingPatches
+		s.Win11Readiness = inv.Win11Readiness
+		s.EventLog = inv.EventLog
+		s.PowerEvents = inv.PowerEvents
+		// Keep MissingPatchCount in sync when inventory has titles.
+		if len(inv.MissingPatches) > 0 {
+			if s.Health == nil {
+				s.Health = &HealthSignals{}
+			}
+			n := len(inv.MissingPatches)
+			if s.Health.MissingPatchCount == nil || *s.Health.MissingPatchCount < n {
+				s.Health.MissingPatchCount = &n
+			}
+		}
+	}
+	s.TopApps = dex.topApps(25)
+	s.StoppedProcesses = dex.recentStopped()
+	s.StorageIO = dex.recentStorage()
 
 	s.CaptureMs = time.Since(start).Milliseconds()
 	return s
@@ -524,6 +574,13 @@ func collectProcesses(ctx context.Context, s *Snapshot) {
 		startedMs, _ := p.CreateTimeWithContext(ctx)
 		key := procKey{pid: p.Pid, started: startedMs}
 		seen[key] = struct{}{}
+		if startedMs > 0 {
+			row.StartedAt = time.UnixMilli(startedMs).UTC().Format(time.RFC3339)
+		}
+		row.Architecture = runtime.GOARCH
+		if nice, err := p.NiceWithContext(ctx); err == nil {
+			row.Priority = niceToPriority(nice)
+		}
 
 		var counters procCounters
 		counters.at = now
@@ -543,6 +600,32 @@ func collectProcesses(ctx context.Context, s *Snapshot) {
 	}
 	procDelta.reapMissing(seen)
 
+	// Process-stop detection + storage I/O ring (before Top-N trim).
+	dex.noteProcesses(rows, seen)
+	var ioSamples []StorageIOEvent
+	nowISO := time.Now().UTC().Format(time.RFC3339Nano)
+	for _, r := range rows {
+		bps := r.DiskReadBps + r.DiskWriteBps
+		if bps < 64*1024 { // ignore < 64 KiB/s noise
+			continue
+		}
+		ioSamples = append(ioSamples, StorageIOEvent{
+			Time:     nowISO,
+			Process:  r.Name,
+			PID:      r.PID,
+			File:     "(process aggregate I/O)",
+			Bytes:    bps,
+			ReadBps:  r.DiskReadBps,
+			WriteBps: r.DiskWriteBps,
+		})
+	}
+	if len(ioSamples) > 15 {
+		// keep highest byte-rate samples
+		sort.Slice(ioSamples, func(i, j int) bool { return ioSamples[i].Bytes > ioSamples[j].Bytes })
+		ioSamples = ioSamples[:15]
+	}
+	dex.pushStorage(ioSamples)
+
 	byCPU := append([]ProcessRow(nil), rows...)
 	sort.Slice(byCPU, func(i, j int) bool { return byCPU[i].CPUPct > byCPU[j].CPUPct })
 	if len(byCPU) > 10 {
@@ -555,6 +638,35 @@ func collectProcesses(ctx context.Context, s *Snapshot) {
 	}
 	s.TopByCPU = byCPU
 	s.TopByMem = byMem
+
+	// ActiveProcesses: top 40 by a combined score so the console table
+	// has enough rows without shipping every process on the host.
+	active := append([]ProcessRow(nil), rows...)
+	sort.Slice(active, func(i, j int) bool {
+		si := active[i].CPUPct*2 + active[i].MemPct
+		sj := active[j].CPUPct*2 + active[j].MemPct
+		return si > sj
+	})
+	if len(active) > 40 {
+		active = active[:40]
+	}
+	s.ActiveProcesses = active
+}
+
+// niceToPriority maps OS niceness to ControlUp-style priority labels.
+func niceToPriority(nice int32) string {
+	switch {
+	case nice <= -10:
+		return "High"
+	case nice < 0:
+		return "Above normal"
+	case nice == 0:
+		return "Normal"
+	case nice < 10:
+		return "Below normal"
+	default:
+		return "Low"
+	}
 }
 
 // applyOpenConns counts per-PID active sockets (any state, both
@@ -567,6 +679,9 @@ func (s *Snapshot) applyOpenConns(perPid map[int32]int) {
 	}
 	for i := range s.TopByMem {
 		s.TopByMem[i].OpenConns = perPid[s.TopByMem[i].PID]
+	}
+	for i := range s.ActiveProcesses {
+		s.ActiveProcesses[i].OpenConns = perPid[s.ActiveProcesses[i].PID]
 	}
 }
 
@@ -684,10 +799,9 @@ func collectSockets(ctx context.Context, s *Snapshot) {
 		}
 
 		direction := "outbound"
-		var localPort uint32
+		localPort := c.Laddr.Port
 		if ourListeners[listenKey{proto: proto, port: c.Laddr.Port}] {
 			direction = "inbound"
-			localPort = c.Laddr.Port
 		}
 
 		procName := resolvePidName(c.Pid)
@@ -713,6 +827,7 @@ func collectSockets(ctx context.Context, s *Snapshot) {
 			Direction:   direction,
 			RemoteIP:    c.Raddr.IP,
 			RemotePort:  c.Raddr.Port,
+			LocalIP:     c.Laddr.IP,
 			LocalPort:   localPort,
 			State:       state,
 			PID:         c.Pid,

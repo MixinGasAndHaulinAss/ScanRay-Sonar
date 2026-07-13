@@ -167,6 +167,12 @@ func runHealthLoop(ctx context.Context, log *slog.Logger) {
 			log.Debug("traceroute failed", "err", err)
 		}
 		extras.setHealth(h)
+		// DEX inventory shares the health cadence — COM Update +
+		// registry Uninstall + WinEvent are too heavy for the 30s loop.
+		inv := CollectDEXInventory(hCtx)
+		if inv != nil {
+			dex.setInventory(inv)
+		}
 	}
 	tick()
 	t := time.NewTicker(5 * time.Minute)

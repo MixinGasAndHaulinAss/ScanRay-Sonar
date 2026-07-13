@@ -1,76 +1,99 @@
-// Agents — overview shell.
-//
-// Replaces the old monolithic Agents page with a dropdown switcher
-// that routes to one of seven sub-pages under pages/agents/. The
-// dropdown selection persists across reloads in localStorage so an
-// operator who lives in "Network · Latency" doesn't have to re-pick
-// it every refresh. Filters/search remain inside the Devices view
-// since they only matter there.
+// Devices shell — ControlUp-style Overview | Details | Reports IA.
+// Enrollment stays reachable from Overview (admin link) and the
+// Details empty-state.
 
 import { useEffect, useState } from "react";
-import OverviewSelect, {
-  loadOverviewView,
-  saveOverviewView,
-  type OverviewView,
-} from "../components/OverviewSelect";
-import ApplicationsPerformance from "./agents/ApplicationsPerformance";
+import { Link } from "react-router-dom";
 import Devices from "./agents/Devices";
-import DevicesAverages from "./agents/DevicesAverages";
-import DevicesPerformance from "./agents/DevicesPerformance";
+import DevicesReports from "./agents/DevicesReports";
 import Enrollment from "./agents/Enrollment";
-import NetworkLatency from "./agents/NetworkLatency";
-import NetworkPerformance from "./agents/NetworkPerformance";
 import Overview from "./agents/Overview";
-import UserExperience from "./agents/UserExperience";
 
-export default function Agents() {
-  const [view, setView] = useState<OverviewView>(loadOverviewView);
-  useEffect(() => saveOverviewView(view), [view]);
+type DevicesTab = "overview" | "details" | "reports" | "enrollment";
 
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-4">
-        <OverviewSelect value={view} onChange={setView} />
-        <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Agents</h2>
-          <p className="text-sm text-slate-400">
-            Hosts running the Sonar Probe. Switch the view dropdown to drill into
-            device, network, or user-experience aggregations.
-          </p>
-        </div>
-      </div>
+const TAB_KEY = "sonar.devices.tab";
 
-      <ViewBody view={view} />
-    </div>
-  );
+function loadTab(): DevicesTab {
+  try {
+    const v = localStorage.getItem(TAB_KEY);
+    if (v === "overview" || v === "details" || v === "reports" || v === "enrollment") return v;
+  } catch {
+    /* ignore */
+  }
+  return "overview";
 }
 
-function ViewBody({ view }: { view: OverviewView }) {
-  switch (view) {
-    case "overview":
-      return <Overview />;
-    case "devices":
-      return <Devices />;
-    case "devices-averages":
-      return <DevicesAverages />;
-    case "devices-performance":
-      return <DevicesPerformance />;
-    case "network-latency":
-      return <NetworkLatency />;
-    case "network-performance":
-      return <NetworkPerformance />;
-    case "applications-performance":
-      return <ApplicationsPerformance />;
-    case "user-experience":
-      return <UserExperience />;
-    case "enrollment":
-      return <Enrollment />;
-    default: {
-      // exhaustiveness check — adding a new OverviewView without
-      // wiring a case here is a TS error.
-      const _exhaustive: never = view;
-      void _exhaustive;
-      return null;
+const TABS: { id: DevicesTab; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "details", label: "Details" },
+  { id: "reports", label: "Reports" },
+];
+
+export default function Agents() {
+  const [tab, setTab] = useState<DevicesTab>(loadTab);
+  useEffect(() => {
+    try {
+      localStorage.setItem(TAB_KEY, tab);
+    } catch {
+      /* ignore */
     }
-  }
+  }, [tab]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold tracking-tight">Devices</h2>
+          <p className="text-sm text-slate-400">
+            Endpoint fleet visibility — live grid, device drill-down, and DEX reports.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setTab("enrollment")}
+          className="text-xs text-sonar-400 hover:underline"
+        >
+          Enrollment tokens
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1 border-b border-ink-800">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={
+              "relative px-4 py-2 text-sm font-medium transition " +
+              (tab === t.id
+                ? "text-sonar-200 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded after:bg-sonar-400"
+                : "text-slate-400 hover:text-slate-200")
+            }
+          >
+            {t.label}
+          </button>
+        ))}
+        {tab === "enrollment" && (
+          <span className="relative px-4 py-2 text-sm font-medium text-sonar-200 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded after:bg-sonar-400">
+            Enrollment
+          </span>
+        )}
+      </div>
+
+      {tab === "overview" && <Overview />}
+      {tab === "details" && <Devices />}
+      {tab === "reports" && <DevicesReports />}
+      {tab === "enrollment" && (
+        <div className="space-y-3">
+          <p className="text-sm text-slate-400">
+            Issue install tokens for new probes.{" "}
+            <Link to="#" className="text-sonar-400 hover:underline" onClick={(e) => { e.preventDefault(); setTab("details"); }}>
+              Back to Details
+            </Link>
+          </p>
+          <Enrollment />
+        </div>
+      )}
+    </div>
+  );
 }

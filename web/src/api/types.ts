@@ -89,6 +89,8 @@ export interface Snapshot {
   hardware?: SnapshotHardware;
   topByCpu: SnapshotProcess[];
   topByMem: SnapshotProcess[];
+  /** Schema v5+: larger live process table for Active Processes tab. */
+  activeProcesses?: SnapshotProcess[];
   listeners: SnapshotListener[];
   /** Schema v2+: aggregated active peer conversations. Optional for back-compat. */
   conversations?: SnapshotConversation[];
@@ -101,8 +103,81 @@ export interface Snapshot {
   pendingReboot: boolean;
   pendingRebootReason?: string;
   stoppedAutoServices?: SnapshotService[];
+  /** Schema v5+: fuller Windows service inventory. */
+  services?: SnapshotService[];
   failedUnits?: string[];
+  /** Schema v5+: DEX device-tab payloads. */
+  installedApps?: SnapshotInstalledApp[];
+  missingPatches?: SnapshotMissingPatch[];
+  win11Readiness?: SnapshotWin11Readiness;
+  topApps?: SnapshotAppFocus[];
+  stoppedProcesses?: SnapshotProcessStop[];
+  eventLog?: SnapshotEventLog[];
+  powerEvents?: SnapshotPowerEvent[];
+  storageIo?: SnapshotStorageIO[];
   collectionWarnings?: string[];
+}
+
+export interface SnapshotInstalledApp {
+  name: string;
+  version?: string;
+  publisher?: string;
+  installDate?: string;
+  installLocation?: string;
+}
+export interface SnapshotMissingPatch {
+  title: string;
+  kb?: string;
+  severity?: string;
+  sizeMb?: number;
+}
+export interface SnapshotWin11Readiness {
+  eligible?: boolean;
+  reason?: string;
+  tpmReady?: boolean;
+  secureBoot?: boolean;
+  cpuOk?: boolean;
+  ramOk?: boolean;
+  storageOk?: boolean;
+}
+export interface SnapshotAppFocus {
+  name: string;
+  pid?: number;
+  focusSeconds: number;
+  focusPct?: number;
+  lastSeen?: string;
+}
+export interface SnapshotProcessStop {
+  time: string;
+  name: string;
+  pid: number;
+  user?: string;
+  cpuPct?: number;
+  memPct?: number;
+  duration?: string;
+}
+export interface SnapshotEventLog {
+  time: string;
+  log?: string;
+  level?: string;
+  provider?: string;
+  eventId?: number;
+  message?: string;
+}
+export interface SnapshotPowerEvent {
+  time: string;
+  kind: string;
+  eventId?: number;
+  message?: string;
+}
+export interface SnapshotStorageIO {
+  time: string;
+  process: string;
+  pid: number;
+  file?: string;
+  bytes: number;
+  readBps?: number;
+  writeBps?: number;
 }
 export interface SnapshotHost {
   hostname: string;
@@ -183,6 +258,12 @@ export interface SnapshotProcess {
   netRecvBps?: number;
   /** Open TCP/UDP sockets owned by this process. */
   openConns?: number;
+  /** Schema v5+ */
+  startedAt?: string;
+  architecture?: string;
+  elevated?: boolean;
+  priority?: string;
+  isService?: boolean;
 }
 
 // SnapshotHardware mirrors internal/probe/hardware.go. Optional —
@@ -258,11 +339,15 @@ export interface SnapshotConversation {
   remoteIp: string;
   remoteHost?: string;
   remotePort: number;
+  /** Schema v5+: local bind address. */
+  localIp?: string;
   /** Set for inbound conversations — the local listening port being hit. */
   localPort?: number;
   state?: string;
   pid?: number;
   processName?: string;
+  /** Schema v5+ */
+  user?: string;
   /** Number of socket rows aggregated into this conversation. */
   count: number;
 }

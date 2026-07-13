@@ -1,41 +1,21 @@
-// AgentDetail — the system tab for a single host. Designed to answer
-// the questions an operator asks first when they click an agent:
-//   1. Is it healthy right now? (stat cards + pending-reboot banner)
-//   2. What's been going on the last 24h? (sparklines)
-//   3. What's actually running? (top procs, listeners, sessions)
-//   4. What about disks/NICs? (tables)
-//   5. What's broken / waiting? (failed units / stopped services)
-//
-// Everything renders from one /agents/{id} fetch + one
-// /agents/{id}/metrics fetch — no per-cell pulls — so the page is
-// fast even on a slow VPN.
+// AgentDetail — ControlUp-style device drill-down with category tabs.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import type {
   AgentDetail,
-  HardwareDisk,
-  HardwareGPU,
-  HardwareMemoryModule,
-  HardwareNIC,
-  LatencySeries,
   MetricSeries,
   NetworkSeries,
   Site,
+  Snapshot,
   SnapshotConversation,
-  SnapshotDisk,
-  SnapshotHardware,
-  SnapshotListener,
-  SnapshotNIC,
   SnapshotProcess,
-  SnapshotSession,
   SnapshotService,
 } from "../api/types";
 import AgentNetworkGraphSection from "../components/AgentNetworkGraph";
 import LineChart from "../components/LineChart";
-import Sparkline from "../components/Sparkline";
 import {
   formatBytes,
   formatDuration,
@@ -44,45 +24,93 @@ import {
   pctBarColor,
 } from "../lib/format";
 
+type DeviceTab =
+  | "performance"
+  | "processes"
+  | "network"
+  | "storage"
+  | "apps"
+  | "patches"
+  | "stopped"
+  | "services"
+  | "sessions"
+  | "topapps"
+  | "eventlog"
+  | "power";
+
+type NetSub = "tcp" | "map" | "topology";
+
+const TABS: { id: DeviceTab; label: string }[] = [
+  { id: "performance", label: "Performance" },
+  { id: "processes", label: "Active Processes" },
+  { id: "network", label: "Network" },
+  { id: "storage", label: "Storage" },
+  { id: "apps", label: "Installed Applications" },
+  { id: "patches", label: "Missing Patches" },
+  { id: "stopped", label: "Stopped Processes" },
+  { id: "services", label: "Services" },
+  { id: "sessions", label: "Sessions" },
+  { id: "topapps", label: "Top Apps" },
+  { id: "eventlog", label: "Windows Event Log" },
+  { id: "power", label: "Power Events" },
+];
+
+const TAB_KEY = "sonar.device.tab";
+
 export default function AgentDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
   const qc = useQueryClient();
+  const [tab, setTab] = useState<DeviceTab>(() => {
+    try {
+      const v = localStorage.getItem(TAB_KEY);
+      if (TABS.some((t) => t.id === v)) return v as DeviceTab;
+    } catch {
+      /* ignore */
+    }
+    return "performance";
+  });
+  const [paused, setPaused] = useState(false);
+  const [netSub, setNetSub] = useState<NetSub>("tcp");
+  const [procSearch, setProcSearch] = useState("");
+  const [connSearch, setConnSearch] = useState("");
+  const [compareAvg, setCompareAvg] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(TAB_KEY, tab);
+    } catch {
+      /* ignore */
+    }
+  }, [tab]);
+
+  const refreshMs = paused ? false : 15_000;
 
   const agent = useQuery({
     queryKey: ["agent", id],
     queryFn: () => api.get<AgentDetail>(`/agents/${id}`),
-    refetchInterval: 30_000,
+    refetchInterval: refreshMs,
     enabled: !!id,
   });
   const metrics = useQuery({
     queryKey: ["agent-metrics", id, "24h"],
     queryFn: () => api.get<MetricSeries>(`/agents/${id}/metrics?range=24h`),
-    refetchInterval: 60_000,
+    refetchInterval: paused ? false : 60_000,
     enabled: !!id,
   });
   const network = useQuery({
     queryKey: ["agent-network", id, "24h"],
     queryFn: () => api.get<NetworkSeries>(`/agents/${id}/network?range=24h`),
-    refetchInterval: 60_000,
-    enabled: !!id,
-  });
-  const latency = useQuery({
-    queryKey: ["agent-latency", id, "24h"],
-    queryFn: () => api.get<LatencySeries>(`/agents/${id}/latency?range=24h&target=both`),
-    refetchInterval: 60_000,
+    refetchInterval: paused ? false : 60_000,
     enabled: !!id,
   });
   const sites = useQuery({ queryKey: ["sites"], queryFn: () => api.get<Site[]>("/sites") });
-  // Pull all agents for tag autocomplete: small payload, already
-  // cached by the Agents list page so this is usually a no-op.
   const allAgents = useQuery({
     queryKey: ["agents"],
     queryFn: () => api.get<AgentDetail[]>("/agents"),
   });
 
   const updateTags = useMutation({
-    mutationFn: (tags: string[]) =>
-      api.patch<AgentDetail>(`/agents/${id}`, { tags }),
+    mutationFn: (tags: string[]) => api.patch<AgentDetail>(`/agents/${id}`, { tags }),
     onSuccess: (updated) => {
       qc.setQueryData(["agent", id], (prev: AgentDetail | undefined) =>
         prev ? { ...prev, tags: updated.tags } : prev,
@@ -92,31 +120,43 @@ export default function AgentDetailPage() {
   });
 
   const snap = agent.data?.lastMetrics ?? null;
+  const online =
+    !!agent.data?.lastSeenAt &&
+    Date.now() - new Date(agent.data.lastSeenAt).getTime() < 5 * 60_000;
 
-  const cpuSeries = useMemo(
-    () => (metrics.data?.samples ?? []).map((s) => Number(s.cpuPct ?? 0)),
-    [metrics.data],
-  );
-  const memSeries = useMemo(() => {
-    if (!metrics.data) return [];
-    return metrics.data.samples.map((s) => {
-      const used = Number(s.memUsedBytes ?? 0);
-      const total = Number(s.memTotalBytes ?? 0);
-      return total > 0 ? (used / total) * 100 : 0;
-    });
-  }, [metrics.data]);
+  const fleetAvg = useMemo(() => {
+    const list = allAgents.data ?? [];
+    let cpu = 0,
+      mem = 0,
+      nCpu = 0,
+      nMem = 0;
+    for (const a of list) {
+      if (a.cpuPct != null) {
+        cpu += a.cpuPct;
+        nCpu++;
+      }
+      if (a.memUsedBytes != null && a.memTotalBytes && a.memTotalBytes > 0) {
+        mem += (Number(a.memUsedBytes) / Number(a.memTotalBytes)) * 100;
+        nMem++;
+      }
+    }
+    return {
+      cpu: nCpu ? cpu / nCpu : null,
+      mem: nMem ? mem / nMem : null,
+    };
+  }, [allAgents.data]);
 
   if (agent.isLoading) {
-    return <div className="text-sm text-slate-400">Loading agent…</div>;
+    return <div className="text-sm text-slate-400">Loading device…</div>;
   }
   if (agent.isError || !agent.data) {
     return (
       <div className="space-y-3">
         <Link to="/agents" className="text-sm text-sonar-400 hover:underline">
-          ← Back to agents
+          ← Back to devices
         </Link>
         <div className="rounded-md border border-red-800/60 bg-red-950/40 p-4 text-sm text-red-200">
-          Could not load agent: {(agent.error as Error)?.message ?? "unknown error"}
+          Could not load device: {(agent.error as Error)?.message ?? "unknown error"}
         </div>
       </div>
     );
@@ -124,43 +164,17 @@ export default function AgentDetailPage() {
 
   const a = agent.data;
   const siteName = sites.data?.find((s) => s.id === a.siteId)?.name ?? a.siteId.slice(0, 8);
-  const memPct =
-    a.memUsedBytes != null && a.memTotalBytes && a.memTotalBytes > 0
-      ? (Number(a.memUsedBytes) / Number(a.memTotalBytes)) * 100
-      : null;
-  const diskPct =
-    a.rootDiskUsedBytes != null && a.rootDiskTotalBytes && a.rootDiskTotalBytes > 0
-      ? (Number(a.rootDiskUsedBytes) / Number(a.rootDiskTotalBytes)) * 100
-      : null;
-  const online =
-    a.lastSeenAt && Date.now() - new Date(a.lastSeenAt).getTime() < 5 * 60_000;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0 flex-1 space-y-2">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
           <Link to="/agents" className="text-xs text-sonar-400 hover:underline">
-            ← All agents
+            ← Devices
           </Link>
-          <h2 className="mt-1 text-2xl font-semibold tracking-tight">{a.hostname}</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">{a.hostname}</h2>
           <p className="text-sm text-slate-400">
-            {siteName} · {a.os} {a.osVersion} · agent {a.agentVersion || "?"}
-            {a.primaryIp && <> · {a.primaryIp}</>}
-            {a.publicIp && (
-              <>
-                {" · "}
-                <span className="text-slate-300">public {a.publicIp}</span>
-                {(a.geoCity || a.geoCountryName) && (
-                  <span className="text-slate-500">
-                    {" "}
-                    ({[a.geoCity, a.geoSubdivision, a.geoCountryIso].filter(Boolean).join(", ")})
-                  </span>
-                )}
-                {a.geoOrg && (
-                  <span className="text-slate-500"> via AS{a.geoAsn} {a.geoOrg}</span>
-                )}
-              </>
-            )}
+            {siteName} · {a.os} {a.osVersion} · probe {a.agentVersion || "?"}
           </p>
           <TagEditor
             tags={a.tags ?? []}
@@ -178,126 +192,1267 @@ export default function AgentDetailPage() {
             onChange={(next) => updateTags.mutate(next)}
           />
         </div>
-        <div className="text-right text-xs">
-          <div>
-            <span
-              className={
-                online
-                  ? "rounded bg-emerald-900/40 px-2 py-0.5 text-emerald-300"
-                  : "rounded bg-slate-800 px-2 py-0.5 text-slate-400"
-              }
-            >
-              {online ? "online" : "offline"}
-            </span>
-          </div>
-          <div className="mt-1 text-slate-500">
-            last seen {formatRelative(a.lastSeenAt)}
-          </div>
-          <div className="text-slate-600">
-            metrics {formatRelative(a.lastMetricsAt)}
-          </div>
+        <div className="flex items-center gap-2">
+          <span
+            className={
+              online
+                ? "inline-flex items-center gap-1.5 rounded-full bg-emerald-900/40 px-2.5 py-1 text-xs text-emerald-300"
+                : "rounded-full bg-slate-800 px-2.5 py-1 text-xs text-slate-400"
+            }
+          >
+            {online && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />}
+            {online ? "Connected" : "Offline"}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPaused((p) => !p)}
+            className="inline-flex items-center gap-1.5 rounded-md bg-sonar-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sonar-500"
+          >
+            {paused ? "Resume Auto Refresh" : "Pause Auto Refresh"}
+          </button>
         </div>
       </div>
 
-      {a.pendingReboot && (
-        <div className="rounded-xl border border-amber-700/60 bg-amber-950/40 p-3 text-sm text-amber-200">
-          <strong className="font-semibold">Reboot pending.</strong>{" "}
-          {snap?.pendingRebootReason ||
-            "The host has reported a pending reboot — patches or driver installs need this machine restarted to take effect."}
+      <div className="flex gap-1 overflow-x-auto border-b border-ink-800 pb-px">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={
+              "whitespace-nowrap px-3 py-2 text-sm font-medium transition " +
+              (tab === t.id
+                ? "border-b-2 border-sonar-400 text-sonar-200"
+                : "border-b-2 border-transparent text-slate-400 hover:text-slate-200")
+            }
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {!snap && (
+        <div className="rounded-lg border border-ink-800 bg-ink-900/50 p-6 text-sm text-slate-400">
+          No telemetry yet — waiting for the probe to send its first snapshot.
         </div>
       )}
 
-      {snap == null ? (
-        <div className="rounded-xl border border-ink-800 bg-ink-900 p-6 text-sm text-slate-400">
-          No telemetry yet. The probe checks in every 60 seconds; if nothing
-          appears within a couple of minutes, check the agent service is
-          running and that <code>/agent/ws</code> is reachable.
-        </div>
-      ) : (
-        <>
-          <StatCards
-            cpuPct={a.cpuPct ?? snap.cpu.usagePct}
-            memPct={memPct ?? snap.memory.usedPct}
-            diskPct={diskPct}
-            uptime={a.uptimeSeconds ?? snap.host.uptimeSeconds}
-            cores={snap.cpu.logicalCpus}
-            memTotal={Number(a.memTotalBytes ?? snap.memory.totalBytes)}
-            diskTotal={Number(a.rootDiskTotalBytes ?? 0)}
-            cpuModel={snap.cpu.model}
-          />
+      {snap && tab === "performance" && (
+        <PerformanceTab
+          agent={a}
+          snap={snap}
+          metrics={metrics.data}
+          network={network.data}
+          compareAvg={compareAvg}
+          onCompareAvg={setCompareAvg}
+          fleetAvg={fleetAvg}
+        />
+      )}
+      {snap && tab === "processes" && (
+        <ProcessesTab
+          snap={snap}
+          search={procSearch}
+          onSearch={setProcSearch}
+        />
+      )}
+      {snap && tab === "network" && (
+        <NetworkTab
+          id={id}
+          snap={snap}
+          netSub={netSub}
+          onNetSub={setNetSub}
+          search={connSearch}
+          onSearch={setConnSearch}
+          agent={a}
+        />
+      )}
+      {snap && tab === "storage" && <StorageTab snap={snap} />}
+      {snap && tab === "services" && <ServicesTab snap={snap} />}
+      {snap && tab === "sessions" && <SessionsTab snap={snap} />}
+      {snap && tab === "patches" && <PatchesTab snap={snap} />}
+      {snap && tab === "apps" && <InstalledAppsTab snap={snap} />}
+      {snap && tab === "stopped" && <StoppedProcessesTab snap={snap} />}
+      {snap && tab === "topapps" && <TopAppsTab snap={snap} />}
+      {snap && tab === "eventlog" && <EventLogTab snap={snap} />}
+      {snap && tab === "power" && <PowerEventsTab snap={snap} />}
+    </div>
+  );
+}
 
-          <Charts cpu={cpuSeries} mem={memSeries} loading={metrics.isLoading} />
+function PerformanceTab({
+  agent,
+  snap,
+  metrics,
+  network,
+  compareAvg,
+  onCompareAvg,
+  fleetAvg,
+}: {
+  agent: AgentDetail;
+  snap: Snapshot;
+  metrics?: MetricSeries;
+  network?: NetworkSeries;
+  compareAvg: boolean;
+  onCompareAvg: (v: boolean) => void;
+  fleetAvg: { cpu: number | null; mem: number | null };
+}) {
+  const times = useMemo(
+    () => (metrics?.samples ?? []).map((s) => s.time),
+    [metrics],
+  );
+  const cpuVals = useMemo(
+    () => (metrics?.samples ?? []).map((s) => Number(s.cpuPct ?? 0)),
+    [metrics],
+  );
+  const memGb = useMemo(
+    () =>
+      (metrics?.samples ?? []).map((s) => Number(s.memUsedBytes ?? 0) / (1024 * 1024 * 1024)),
+    [metrics],
+  );
+  const memTotalGb = snap.memory.totalBytes / (1024 * 1024 * 1024);
+  const netTimes = useMemo(
+    () => (network?.samples ?? []).map((s) => s.time),
+    [network],
+  );
+  const netIn = useMemo(
+    () => (network?.samples ?? []).map((s) => Number(s.inBps ?? 0) / (1024 * 1024)),
+    [network],
+  );
+  const netOut = useMemo(
+    () => (network?.samples ?? []).map((s) => Number(s.outBps ?? 0) / (1024 * 1024)),
+    [network],
+  );
 
-          <NetworkAndLatencySection
-            network={network.data}
-            latency={latency.data}
-            loading={network.isLoading || latency.isLoading}
-          />
+  const scoreSeries = useMemo(() => {
+    return cpuVals.map((cpu, i) => {
+      const memPct =
+        metrics?.samples[i]?.memTotalBytes && Number(metrics.samples[i].memTotalBytes) > 0
+          ? (Number(metrics.samples[i].memUsedBytes ?? 0) /
+              Number(metrics.samples[i].memTotalBytes)) *
+            100
+          : 0;
+      // Lightweight 0–10 score proxy matching score.go spirit.
+      let s = 10;
+      if (cpu > 90) s -= 3;
+      else if (cpu > 70) s -= 1.5;
+      if (memPct > 90) s -= 2;
+      else if (memPct > 75) s -= 1;
+      return Math.max(0, Math.min(10, s));
+    });
+  }, [cpuVals, metrics]);
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <DisksTable disks={snap.disks ?? []} />
-            <NicsTable nics={snap.nics ?? []} />
-          </div>
+  const root = snap.disks.find((d) => d.mountpoint === "/" || d.mountpoint === "C:\\") ?? snap.disks[0];
+  const hw = snap.hardware;
+  const consoleUser = snap.loggedInUsers.find((u) => u.state === "Active")?.user
+    ?? snap.loggedInUsers[0]?.user
+    ?? "—";
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <ProcessTable title="Top processes by CPU" rows={snap.topByCpu ?? []} sortBy="cpu" />
-            <ProcessTable title="Top processes by memory" rows={snap.topByMem ?? []} sortBy="mem" />
-          </div>
-
-          <ListenersTable listeners={snap.listeners ?? []} />
-
-          <ConversationsTable conversations={snap.conversations ?? []} />
-
-          <AgentNetworkGraphSection agentId={id} />
-
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <SessionsTable sessions={snap.loggedInUsers ?? []} />
-            {snap.stoppedAutoServices && snap.stoppedAutoServices.length > 0 && (
-              <ServicesTable services={snap.stoppedAutoServices} />
-            )}
-            {snap.failedUnits && snap.failedUnits.length > 0 && (
-              <FailedUnitsTable units={snap.failedUnits} />
-            )}
-          </div>
-
-          {snap.hardware && <HardwareSection hw={snap.hardware} />}
-
-          <HostMeta snap={snap} />
-
-          {snap.collectionWarnings && snap.collectionWarnings.length > 0 && (
-            <div className="rounded-xl border border-amber-800/40 bg-amber-950/20 p-3 text-xs text-amber-200">
-              <div className="mb-1 font-semibold">Collection warnings</div>
-              <ul className="list-inside list-disc space-y-0.5">
-                {snap.collectionWarnings.map((w) => (
-                  <li key={w}>{w}</li>
-                ))}
-              </ul>
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 lg:grid-cols-5">
+        <MetaCard title="Location">
+          {agent.geoLat != null && agent.geoLon != null ? (
+            <p className="text-sm text-slate-300">
+              {[agent.geoCity, agent.geoSubdivision, agent.geoCountryName].filter(Boolean).join(", ") ||
+                "Mapped"}
+              <br />
+              <span className="text-xs text-slate-500">
+                {agent.geoLat.toFixed(3)}, {agent.geoLon.toFixed(3)}
+              </span>
+            </p>
+          ) : (
+            <p className="text-sm text-slate-500">No GeoIP yet</p>
+          )}
+        </MetaCard>
+        <MetaCard title="General">
+          <KV label="Enrolled" value={formatRelative(agent.enrolledAt)} />
+          <KV label="Last communication" value={formatRelative(agent.lastSeenAt)} />
+          <KV label="Console user" value={consoleUser} />
+          <KV label="Remote IP" value={agent.publicIp || "—"} />
+          <KV label="ISP" value={agent.geoOrg || snap.health?.ispName || "—"} />
+          <KV label="Agent version" value={agent.agentVersion || "—"} />
+        </MetaCard>
+        <MetaCard title="Operating System">
+          <KV label="OS" value={`${snap.host.platform} ${snap.host.platformVersion}`} />
+          <KV label="Architecture" value={snap.host.kernelArch} />
+          <KV label="Kernel" value={snap.host.kernelVersion} />
+          {root && (
+            <div className="mt-2 space-y-1">
+              <div className="flex justify-between text-[11px] text-slate-400">
+                <span>Drive {root.mountpoint}</span>
+                <span>
+                  {formatBytes(root.freeBytes)} free / {formatBytes(root.totalBytes)}
+                </span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded bg-ink-800">
+                <div
+                  className={"h-full " + pctBarColor(root.usedPct)}
+                  style={{ width: `${Math.min(100, root.usedPct)}%` }}
+                />
+              </div>
             </div>
           )}
-        </>
+        </MetaCard>
+        <MetaCard title="Hardware">
+          <KV label="Manufacturer" value={hw?.system?.manufacturer || "—"} />
+          <KV label="Model" value={hw?.system?.productName || "—"} />
+          <KV label="Serial" value={hw?.system?.serialNumber || "—"} />
+          <KV
+            label="CPU"
+            value={snap.cpu.model || hw?.cpu?.model || "—"}
+          />
+          <KV
+            label="Cores"
+            value={`${snap.cpu.cores} phys / ${snap.cpu.logicalCpus} logical`}
+          />
+          <KV label="Memory" value={formatBytes(snap.memory.totalBytes)} />
+          <KV
+            label="Battery health"
+            value={
+              snap.health?.batteryHealthPct != null
+                ? formatPct(snap.health.batteryHealthPct)
+                : "—"
+            }
+          />
+        </MetaCard>
+        <MetaCard title="Network">
+          {snap.nics
+            .filter((n) => n.kind !== "loopback" && n.up)
+            .slice(0, 4)
+            .map((n) => (
+              <div key={n.name} className="mb-2 border-b border-ink-800/60 pb-2 last:mb-0 last:border-0 last:pb-0">
+                <div className="text-xs font-medium text-slate-200">{n.name}</div>
+                <div className="text-[11px] text-slate-500">
+                  {n.kind || "adapter"} · {n.mac || "no MAC"}
+                </div>
+                <div className="font-mono text-[11px] text-slate-400">
+                  {(n.addresses ?? []).join(", ") || "—"}
+                </div>
+              </div>
+            ))}
+          {snap.nics.filter((n) => n.kind !== "loopback" && n.up).length === 0 && (
+            <p className="text-sm text-slate-500">No active adapters</p>
+          )}
+        </MetaCard>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+        <label className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={compareAvg}
+            onChange={(e) => onCompareAvg(e.target.checked)}
+          />
+          Compare with averages
+        </label>
+        {compareAvg && (
+          <span className="text-slate-500">
+            Fleet avg CPU {fleetAvg.cpu != null ? formatPct(fleetAvg.cpu) : "—"} · Mem{" "}
+            {fleetAvg.mem != null ? formatPct(fleetAvg.mem) : "—"}
+          </span>
+        )}
+        <span className="ml-auto text-slate-500">Last 24h</span>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <ChartCard title="Device Score">
+          <LineChart
+            times={times}
+            series={[{ label: "Score", values: scoreSeries, color: "stroke-sky-400 text-sky-400" }]}
+            height={180}
+            yMin={0}
+            yMax={10}
+          />
+        </ChartCard>
+        <ChartCard title="CPU Usage (%)">
+          <LineChart
+            times={times}
+            series={[
+              { label: "CPU", values: cpuVals, color: "stroke-emerald-400 text-emerald-400" },
+              ...(compareAvg && fleetAvg.cpu != null
+                ? [
+                    {
+                      label: "Fleet avg",
+                      values: cpuVals.map(() => fleetAvg.cpu),
+                      color: "stroke-slate-500 text-slate-500",
+                    },
+                  ]
+                : []),
+            ]}
+            height={180}
+            yMin={0}
+            yMax={100}
+            yUnit="%"
+          />
+        </ChartCard>
+        <ChartCard title="CPU Queue Length">
+          <LineChart
+            times={times}
+            series={[
+              {
+                label: "Queue",
+                values: times.map(() => snap.health?.cpuQueueLength ?? 0),
+                color: "stroke-sky-400 text-sky-400",
+              },
+            ]}
+            height={180}
+            yMin={0}
+          />
+          <p className="mt-1 text-[10px] text-slate-600">
+            Current sample: {snap.health?.cpuQueueLength ?? "—"} (history requires denser health ingest)
+          </p>
+        </ChartCard>
+        <ChartCard title="Memory Usage (GB)">
+          <LineChart
+            times={times}
+            series={[
+              { label: "In use", values: memGb, color: "stroke-sky-400 text-sky-400" },
+              {
+                label: "Total",
+                values: memGb.map(() => memTotalGb),
+                color: "stroke-slate-600 text-slate-600",
+              },
+            ]}
+            height={180}
+            yMin={0}
+            yMax={Math.max(memTotalGb * 1.05, 1)}
+            yUnit="GB"
+          />
+        </ChartCard>
+        <ChartCard title="Disk Queue Length">
+          <LineChart
+            times={times}
+            series={[
+              {
+                label: "Queue",
+                values: times.map(() => snap.health?.diskQueueLength ?? 0),
+                color: "stroke-rose-400 text-rose-400",
+              },
+            ]}
+            height={180}
+            yMin={0}
+          />
+          <p className="mt-1 text-[10px] text-slate-600">
+            Current sample: {snap.health?.diskQueueLength ?? "—"}
+          </p>
+        </ChartCard>
+        <ChartCard title="Network Usage (MB/s)">
+          <LineChart
+            times={netTimes}
+            series={[
+              { label: "Received", values: netIn, color: "stroke-emerald-300 text-emerald-300" },
+              { label: "Sent", values: netOut, color: "stroke-emerald-600 text-emerald-600" },
+            ]}
+            height={180}
+            yMin={0}
+            yUnit="MB/s"
+          />
+        </ChartCard>
+      </div>
+
+      {agent.pendingReboot && (
+        <div className="rounded-md border border-amber-800/50 bg-amber-950/30 px-3 py-2 text-sm text-amber-200">
+          Reboot pending{agent.lastMetrics?.pendingRebootReason ? `: ${agent.lastMetrics.pendingRebootReason}` : ""}
+        </div>
       )}
     </div>
   );
 }
 
-// ---- Tag editor ----------------------------------------------------------
-//
-// Inline tag editor for an agent. Tags are short, lowercase identifiers
-// — "prod", "edge", "ec2", "k8s-node" — that operators use to filter
-// the Agents list. The editor:
-//   * Accepts comma- or Enter-separated input (with autocomplete from
-//     other hosts' existing tags so spellings stay consistent).
-//   * Removes a tag with click on its × or Backspace on an empty input.
-//   * Sends a PATCH with the next list immediately (optimistic UX is
-//     handled by react-query setQueryData in the parent).
-//
-// Tags are normalized server-side (lower, trimmed, deduped, capped at
-// 32 chars and 32 total) — we just mirror that so the UI doesn't drift
-// from what's persisted.
+function ProcessesTab({
+  snap,
+  search,
+  onSearch,
+}: {
+  snap: Snapshot;
+  search: string;
+  onSearch: (v: string) => void;
+}) {
+  const rows = useMemo(() => {
+    const base =
+      snap.activeProcesses && snap.activeProcesses.length > 0
+        ? snap.activeProcesses
+        : mergeUnique(snap.topByCpu, snap.topByMem);
+    const q = search.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        String(p.pid).includes(q) ||
+        (p.user ?? "").toLowerCase().includes(q),
+    );
+  }, [snap, search]);
+
+  const [sortKey, setSortKey] = useState<"cpu" | "mem" | "name">("cpu");
+  const sorted = useMemo(() => {
+    const r = [...rows];
+    r.sort((a, b) => {
+      if (sortKey === "name") return a.name.localeCompare(b.name);
+      if (sortKey === "mem") return (b.memPct ?? 0) - (a.memPct ?? 0);
+      return b.cpuPct - a.cpuPct;
+    });
+    return r;
+  }, [rows, sortKey]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={search}
+          onChange={(e) => onSearch(e.target.value)}
+          placeholder="Search by name or PID…"
+          className="h-8 w-64 rounded-md border border-ink-700 bg-ink-950 px-2 text-xs"
+        />
+        <span className="text-xs text-slate-500">{sorted.length} processes</span>
+      </div>
+      <div className="overflow-auto rounded-xl border border-ink-800">
+        <table className="w-full min-w-[1000px] text-left text-sm">
+          <thead className="bg-ink-800/80 text-xs uppercase text-slate-400">
+            <tr>
+              <th className="cursor-pointer px-3 py-2" onClick={() => setSortKey("name")}>
+                Name
+              </th>
+              <th className="px-3 py-2">Arch</th>
+              <th className="px-3 py-2">Elevated</th>
+              <th className="px-3 py-2">User</th>
+              <th className="px-3 py-2">Duration</th>
+              <th className="px-3 py-2">Priority</th>
+              <th className="px-3 py-2">Service</th>
+              <th className="cursor-pointer px-3 py-2" onClick={() => setSortKey("cpu")}>
+                CPU %
+              </th>
+              <th className="cursor-pointer px-3 py-2" onClick={() => setSortKey("mem")}>
+                Memory %
+              </th>
+              <th className="px-3 py-2">Disk I/O</th>
+              <th className="px-3 py-2">Network I/O</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((p) => (
+              <tr key={p.pid + p.name} className="border-t border-ink-800/70 even:bg-ink-950/30">
+                <td className="px-3 py-1.5 font-medium text-slate-200">
+                  {p.name}{" "}
+                  <span className="font-normal text-slate-500">({p.pid})</span>
+                </td>
+                <td className="px-3 py-1.5 text-slate-400">{p.architecture || "—"}</td>
+                <td className="px-3 py-1.5 text-slate-400">
+                  {p.elevated == null ? "—" : p.elevated ? "Yes" : "No"}
+                </td>
+                <td className="max-w-[12rem] truncate px-3 py-1.5 text-xs text-slate-400" title={p.user}>
+                  {p.user || "—"}
+                </td>
+                <td className="px-3 py-1.5 text-xs text-slate-400">
+                  {p.startedAt ? formatDuration((Date.now() - new Date(p.startedAt).getTime()) / 1000) : "—"}
+                </td>
+                <td className="px-3 py-1.5">
+                  <PriorityPill priority={p.priority} />
+                </td>
+                <td className="px-3 py-1.5 text-slate-400">
+                  {p.isService == null ? "—" : p.isService ? "Yes" : "No"}
+                </td>
+                <td className="px-3 py-1.5 tabular-nums text-slate-200">{formatPct(p.cpuPct)}</td>
+                <td className="px-3 py-1.5 tabular-nums text-slate-200">
+                  {p.memPct != null ? formatPct(p.memPct) : "—"}
+                </td>
+                <td className="px-3 py-1.5 text-xs tabular-nums text-slate-400">
+                  {formatBytes((p.diskReadBps ?? 0) + (p.diskWriteBps ?? 0))}/s
+                </td>
+                <td className="px-3 py-1.5 text-xs tabular-nums text-slate-400">
+                  {formatBytes((p.netSentBps ?? 0) + (p.netRecvBps ?? 0))}/s
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function NetworkTab({
+  id,
+  snap,
+  netSub,
+  onNetSub,
+  search,
+  onSearch,
+  agent,
+}: {
+  id: string;
+  snap: Snapshot;
+  netSub: NetSub;
+  onNetSub: (v: NetSub) => void;
+  search: string;
+  onSearch: (v: string) => void;
+  agent: AgentDetail;
+}) {
+  const conns = useMemo(() => {
+    const list = snap.conversations ?? [];
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(
+      (c) =>
+        (c.processName ?? "").toLowerCase().includes(q) ||
+        c.remoteIp.includes(q) ||
+        (c.localIp ?? "").includes(q) ||
+        String(c.pid ?? "").includes(q),
+    );
+  }, [snap.conversations, search]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {(["tcp", "map", "topology"] as NetSub[]).map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => onNetSub(s)}
+            className={
+              "rounded-md px-3 py-1.5 text-xs font-medium " +
+              (netSub === s
+                ? "bg-sonar-700/50 text-sonar-100"
+                : "bg-ink-800 text-slate-400 hover:text-slate-200")
+            }
+          >
+            {s === "tcp" ? "TCP Connections" : s === "map" ? "Map" : "Topology"}
+          </button>
+        ))}
+      </div>
+
+      {netSub === "tcp" && (
+        <>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {snap.nics
+              .filter((n) => n.kind !== "loopback")
+              .slice(0, 6)
+              .map((n) => (
+                <div key={n.name} className="rounded-lg border border-ink-800 bg-ink-900/40 p-3">
+                  <div className="text-sm font-medium text-slate-200">{n.name}</div>
+                  <div className="text-xs text-slate-500">
+                    {n.kind || "adapter"} · {n.up ? "Up" : "Down"} · {n.mac || "—"}
+                  </div>
+                  <div className="mt-1 font-mono text-[11px] text-slate-400">
+                    {(n.addresses ?? []).join(", ") || "no address"}
+                  </div>
+                  <div className="mt-1 text-[11px] text-slate-500">
+                    ↓ {formatBytes(n.bytesRecvBps ?? 0)}/s · ↑ {formatBytes(n.bytesSentBps ?? 0)}/s
+                  </div>
+                </div>
+              ))}
+          </div>
+          <input
+            value={search}
+            onChange={(e) => onSearch(e.target.value)}
+            placeholder="Search processes…"
+            className="h-8 w-64 rounded-md border border-ink-700 bg-ink-950 px-2 text-xs"
+          />
+          <div className="overflow-auto rounded-xl border border-ink-800">
+            <table className="w-full min-w-[900px] text-left text-sm">
+              <thead className="bg-ink-800/80 text-xs uppercase text-slate-400">
+                <tr>
+                  <th className="px-3 py-2">Process</th>
+                  <th className="px-3 py-2">Local Address</th>
+                  <th className="px-3 py-2">Remote Address</th>
+                  <th className="px-3 py-2">User</th>
+                  <th className="px-3 py-2">State</th>
+                  <th className="px-3 py-2">Direction</th>
+                  <th className="px-3 py-2">Count</th>
+                </tr>
+              </thead>
+              <tbody>
+                {conns.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-3 py-6 text-center text-slate-500">
+                      No active conversations
+                    </td>
+                  </tr>
+                )}
+                {conns.map((c, i) => (
+                  <ConnRow key={i} c={c} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {netSub === "map" && (
+        <div className="space-y-3 rounded-xl border border-ink-800 bg-ink-900/40 p-4">
+          <div className="text-sm text-slate-300">
+            Device location:{" "}
+            {[agent.geoCity, agent.geoSubdivision, agent.geoCountryName].filter(Boolean).join(", ") ||
+              "unknown"}
+            {agent.publicIp && (
+              <span className="text-slate-500">
+                {" "}
+                · {agent.publicIp}
+                {agent.geoOrg ? ` (${agent.geoOrg})` : ""}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-500">
+            Connection arcs use the per-device network graph (topology view). Remote peer GeoIP
+            arcs are a future enhancement.
+          </p>
+          <AgentNetworkGraphSection agentId={id} />
+        </div>
+      )}
+
+      {netSub === "topology" && <AgentNetworkGraphSection agentId={id} />}
+    </div>
+  );
+}
+
+function ConnRow({ c }: { c: SnapshotConversation }) {
+  const local =
+    c.localIp || c.localPort
+      ? `${c.localIp || "*"}:${c.localPort ?? ""}`
+      : "—";
+  const remote = `${c.remoteIp}:${c.remotePort}`;
+  return (
+    <tr className="border-t border-ink-800/70 even:bg-ink-950/30">
+      <td className="px-3 py-1.5">
+        {c.processName || "?"}{" "}
+        {c.pid != null && <span className="text-slate-500">({c.pid})</span>}
+      </td>
+      <td className="px-3 py-1.5 font-mono text-xs text-slate-400">{local}</td>
+      <td className="px-3 py-1.5 font-mono text-xs text-slate-400">
+        {remote}
+        {c.remoteHost && <span className="text-slate-600"> ({c.remoteHost})</span>}
+      </td>
+      <td className="px-3 py-1.5 text-xs text-slate-400">{c.user || "—"}</td>
+      <td className="px-3 py-1.5 text-xs text-slate-300">{c.state || "—"}</td>
+      <td className="px-3 py-1.5 text-xs text-slate-400">{c.direction}</td>
+      <td className="px-3 py-1.5 tabular-nums text-slate-400">{c.count}</td>
+    </tr>
+  );
+}
+
+function StorageTab({ snap }: { snap: Snapshot }) {
+  const [procQ, setProcQ] = useState("");
+  const [fileQ, setFileQ] = useState("");
+  const events = useMemo(() => {
+    const list = [...(snap.storageIo ?? [])].reverse();
+    const pq = procQ.trim().toLowerCase();
+    const fq = fileQ.trim().toLowerCase();
+    return list.filter((e) => {
+      if (pq && !(`${e.process} ${e.pid}`).toLowerCase().includes(pq)) return false;
+      if (fq && !(e.file ?? "").toLowerCase().includes(fq)) return false;
+      return true;
+    });
+  }, [snap.storageIo, procQ, fileQ]);
+
+  return (
+    <div className="space-y-4">
+      <div className="overflow-auto rounded-xl border border-ink-800">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-ink-800/80 text-xs uppercase text-slate-400">
+            <tr>
+              <th className="px-3 py-2">Mount</th>
+              <th className="px-3 py-2">Device</th>
+              <th className="px-3 py-2">FS</th>
+              <th className="px-3 py-2">Used</th>
+              <th className="px-3 py-2">Free</th>
+              <th className="px-3 py-2">Total</th>
+              <th className="px-3 py-2">%</th>
+            </tr>
+          </thead>
+          <tbody>
+            {snap.disks.map((d) => (
+              <tr key={d.mountpoint + d.device} className="border-t border-ink-800/70">
+                <td className="px-3 py-2 font-medium text-slate-200">{d.mountpoint}</td>
+                <td className="px-3 py-2 text-slate-400">{d.device}</td>
+                <td className="px-3 py-2 text-slate-400">{d.fsType}</td>
+                <td className="px-3 py-2 tabular-nums">{formatBytes(d.usedBytes)}</td>
+                <td className="px-3 py-2 tabular-nums">{formatBytes(d.freeBytes)}</td>
+                <td className="px-3 py-2 tabular-nums">{formatBytes(d.totalBytes)}</td>
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="tabular-nums text-slate-200">{formatPct(d.usedPct)}</span>
+                    <div className="h-1 w-16 overflow-hidden rounded bg-ink-800">
+                      <div
+                        className={"h-full " + pctBarColor(d.usedPct)}
+                        style={{ width: `${Math.min(100, d.usedPct)}%` }}
+                      />
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={procQ}
+          onChange={(e) => setProcQ(e.target.value)}
+          placeholder="Search by Process Name or ID"
+          className="h-8 w-56 rounded-md border border-ink-700 bg-ink-950 px-2 text-xs"
+        />
+        <input
+          value={fileQ}
+          onChange={(e) => setFileQ(e.target.value)}
+          placeholder="Search by File (wildcard)"
+          className="h-8 w-56 rounded-md border border-ink-700 bg-ink-950 px-2 text-xs"
+        />
+        <span className="text-xs text-slate-500">{events.length} I/O samples</span>
+      </div>
+      <div className="overflow-auto rounded-xl border border-ink-800">
+        <table className="w-full min-w-[700px] text-left text-sm">
+          <thead className="bg-ink-800/80 text-xs uppercase text-slate-400">
+            <tr>
+              <th className="px-3 py-2">Time</th>
+              <th className="px-3 py-2">Process</th>
+              <th className="px-3 py-2">File</th>
+              <th className="px-3 py-2 text-right">Bytes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {events.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-3 py-6 text-center text-slate-500">
+                  No high disk-I/O samples yet. Samples appear when a process exceeds ~64 KiB/s.
+                </td>
+              </tr>
+            )}
+            {events.map((e, i) => (
+              <tr key={i} className="border-t border-ink-800/70 even:bg-ink-950/30">
+                <td className="px-3 py-1.5 text-xs tabular-nums text-slate-400">
+                  {e.time ? new Date(e.time).toLocaleTimeString() : "—"}
+                </td>
+                <td className="px-3 py-1.5">
+                  {e.process} <span className="text-slate-500">({e.pid})</span>
+                </td>
+                <td className="max-w-[28rem] truncate px-3 py-1.5 text-xs text-slate-400" title={e.file}>
+                  {e.file || "—"}
+                </td>
+                <td className="px-3 py-1.5 text-right tabular-nums text-slate-300">
+                  {formatBytes(e.bytes)}/s
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[11px] text-slate-600">
+        Storage I/O is process-aggregate (read+write rate). Per-path ETW file tracing is not enabled
+        in this probe build.
+      </p>
+    </div>
+  );
+}
+
+function ServicesTab({ snap }: { snap: Snapshot }) {
+  const rows: SnapshotService[] =
+    snap.services && snap.services.length > 0
+      ? snap.services
+      : snap.stoppedAutoServices ?? [];
+  const [q, setQ] = useState("");
+  const filtered = rows.filter(
+    (s) =>
+      !q ||
+      s.name.toLowerCase().includes(q.toLowerCase()) ||
+      (s.displayName ?? "").toLowerCase().includes(q.toLowerCase()),
+  );
+  return (
+    <div className="space-y-3">
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Search services…"
+        className="h-8 w-64 rounded-md border border-ink-700 bg-ink-950 px-2 text-xs"
+      />
+      <div className="overflow-auto rounded-xl border border-ink-800">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-ink-800/80 text-xs uppercase text-slate-400">
+            <tr>
+              <th className="px-3 py-2">Name</th>
+              <th className="px-3 py-2">Display name</th>
+              <th className="px-3 py-2">Start type</th>
+              <th className="px-3 py-2">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-3 py-6 text-center text-slate-500">
+                  No services in snapshot (Windows probe required for full inventory)
+                </td>
+              </tr>
+            )}
+            {filtered.map((s) => (
+              <tr key={s.name} className="border-t border-ink-800/70 even:bg-ink-950/30">
+                <td className="px-3 py-1.5 font-mono text-xs text-slate-200">{s.name}</td>
+                <td className="px-3 py-1.5 text-slate-400">{s.displayName || "—"}</td>
+                <td className="px-3 py-1.5 text-slate-400">{s.startType || "—"}</td>
+                <td className="px-3 py-1.5">
+                  <span
+                    className={
+                      s.status === "running"
+                        ? "text-emerald-300"
+                        : s.status === "stopped"
+                          ? "text-amber-300"
+                          : "text-slate-400"
+                    }
+                  >
+                    {s.status || "—"}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SessionsTab({ snap }: { snap: Snapshot }) {
+  return (
+    <div className="overflow-auto rounded-xl border border-ink-800">
+      <table className="w-full text-left text-sm">
+        <thead className="bg-ink-800/80 text-xs uppercase text-slate-400">
+          <tr>
+            <th className="px-3 py-2">User</th>
+            <th className="px-3 py-2">State</th>
+            <th className="px-3 py-2">Source</th>
+            <th className="px-3 py-2">Host / TTY</th>
+            <th className="px-3 py-2">Started</th>
+          </tr>
+        </thead>
+        <tbody>
+          {snap.loggedInUsers.length === 0 && (
+            <tr>
+              <td colSpan={5} className="px-3 py-6 text-center text-slate-500">
+                No interactive sessions
+              </td>
+            </tr>
+          )}
+          {snap.loggedInUsers.map((s, i) => (
+            <tr key={i} className="border-t border-ink-800/70">
+              <td className="px-3 py-2 font-medium text-slate-200">{s.user}</td>
+              <td className="px-3 py-2 text-slate-400">{s.state || "—"}</td>
+              <td className="px-3 py-2 text-slate-400">{s.source || "—"}</td>
+              <td className="px-3 py-2 text-slate-400">
+                {[s.host, s.tty].filter(Boolean).join(" · ") || "—"}
+              </td>
+              <td className="px-3 py-2 text-xs text-slate-500">
+                {s.started ? formatRelative(s.started) : "—"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PatchesTab({ snap }: { snap: Snapshot }) {
+  const patches = snap.missingPatches ?? [];
+  const count = snap.health?.missingPatchCount ?? patches.length;
+  const [q, setQ] = useState("");
+  const filtered = patches.filter(
+    (p) =>
+      !q ||
+      p.title.toLowerCase().includes(q.toLowerCase()) ||
+      (p.kb ?? "").toLowerCase().includes(q.toLowerCase()),
+  );
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="text-sm text-slate-200">
+          Missing patches:{" "}
+          <span className="font-semibold tabular-nums">{count == null ? "—" : count}</span>
+        </div>
+        {snap.win11Readiness && (
+          <div className="rounded-md border border-ink-700 bg-ink-900/50 px-3 py-1.5 text-xs text-slate-300">
+            Win11:{" "}
+            <span className={snap.win11Readiness.eligible ? "text-emerald-300" : "text-amber-300"}>
+              {snap.win11Readiness.eligible ? "Ready / OK" : "Not ready"}
+            </span>
+            {snap.win11Readiness.reason && (
+              <span className="text-slate-500"> — {snap.win11Readiness.reason}</span>
+            )}
+          </div>
+        )}
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search patches…"
+          className="h-8 w-56 rounded-md border border-ink-700 bg-ink-950 px-2 text-xs"
+        />
+      </div>
+      <div className="overflow-auto rounded-xl border border-ink-800">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-ink-800/80 text-xs uppercase text-slate-400">
+            <tr>
+              <th className="px-3 py-2">Title</th>
+              <th className="px-3 py-2">KB</th>
+              <th className="px-3 py-2">Severity</th>
+              <th className="px-3 py-2 text-right">Size</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-3 py-6 text-center text-slate-500">
+                  {patches.length === 0
+                    ? "No missing patches reported (or inventory not collected yet — waits for 5-min health cycle)."
+                    : "No patches match the filter."}
+                </td>
+              </tr>
+            )}
+            {filtered.map((p, i) => (
+              <tr key={i} className="border-t border-ink-800/70 even:bg-ink-950/30">
+                <td className="px-3 py-1.5 text-slate-200">{p.title}</td>
+                <td className="px-3 py-1.5 font-mono text-xs text-slate-400">{p.kb || "—"}</td>
+                <td className="px-3 py-1.5 text-slate-400">{p.severity || "—"}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums text-slate-400">
+                  {p.sizeMb != null ? `${p.sizeMb} MB` : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function InstalledAppsTab({ snap }: { snap: Snapshot }) {
+  const apps = snap.installedApps ?? [];
+  const [q, setQ] = useState("");
+  const filtered = apps.filter(
+    (a) =>
+      !q ||
+      a.name.toLowerCase().includes(q.toLowerCase()) ||
+      (a.publisher ?? "").toLowerCase().includes(q.toLowerCase()),
+  );
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search applications…"
+          className="h-8 w-64 rounded-md border border-ink-700 bg-ink-950 px-2 text-xs"
+        />
+        <span className="text-xs text-slate-500">{filtered.length} / {apps.length}</span>
+      </div>
+      <div className="overflow-auto rounded-xl border border-ink-800">
+        <table className="w-full min-w-[800px] text-left text-sm">
+          <thead className="bg-ink-800/80 text-xs uppercase text-slate-400">
+            <tr>
+              <th className="px-3 py-2">Name</th>
+              <th className="px-3 py-2">Version</th>
+              <th className="px-3 py-2">Publisher</th>
+              <th className="px-3 py-2">Install date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-3 py-6 text-center text-slate-500">
+                  {apps.length === 0
+                    ? "No installed-app inventory yet (Windows probe, 5-min inventory cycle)."
+                    : "No applications match."}
+                </td>
+              </tr>
+            )}
+            {filtered.map((a, i) => (
+              <tr key={i} className="border-t border-ink-800/70 even:bg-ink-950/30">
+                <td className="px-3 py-1.5 text-slate-200">{a.name}</td>
+                <td className="px-3 py-1.5 text-slate-400">{a.version || "—"}</td>
+                <td className="px-3 py-1.5 text-slate-400">{a.publisher || "—"}</td>
+                <td className="px-3 py-1.5 text-xs text-slate-500">{a.installDate || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function StoppedProcessesTab({ snap }: { snap: Snapshot }) {
+  const rows = [...(snap.stoppedProcesses ?? [])].reverse();
+  const [q, setQ] = useState("");
+  const filtered = rows.filter(
+    (r) =>
+      !q ||
+      r.name.toLowerCase().includes(q.toLowerCase()) ||
+      String(r.pid).includes(q),
+  );
+  return (
+    <div className="space-y-3">
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Search stopped processes…"
+        className="h-8 w-64 rounded-md border border-ink-700 bg-ink-950 px-2 text-xs"
+      />
+      <div className="overflow-auto rounded-xl border border-ink-800">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-ink-800/80 text-xs uppercase text-slate-400">
+            <tr>
+              <th className="px-3 py-2">Time</th>
+              <th className="px-3 py-2">Process</th>
+              <th className="px-3 py-2">User</th>
+              <th className="px-3 py-2">Duration</th>
+              <th className="px-3 py-2">Last CPU %</th>
+              <th className="px-3 py-2">Last Mem %</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
+                  No process-stop events yet. Events appear after the probe sees a process exit.
+                </td>
+              </tr>
+            )}
+            {filtered.map((r, i) => (
+              <tr key={i} className="border-t border-ink-800/70 even:bg-ink-950/30">
+                <td className="px-3 py-1.5 text-xs text-slate-400">
+                  {r.time ? new Date(r.time).toLocaleString() : "—"}
+                </td>
+                <td className="px-3 py-1.5">
+                  {r.name} <span className="text-slate-500">({r.pid})</span>
+                </td>
+                <td className="px-3 py-1.5 text-xs text-slate-400">{r.user || "—"}</td>
+                <td className="px-3 py-1.5 text-xs text-slate-400">{r.duration || "—"}</td>
+                <td className="px-3 py-1.5 tabular-nums">{formatPct(r.cpuPct)}</td>
+                <td className="px-3 py-1.5 tabular-nums">{formatPct(r.memPct)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function TopAppsTab({ snap }: { snap: Snapshot }) {
+  const apps = snap.topApps ?? [];
+  return (
+    <div className="overflow-auto rounded-xl border border-ink-800">
+      <table className="w-full text-left text-sm">
+        <thead className="bg-ink-800/80 text-xs uppercase text-slate-400">
+          <tr>
+            <th className="px-3 py-2">Application</th>
+            <th className="px-3 py-2">PID</th>
+            <th className="px-3 py-2">Focus time</th>
+            <th className="px-3 py-2">Focus %</th>
+            <th className="px-3 py-2">Last seen</th>
+          </tr>
+        </thead>
+        <tbody>
+          {apps.length === 0 && (
+            <tr>
+              <td colSpan={5} className="px-3 py-6 text-center text-slate-500">
+                No foreground focus samples yet. The probe samples the active window every 15s.
+              </td>
+            </tr>
+          )}
+          {apps.map((a, i) => (
+            <tr key={i} className="border-t border-ink-800/70 even:bg-ink-950/30">
+              <td className="px-3 py-1.5 font-medium text-slate-200">{a.name}</td>
+              <td className="px-3 py-1.5 text-slate-400">{a.pid ?? "—"}</td>
+              <td className="px-3 py-1.5 tabular-nums text-slate-300">
+                {formatDuration(a.focusSeconds)}
+              </td>
+              <td className="px-3 py-1.5 tabular-nums text-slate-300">
+                {a.focusPct != null ? formatPct(a.focusPct) : "—"}
+              </td>
+              <td className="px-3 py-1.5 text-xs text-slate-500">
+                {a.lastSeen ? formatRelative(a.lastSeen) : "—"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function EventLogTab({ snap }: { snap: Snapshot }) {
+  const rows = snap.eventLog ?? [];
+  const [q, setQ] = useState("");
+  const filtered = rows.filter(
+    (r) =>
+      !q ||
+      (r.message ?? "").toLowerCase().includes(q.toLowerCase()) ||
+      (r.provider ?? "").toLowerCase().includes(q.toLowerCase()) ||
+      String(r.eventId ?? "").includes(q),
+  );
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-2 sm:grid-cols-4">
+        <Stat label="Event log errors (24h)" value={snap.health?.eventLogErrorCount24h} />
+        <Stat label="App crashes (24h)" value={snap.health?.appCrashCount24h} />
+        <Stat label="BSODs (24h)" value={snap.health?.bsodCount24h} />
+        <Stat label="Rows loaded" value={rows.length} />
+      </div>
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Search events…"
+        className="h-8 w-64 rounded-md border border-ink-700 bg-ink-950 px-2 text-xs"
+      />
+      <div className="overflow-auto rounded-xl border border-ink-800">
+        <table className="w-full min-w-[900px] text-left text-sm">
+          <thead className="bg-ink-800/80 text-xs uppercase text-slate-400">
+            <tr>
+              <th className="px-3 py-2">Time</th>
+              <th className="px-3 py-2">Level</th>
+              <th className="px-3 py-2">Log</th>
+              <th className="px-3 py-2">Provider</th>
+              <th className="px-3 py-2">ID</th>
+              <th className="px-3 py-2">Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
+                  No event-log rows yet (Windows inventory cycle).
+                </td>
+              </tr>
+            )}
+            {filtered.map((r, i) => (
+              <tr key={i} className="border-t border-ink-800/70 even:bg-ink-950/30">
+                <td className="whitespace-nowrap px-3 py-1.5 text-xs text-slate-400">
+                  {r.time ? new Date(r.time).toLocaleString() : "—"}
+                </td>
+                <td className="px-3 py-1.5 text-xs text-slate-300">{r.level || "—"}</td>
+                <td className="px-3 py-1.5 text-xs text-slate-400">{r.log || "—"}</td>
+                <td className="px-3 py-1.5 text-xs text-slate-400">{r.provider || "—"}</td>
+                <td className="px-3 py-1.5 tabular-nums text-slate-400">{r.eventId ?? "—"}</td>
+                <td className="max-w-[28rem] truncate px-3 py-1.5 text-xs text-slate-300" title={r.message}>
+                  {r.message || "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function PowerEventsTab({ snap }: { snap: Snapshot }) {
+  const rows = snap.powerEvents ?? [];
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Stat label="User reboots (24h)" value={snap.health?.userRebootCount24h} />
+        <Stat label="BSODs (24h)" value={snap.health?.bsodCount24h} />
+        <Stat label="Power events loaded" value={rows.length} />
+      </div>
+      <div className="overflow-auto rounded-xl border border-ink-800">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-ink-800/80 text-xs uppercase text-slate-400">
+            <tr>
+              <th className="px-3 py-2">Time</th>
+              <th className="px-3 py-2">Kind</th>
+              <th className="px-3 py-2">Event ID</th>
+              <th className="px-3 py-2">Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-3 py-6 text-center text-slate-500">
+                  No power events yet (Windows inventory cycle).
+                </td>
+              </tr>
+            )}
+            {rows.map((r, i) => (
+              <tr key={i} className="border-t border-ink-800/70 even:bg-ink-950/30">
+                <td className="whitespace-nowrap px-3 py-1.5 text-xs text-slate-400">
+                  {r.time ? new Date(r.time).toLocaleString() : "—"}
+                </td>
+                <td className="px-3 py-1.5 capitalize text-slate-200">{r.kind}</td>
+                <td className="px-3 py-1.5 tabular-nums text-slate-400">{r.eventId ?? "—"}</td>
+                <td className="max-w-[32rem] truncate px-3 py-1.5 text-xs text-slate-400" title={r.message}>
+                  {r.message || "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value?: number }) {
+  return (
+    <div className="rounded-lg border border-ink-800 bg-ink-950/40 p-3">
+      <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="mt-1 text-lg tabular-nums text-slate-100">
+        {value == null ? "—" : value}
+      </div>
+    </div>
+  );
+}
+
+function MetaCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-ink-800 bg-ink-900/50 p-3">
+      <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        {title}
+      </h3>
+      <div className="space-y-0.5">{children}</div>
+    </div>
+  );
+}
+
+function KV({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-2 text-[11px]">
+      <span className="shrink-0 text-slate-500">{label}</span>
+      <span className="truncate text-right text-slate-300" title={value}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-ink-800 bg-ink-900/40 p-3">
+      <h3 className="mb-2 text-xs font-semibold text-slate-300">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function PriorityPill({ priority }: { priority?: string }) {
+  if (!priority) return <span className="text-slate-600">—</span>;
+  const high = priority.toLowerCase().includes("high");
+  return (
+    <span
+      className={
+        "rounded-full px-2 py-0.5 text-[10px] font-medium " +
+        (high ? "bg-red-900/50 text-red-200" : "bg-slate-800 text-slate-300")
+      }
+    >
+      {priority}
+    </span>
+  );
+}
+
+function mergeUnique(a: SnapshotProcess[], b: SnapshotProcess[]): SnapshotProcess[] {
+  const map = new Map<number, SnapshotProcess>();
+  for (const p of [...a, ...b]) map.set(p.pid, p);
+  return Array.from(map.values());
+}
 
 const MAX_TAG_LEN = 32;
 const MAX_TAG_COUNT = 32;
-
 function normalizeTag(s: string): string {
   return s.trim().toLowerCase().slice(0, MAX_TAG_LEN);
 }
@@ -316,1316 +1471,55 @@ function TagEditor({
   onChange: (next: string[]) => void;
 }) {
   const [draft, setDraft] = useState("");
-  const [focused, setFocused] = useState(false);
-
-  // The set of suggestions narrows as the operator types and excludes
-  // tags already on this host so we don't duplicate-suggest.
   const filteredSuggestions = useMemo(() => {
     const q = draft.trim().toLowerCase();
     const own = new Set(tags);
-    return suggestions
-      .filter((s) => !own.has(s) && (q === "" || s.includes(q)))
-      .slice(0, 8);
+    return suggestions.filter((s) => !own.has(s) && (q === "" || s.includes(q))).slice(0, 8);
   }, [draft, suggestions, tags]);
 
   const commitDraft = () => {
     const t = normalizeTag(draft);
     setDraft("");
-    if (!t) return;
-    if (tags.includes(t)) return;
-    if (tags.length >= MAX_TAG_COUNT) return;
+    if (!t || tags.includes(t) || tags.length >= MAX_TAG_COUNT) return;
     onChange([...tags, t]);
   };
-
-  const removeTag = (t: string) => onChange(tags.filter((x) => x !== t));
 
   return (
     <div className="space-y-1">
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[10px] uppercase tracking-wide text-slate-500">Tags</span>
-        {tags.length === 0 && (
-          <span className="text-[11px] italic text-slate-600">none</span>
-        )}
         {tags.map((t) => (
           <span
             key={t}
-            className="group inline-flex items-center gap-1 rounded-full border border-sonar-700/60 bg-sonar-900/30 px-2 py-0.5 text-[11px] text-sonar-100"
+            className="inline-flex items-center gap-1 rounded-full border border-sonar-700/60 bg-sonar-900/30 px-2 py-0.5 text-[11px] text-sonar-100"
           >
             {t}
-            <button
-              type="button"
-              onClick={() => removeTag(t)}
-              className="text-sonar-300/60 hover:text-red-300"
-              title={`Remove ${t}`}
-              aria-label={`Remove ${t}`}
-            >
+            <button type="button" onClick={() => onChange(tags.filter((x) => x !== t))} className="hover:text-red-300">
               ×
             </button>
           </span>
         ))}
-        <div className="relative">
-          <input
-            value={draft}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v.endsWith(",")) {
-                setDraft(v.slice(0, -1));
-                setTimeout(commitDraft, 0);
-                return;
-              }
-              setDraft(v);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                commitDraft();
-              } else if (e.key === "Backspace" && draft === "" && tags.length > 0) {
-                onChange(tags.slice(0, -1));
-              } else if (e.key === "Escape") {
-                setDraft("");
-                (e.target as HTMLInputElement).blur();
-              }
-            }}
-            onFocus={() => setFocused(true)}
-            onBlur={() => {
-              setTimeout(() => setFocused(false), 120);
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
               commitDraft();
-            }}
-            placeholder={tags.length === 0 ? "add tag…" : "+"}
-            disabled={tags.length >= MAX_TAG_COUNT}
-            className="h-6 w-28 rounded-full border border-ink-700 bg-ink-950 px-2 text-[11px] text-slate-100 placeholder:text-slate-600 focus:border-sonar-500 focus:outline-none"
-          />
-          {focused && filteredSuggestions.length > 0 && (
-            <div className="absolute z-20 mt-1 max-h-52 w-44 overflow-auto rounded-md border border-ink-700 bg-ink-950 py-1 text-[11px] shadow-lg">
-              {filteredSuggestions.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    setDraft("");
-                    if (!tags.includes(s)) onChange([...tags, s]);
-                  }}
-                  className="block w-full px-2 py-1 text-left text-slate-300 hover:bg-ink-800 hover:text-sonar-100"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        {saving && <span className="text-[10px] text-slate-500">saving…</span>}
+            }
+          }}
+          onBlur={commitDraft}
+          placeholder="add tag…"
+          className="h-6 w-24 rounded border border-ink-700 bg-ink-950 px-1.5 text-[11px]"
+          disabled={saving}
+        />
+        {filteredSuggestions.length > 0 && draft && (
+          <span className="text-[10px] text-slate-600">
+            {filteredSuggestions.slice(0, 3).join(", ")}
+          </span>
+        )}
       </div>
       {error && <div className="text-[11px] text-red-300">{error}</div>}
     </div>
   );
-}
-
-// ---- Stat cards ----------------------------------------------------------
-
-interface StatCardsProps {
-  cpuPct: number;
-  memPct: number;
-  diskPct: number | null;
-  uptime: number;
-  cores: number;
-  memTotal: number;
-  diskTotal: number;
-  cpuModel: string;
-}
-
-function StatCards(p: StatCardsProps) {
-  return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      <Stat
-        label="CPU"
-        value={formatPct(p.cpuPct)}
-        bar={p.cpuPct}
-        sub={`${p.cores} logical · ${truncate(p.cpuModel, 28)}`}
-      />
-      <Stat
-        label="Memory"
-        value={formatPct(p.memPct)}
-        bar={p.memPct}
-        sub={`${formatBytes(p.memTotal)} total`}
-      />
-      <Stat
-        label="Root disk"
-        value={p.diskPct == null ? "—" : formatPct(p.diskPct)}
-        bar={p.diskPct ?? 0}
-        sub={p.diskTotal ? `${formatBytes(p.diskTotal)} total` : "—"}
-      />
-      <Stat
-        label="Uptime"
-        value={formatDuration(p.uptime)}
-        sub={`since ${new Date(Date.now() - p.uptime * 1000).toLocaleDateString()}`}
-      />
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  sub,
-  bar,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  bar?: number;
-}) {
-  return (
-    <div className="rounded-xl border border-ink-800 bg-ink-900 p-4">
-      <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-1 text-2xl font-semibold">{value}</div>
-      {bar != null && (
-        <div className="mt-2 h-1.5 w-full overflow-hidden rounded bg-ink-800">
-          <div
-            className={"h-full " + pctBarColor(bar)}
-            style={{ width: `${Math.min(100, Math.max(0, bar))}%` }}
-          />
-        </div>
-      )}
-      {sub && <div className="mt-2 text-xs text-slate-500">{sub}</div>}
-    </div>
-  );
-}
-
-// ---- Sparkline charts ----------------------------------------------------
-
-function Charts({ cpu, mem, loading }: { cpu: number[]; mem: number[]; loading: boolean }) {
-  return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-      <ChartCard title="CPU utilization (24h)" values={cpu} loading={loading} suffix="%" />
-      <ChartCard title="Memory utilization (24h)" values={mem} loading={loading} suffix="%" />
-    </div>
-  );
-}
-
-function ChartCard({
-  title,
-  values,
-  loading,
-  suffix,
-}: {
-  title: string;
-  values: number[];
-  loading: boolean;
-  suffix: string;
-}) {
-  const last = values[values.length - 1];
-  const lastTxt = last == null ? "—" : `${last.toFixed(1)}${suffix}`;
-  return (
-    <div className="rounded-xl border border-ink-800 bg-ink-900 p-4">
-      <div className="flex items-baseline justify-between">
-        <div className="text-xs uppercase tracking-wide text-slate-500">{title}</div>
-        <div className="text-sm tabular-nums text-slate-300">{lastTxt}</div>
-      </div>
-      <div className="mt-2">
-        {loading ? (
-          <div className="h-14 animate-pulse rounded bg-ink-800/50" />
-        ) : (
-          <Sparkline
-            values={values}
-            width={520}
-            height={56}
-            min={0}
-            max={100}
-            className="w-full"
-            ariaLabel={title}
-          />
-        )}
-      </div>
-      <div className="mt-1 text-xs text-slate-600">
-        {values.length} samples · 1/min cadence
-      </div>
-    </div>
-  );
-}
-
-// ---- Network usage + latency (Phase 4) -----------------------------------
-//
-// Three charts side-by-side on wide viewports:
-//   1. "Network usage" — per-snapshot in/out bps (MB/s on the y-axis).
-//   2. "Network usage (hourly)" — bytes-per-hour bar-style line for
-//      operators who want the daily shape, not the instantaneous rate.
-//   3. "Network latency" — two ICMP latency lines (target + gateway)
-//      with a loss-percentage badge per series.
-//
-// Empty states are common for fresh enrollments (no samples yet) and
-// for older probes (schema v3 didn't collect latency). We use
-// LineChart's built-in "no data" placeholder so the section still
-// renders consistently.
-
-function NetworkAndLatencySection({
-  network,
-  latency,
-  loading,
-}: {
-  network: NetworkSeries | undefined;
-  latency: LatencySeries | undefined;
-  loading: boolean;
-}) {
-  // Per-snapshot bps -> MB/s for the line chart.
-  const bpsTimes = useMemo(
-    () => (network?.samples ?? []).map((s) => s.time),
-    [network],
-  );
-  const bpsIn = useMemo(
-    () => (network?.samples ?? []).map((s) =>
-      s.inBps == null ? null : Number(s.inBps) / 1024 / 1024,
-    ),
-    [network],
-  );
-  const bpsOut = useMemo(
-    () => (network?.samples ?? []).map((s) =>
-      s.outBps == null ? null : Number(s.outBps) / 1024 / 1024,
-    ),
-    [network],
-  );
-
-  // Hourly totals — convert bytes -> MB.
-  const hourlyTimes = useMemo(
-    () => (network?.hourly ?? []).map((h) => h.hour),
-    [network],
-  );
-  const hourlyIn = useMemo(
-    () => (network?.hourly ?? []).map((h) =>
-      h.inBytes == null ? null : Number(h.inBytes) / 1024 / 1024,
-    ),
-    [network],
-  );
-  const hourlyOut = useMemo(
-    () => (network?.hourly ?? []).map((h) =>
-      h.outBytes == null ? null : Number(h.outBytes) / 1024 / 1024,
-    ),
-    [network],
-  );
-
-  // Latency: split per target. We construct a unified time axis so the
-  // two series line up — when one target has no sample at a given
-  // time the value is left null (LineChart breaks the path on null).
-  const { latTimes, latTarget, latGateway, lossTarget, lossGateway, targetName } = useMemo(() => {
-    const samples = latency?.samples ?? [];
-    const timeSet = new Set<string>();
-    samples.forEach((s) => timeSet.add(s.time));
-    const times = Array.from(timeSet).sort();
-    const idx = new Map(times.map((t, i) => [t, i]));
-    const tgt: Array<number | null> = times.map(() => null);
-    const gw: Array<number | null> = times.map(() => null);
-    const lt: Array<number | null> = times.map(() => null);
-    const lg: Array<number | null> = times.map(() => null);
-    let firstTarget = "";
-    samples.forEach((s) => {
-      const i = idx.get(s.time);
-      if (i == null) return;
-      if (s.target === "gateway") {
-        gw[i] = s.avgMs ?? null;
-        lg[i] = s.lossPct ?? null;
-      } else {
-        tgt[i] = s.avgMs ?? null;
-        lt[i] = s.lossPct ?? null;
-        if (!firstTarget) firstTarget = s.target;
-      }
-    });
-    return {
-      latTimes: times,
-      latTarget: tgt,
-      latGateway: gw,
-      lossTarget: lt,
-      lossGateway: lg,
-      targetName: firstTarget || "8.8.8.8",
-    };
-  }, [latency]);
-
-  const lastLossTarget = lossTarget.length ? lossTarget[lossTarget.length - 1] : null;
-  const lastLossGateway = lossGateway.length ? lossGateway[lossGateway.length - 1] : null;
-
-  return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <Section title="Network usage (MB/s)">
-        {loading ? (
-          <div className="h-48 animate-pulse rounded bg-ink-800/50" />
-        ) : (
-          <LineChart
-            times={bpsTimes}
-            series={[
-              { label: "In",  values: bpsIn,  color: "stroke-emerald-400 text-emerald-400" },
-              { label: "Out", values: bpsOut, color: "stroke-sky-400 text-sky-400" },
-            ]}
-            yUnit=" MB/s"
-            yMin={0}
-            height={200}
-            ariaLabel="Network usage MB/s"
-          />
-        )}
-      </Section>
-      <Section title="Network usage (hourly)">
-        {loading ? (
-          <div className="h-48 animate-pulse rounded bg-ink-800/50" />
-        ) : (
-          <LineChart
-            times={hourlyTimes}
-            series={[
-              { label: "Received (MB)", values: hourlyIn,  color: "stroke-emerald-400 text-emerald-400" },
-              { label: "Sent (MB)",     values: hourlyOut, color: "stroke-sky-400 text-sky-400" },
-            ]}
-            yUnit=" MB"
-            yMin={0}
-            height={200}
-            ariaLabel="Network usage hourly"
-          />
-        )}
-      </Section>
-      <Section
-        title={
-          <span className="flex items-center gap-2">
-            <span>Network latency (ms)</span>
-            {lastLossTarget != null && lastLossTarget > 0 && (
-              <span className="rounded bg-amber-900/40 px-1.5 py-0.5 text-[10px] text-amber-200">
-                {targetName} loss {lastLossTarget.toFixed(0)}%
-              </span>
-            )}
-            {lastLossGateway != null && lastLossGateway > 0 && (
-              <span className="rounded bg-amber-900/40 px-1.5 py-0.5 text-[10px] text-amber-200">
-                gateway loss {lastLossGateway.toFixed(0)}%
-              </span>
-            )}
-          </span>
-        }
-      >
-        {loading ? (
-          <div className="h-48 animate-pulse rounded bg-ink-800/50" />
-        ) : latTimes.length === 0 ? (
-          <Empty>
-            No latency samples yet — the probe needs raw-socket access (SYSTEM
-            on Windows, root on Linux) and will start populating this once
-            it's running.
-          </Empty>
-        ) : (
-          <LineChart
-            times={latTimes}
-            series={[
-              { label: targetName, values: latTarget,  color: "stroke-sky-400 text-sky-400" },
-              { label: "gateway",  values: latGateway, color: "stroke-amber-400 text-amber-400" },
-            ]}
-            yUnit=" ms"
-            yMin={0}
-            height={200}
-            ariaLabel="ICMP latency"
-          />
-        )}
-      </Section>
-    </div>
-  );
-}
-
-// ---- Disks ----------------------------------------------------------------
-
-function DisksTable({ disks }: { disks: SnapshotDisk[] }) {
-  return (
-    <Section title="Disks">
-      {disks.length === 0 ? (
-        <Empty>No mounted volumes reported.</Empty>
-      ) : (
-        <Table head={["Mount", "FS", "Used", "Total", ""]}>
-          {disks.map((d) => (
-            <tr key={d.device + d.mountpoint} className="border-t border-ink-800">
-              <td className="px-3 py-2 font-mono text-xs">{d.mountpoint}</td>
-              <td className="px-3 py-2 text-xs text-slate-400">{d.fsType}</td>
-              <td className="px-3 py-2 text-xs tabular-nums">{formatBytes(d.usedBytes)}</td>
-              <td className="px-3 py-2 text-xs tabular-nums">{formatBytes(d.totalBytes)}</td>
-              <td className="px-3 py-2">
-                <UsageBar pct={d.usedPct} />
-              </td>
-            </tr>
-          ))}
-        </Table>
-      )}
-    </Section>
-  );
-}
-
-// ---- NICs -----------------------------------------------------------------
-
-function NicsTable({ nics }: { nics: SnapshotNIC[] }) {
-  // Hide down loopback noise so the table tells a useful story.
-  const visible = nics.filter(
-    (n) =>
-      n.up ||
-      (n.addresses && n.addresses.some((a) => !a.startsWith("127.") && a !== "::1")),
-  );
-  return (
-    <Section title="Network interfaces">
-      {visible.length === 0 ? (
-        <Empty>No up interfaces.</Empty>
-      ) : (
-        <Table head={["NIC", "Addresses", "TX", "RX"]}>
-          {visible.map((n) => (
-            <tr key={n.name} className="border-t border-ink-800 align-top">
-              <td className="px-3 py-2">
-                <div className="font-mono text-xs">{n.name}</div>
-                <div className="text-[10px] text-slate-500">
-                  {n.up ? "up" : "down"}
-                  {n.mac && <> · {n.mac}</>}
-                  {n.mtu ? <> · MTU {n.mtu}</> : null}
-                </div>
-              </td>
-              <td className="px-3 py-2">
-                <div className="flex flex-wrap gap-1">
-                  {(n.addresses ?? []).map((a) => (
-                    <span
-                      key={a}
-                      className="rounded bg-ink-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300"
-                    >
-                      {a}
-                    </span>
-                  ))}
-                </div>
-              </td>
-              <td className="px-3 py-2 text-xs tabular-nums">{formatBytes(n.bytesSent)}</td>
-              <td className="px-3 py-2 text-xs tabular-nums">{formatBytes(n.bytesRecv)}</td>
-            </tr>
-          ))}
-        </Table>
-      )}
-    </Section>
-  );
-}
-
-// ---- Processes ------------------------------------------------------------
-//
-// Process rows are click-to-expand. We keep a compact summary line in the
-// table (so a couple-dozen procs fit on screen) and tuck the noisy bits
-// — the full cmdline, every available field, and a copy button — into a
-// details drawer that opens beneath the row. This fixes two earlier UX
-// bugs at once:
-//   * Long cmdlines were overflowing the column on narrow viewports.
-//   * The `title=` tooltip was the only way to read them, which is
-//     undiscoverable and unselectable.
-
-function ProcessTable({
-  title,
-  rows,
-  sortBy,
-}: {
-  title: string;
-  rows: SnapshotProcess[];
-  sortBy: "cpu" | "mem";
-}) {
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-  const toggle = (key: string) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-
-  return (
-    <Section title={title}>
-      {rows.length === 0 ? (
-        <Empty>No processes to show.</Empty>
-      ) : (
-        // table-fixed + per-column widths makes the Name column actually
-        // honour `truncate` instead of widening the table to fit the
-        // cmdline. Without it, long cmdlines push the right-hand metric
-        // column off-screen on narrow viewports.
-        //
-        // The two right-hand "stat" columns adapt to the table's
-        // sortBy: when sorted by CPU we lead with CPU% and back it
-        // with RSS; when sorted by mem we lead with RSS and back
-        // with CPU%. The rest of the rich stats (disk/net Bps, open
-        // conns) live in the per-row drawer to keep the visible
-        // table compact on narrow viewports.
-        <div className="overflow-hidden">
-          <table className="w-full table-fixed text-left text-sm">
-            <colgroup>
-              <col className="w-6" />
-              <col className="w-14" />
-              <col />
-              <col className="w-20" />
-              <col className="w-20" />
-              <col className="w-20" />
-            </colgroup>
-            <thead className="text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-1 py-1.5" aria-label="Expand" />
-                <th className="px-3 py-1.5">PID</th>
-                <th className="px-3 py-1.5">Name</th>
-                <th className="px-3 py-1.5 text-right">
-                  {sortBy === "cpu" ? "CPU%" : "RSS"}
-                </th>
-                <th className="px-3 py-1.5 text-right">
-                  {sortBy === "cpu" ? "RSS" : "CPU%"}
-                </th>
-                <th className="px-3 py-1.5 text-right" title="Disk read+write per second">
-                  Disk/s
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => {
-                const key = `${r.pid}-${r.name}`;
-                const open = expanded.has(key);
-                return (
-                  <ProcessRow
-                    key={key}
-                    row={r}
-                    open={open}
-                    onToggle={() => toggle(key)}
-                    sortBy={sortBy}
-                  />
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Section>
-  );
-}
-
-function ProcessRow({
-  row,
-  open,
-  onToggle,
-  sortBy,
-}: {
-  row: SnapshotProcess;
-  open: boolean;
-  onToggle: () => void;
-  sortBy: "cpu" | "mem";
-}) {
-  const primary =
-    sortBy === "cpu" ? formatPct(row.cpuPct) : formatBytes(row.rssBytes);
-  const secondary =
-    sortBy === "cpu" ? formatBytes(row.rssBytes) : formatPct(row.cpuPct);
-  const diskBps = (row.diskReadBps ?? 0) + (row.diskWriteBps ?? 0);
-  return (
-    <>
-      <tr
-        className={
-          "cursor-pointer border-t border-ink-800 transition hover:bg-ink-800/40 " +
-          (open ? "bg-ink-800/30" : "")
-        }
-        onClick={onToggle}
-        aria-expanded={open}
-      >
-        <td className="px-1 py-1.5 align-top">
-          <Chevron open={open} />
-        </td>
-        <td className="px-3 py-1.5 align-top font-mono text-xs text-slate-500">
-          {row.pid}
-        </td>
-        <td className="px-3 py-1.5 align-top text-xs">
-          <div className="truncate font-medium">{row.name}</div>
-          {row.user && (
-            <div className="truncate text-[10px] text-slate-500">{row.user}</div>
-          )}
-        </td>
-        <td className="px-3 py-1.5 align-top text-right text-xs tabular-nums">
-          {primary}
-        </td>
-        <td className="px-3 py-1.5 align-top text-right text-xs tabular-nums text-slate-400">
-          {secondary}
-        </td>
-        <td className="px-3 py-1.5 align-top text-right text-xs tabular-nums text-slate-400">
-          {diskBps > 0 ? formatBytes(diskBps) + "/s" : "—"}
-        </td>
-      </tr>
-      {open && (
-        <tr className="border-t border-ink-800 bg-ink-950/40">
-          <td className="px-1 py-3" />
-          <td className="px-3 py-3" colSpan={5}>
-            <ProcessDetails row={row} />
-          </td>
-        </tr>
-      )}
-    </>
-  );
-}
-
-function ProcessDetails({ row }: { row: SnapshotProcess }) {
-  const cmd = row.cmdline?.trim();
-  // The drawer is the only place rich per-process counters surface,
-  // so we lay them out in a 6-up grid with plain text values. We
-  // fall back to "—" for the network rates because the current
-  // probe doesn't yet emit per-process net Bps (gopsutil doesn't
-  // expose it portably) — wiring those in is a separate change and
-  // the UI is already prepared for the field's eventual arrival.
-  const fields: Array<[string, string]> = [
-    ["PID", String(row.pid)],
-    ["Name", row.name],
-    ["User", row.user || "—"],
-    ["CPU", formatPct(row.cpuPct)],
-    ["Memory", row.memPct != null ? `${formatPct(row.memPct)} (${formatBytes(row.rssBytes)})` : formatBytes(row.rssBytes)],
-    ["Open conns", row.openConns != null ? String(row.openConns) : "—"],
-    ["Disk read /s", row.diskReadBps ? formatBytes(row.diskReadBps) + "/s" : "—"],
-    ["Disk write /s", row.diskWriteBps ? formatBytes(row.diskWriteBps) + "/s" : "—"],
-    ["Net sent /s", row.netSentBps ? formatBytes(row.netSentBps) + "/s" : "—"],
-    ["Net recv /s", row.netRecvBps ? formatBytes(row.netRecvBps) + "/s" : "—"],
-  ];
-  return (
-    <div className="space-y-3 text-xs">
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-3 lg:grid-cols-5">
-        {fields.map(([k, v]) => (
-          <Field key={k} label={k} value={v} mono={k === "PID" || k === "Name"} />
-        ))}
-      </dl>
-      <div>
-        <div className="mb-1 flex items-center justify-between">
-          <span className="text-[10px] uppercase tracking-wide text-slate-500">
-            Command line
-          </span>
-          {cmd && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                navigator.clipboard?.writeText(cmd).catch(() => {});
-              }}
-              className="rounded border border-ink-800 bg-ink-900 px-2 py-0.5 text-[10px] text-slate-400 transition hover:border-sonar-700 hover:text-sonar-200"
-            >
-              Copy
-            </button>
-          )}
-        </div>
-        <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-md border border-ink-800 bg-ink-950 px-3 py-2 font-mono text-[11px] leading-snug text-slate-300">
-          {cmd || "(no cmdline reported)"}
-        </pre>
-      </div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  value,
-  mono,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-[10px] uppercase tracking-wide text-slate-500">{label}</dt>
-      <dd
-        className={
-          "truncate text-slate-200 " + (mono ? "font-mono text-[11px]" : "text-xs")
-        }
-        title={value}
-      >
-        {value}
-      </dd>
-    </div>
-  );
-}
-
-function Chevron({ open }: { open: boolean }) {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 12 12"
-      className={
-        "transition-transform text-slate-500 " + (open ? "rotate-90 text-sonar-300" : "")
-      }
-      aria-hidden="true"
-    >
-      <path
-        d="M4 2 L8 6 L4 10"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-// ---- Listeners ------------------------------------------------------------
-
-function ListenersTable({ listeners }: { listeners: SnapshotListener[] }) {
-  return (
-    <Section title="Listening ports">
-      {listeners.length === 0 ? (
-        <Empty>No listening sockets.</Empty>
-      ) : (
-        <div className="max-h-72 overflow-auto">
-          <Table head={["Proto", "Address", "Port", "PID", "Process"]}>
-            {listeners.map((l, i) => (
-              <tr key={i} className="border-t border-ink-800">
-                <td className="px-3 py-1.5 font-mono text-xs text-slate-400">{l.proto}</td>
-                <td className="px-3 py-1.5 font-mono text-xs">{l.address || "*"}</td>
-                <td className="px-3 py-1.5 text-xs tabular-nums">{l.port}</td>
-                <td className="px-3 py-1.5 text-xs text-slate-500">{l.pid || "—"}</td>
-                <td className="px-3 py-1.5 text-xs">{l.processName || "—"}</td>
-              </tr>
-            ))}
-          </Table>
-        </div>
-      )}
-    </Section>
-  );
-}
-
-// ---- Conversations ("talking to") ----------------------------------------
-
-function ConversationsTable({ conversations }: { conversations: SnapshotConversation[] }) {
-  const [filter, setFilter] = useState("");
-  const [dir, setDir] = useState<"all" | "outbound" | "inbound">("all");
-
-  const filtered = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    return conversations.filter((c) => {
-      if (dir !== "all" && c.direction !== dir) return false;
-      if (!q) return true;
-      const peer = (c.remoteHost ?? c.remoteIp).toLowerCase();
-      return (
-        peer.includes(q) ||
-        c.remoteIp.includes(q) ||
-        String(c.remotePort).includes(q) ||
-        (c.processName ?? "").toLowerCase().includes(q)
-      );
-    });
-  }, [conversations, filter, dir]);
-
-  const counts = useMemo(() => {
-    let inbound = 0;
-    let outbound = 0;
-    for (const c of conversations) {
-      if (c.direction === "inbound") inbound++;
-      else if (c.direction === "outbound") outbound++;
-    }
-    return { inbound, outbound, total: conversations.length };
-  }, [conversations]);
-
-  return (
-    <Section
-      title={`Talking to (${counts.total} peers · ${counts.outbound} out · ${counts.inbound} in)`}
-    >
-      {conversations.length === 0 ? (
-        <Empty>
-          No active peer conversations reported. Requires probe v2026.4.25.6+ with the
-          conversations collector enabled.
-        </Empty>
-      ) : (
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              placeholder="Filter by host, IP, port, or process…"
-              className="w-72 rounded-md border border-ink-800 bg-ink-950 px-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:border-sonar-500 focus:outline-none"
-            />
-            <div className="flex overflow-hidden rounded-md border border-ink-800 text-[11px]">
-              {(["all", "outbound", "inbound"] as const).map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => setDir(d)}
-                  className={
-                    "px-2.5 py-1 transition " +
-                    (dir === d
-                      ? "bg-sonar-700/40 text-sonar-200"
-                      : "bg-ink-900 text-slate-400 hover:bg-ink-800")
-                  }
-                >
-                  {d}
-                </button>
-              ))}
-            </div>
-            <span className="text-[11px] text-slate-500">
-              showing {filtered.length} of {conversations.length}
-            </span>
-          </div>
-          <div className="max-h-[28rem] overflow-auto">
-            <Table head={["Dir", "Peer", "Port", "Proto", "Process", "State", "Conns"]}>
-              {filtered.map((c, i) => (
-                <tr key={i} className="border-t border-ink-800">
-                  <td className="px-3 py-1.5">
-                    <DirectionPill dir={c.direction} />
-                  </td>
-                  <td className="px-3 py-1.5">
-                    <div className="flex flex-col">
-                      <span className="text-xs text-slate-200">
-                        {c.remoteHost || c.remoteIp}
-                      </span>
-                      {c.remoteHost && (
-                        <span className="font-mono text-[10px] text-slate-500">
-                          {c.remoteIp}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-3 py-1.5 text-xs tabular-nums">
-                    {c.remotePort}
-                    {c.direction === "inbound" && c.localPort != null && (
-                      <span className="ml-1 text-[10px] text-slate-500">
-                        ← :{c.localPort}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-1.5 font-mono text-xs text-slate-400">{c.proto}</td>
-                  <td className="px-3 py-1.5 text-xs">
-                    {c.processName || "—"}
-                    {c.pid ? (
-                      <span className="ml-1 text-[10px] text-slate-500">pid {c.pid}</span>
-                    ) : null}
-                  </td>
-                  <td className="px-3 py-1.5 text-[11px] text-slate-500">
-                    {c.state || "—"}
-                  </td>
-                  <td className="px-3 py-1.5 text-right text-xs tabular-nums text-slate-300">
-                    {c.count}
-                  </td>
-                </tr>
-              ))}
-            </Table>
-          </div>
-        </div>
-      )}
-    </Section>
-  );
-}
-
-function DirectionPill({ dir }: { dir: SnapshotConversation["direction"] }) {
-  const cls =
-    dir === "outbound"
-      ? "bg-sonar-900/60 text-sonar-200"
-      : dir === "inbound"
-        ? "bg-emerald-900/60 text-emerald-200"
-        : "bg-slate-800 text-slate-300";
-  const label = dir === "outbound" ? "out" : dir === "inbound" ? "in" : dir;
-  return (
-    <span
-      className={`inline-block rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${cls}`}
-    >
-      {label}
-    </span>
-  );
-}
-
-// ---- Sessions / services / failed units -----------------------------------
-
-function SessionsTable({ sessions }: { sessions: SnapshotSession[] }) {
-  // Probe schema v4+ adds `state` (Active/Disconnected/Idle) and
-  // `source` (RDP client name or "console") on Windows. Show those
-  // columns only when at least one session populates them so the
-  // header isn't misleading on Linux/macOS hosts.
-  const hasState = sessions.some((s) => !!s.state);
-  const hasSource = sessions.some((s) => !!s.source);
-  const head = ["User", "Tty"];
-  if (hasState) head.push("State");
-  if (hasSource) head.push("Source");
-  head.push("Host", "Since");
-
-  return (
-    <Section title="Logged-in users">
-      {sessions.length === 0 ? (
-        <Empty>No interactive sessions.</Empty>
-      ) : (
-        <Table head={head}>
-          {sessions.map((s, i) => (
-            <tr key={i} className="border-t border-ink-800">
-              <td className="px-3 py-1.5 text-xs">{s.user}</td>
-              <td className="px-3 py-1.5 font-mono text-xs text-slate-400">{s.tty || "—"}</td>
-              {hasState && (
-                <td className="px-3 py-1.5 text-xs">
-                  <SessionStatePill state={s.state} />
-                </td>
-              )}
-              {hasSource && (
-                <td className="px-3 py-1.5 text-xs text-slate-400">{s.source || "—"}</td>
-              )}
-              <td className="px-3 py-1.5 text-xs text-slate-400">{s.host || "—"}</td>
-              <td className="px-3 py-1.5 text-xs text-slate-500">
-                {s.started ? formatRelative(s.started) : "—"}
-              </td>
-            </tr>
-          ))}
-        </Table>
-      )}
-    </Section>
-  );
-}
-
-function SessionStatePill({ state }: { state?: string }) {
-  if (!state) return <span className="text-slate-500">—</span>;
-  const cls =
-    state === "Active"
-      ? "bg-emerald-900/60 text-emerald-200"
-      : state === "Disconnected"
-        ? "bg-slate-800 text-slate-300"
-        : state === "Idle"
-          ? "bg-amber-900/40 text-amber-200"
-          : "bg-slate-800 text-slate-300";
-  return (
-    <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${cls}`}>
-      {state}
-    </span>
-  );
-}
-
-function ServicesTable({ services }: { services: SnapshotService[] }) {
-  return (
-    <Section title="Stopped automatic services">
-      <Table head={["Service", "Display", "Start", "Status"]}>
-        {services.map((s) => (
-          <tr key={s.name} className="border-t border-ink-800">
-            <td className="px-3 py-1.5 font-mono text-xs">{s.name}</td>
-            <td className="px-3 py-1.5 text-xs text-slate-300">{s.displayName || "—"}</td>
-            <td className="px-3 py-1.5 text-xs text-slate-400">{s.startType || "—"}</td>
-            <td className="px-3 py-1.5 text-xs text-amber-300">{s.status || "—"}</td>
-          </tr>
-        ))}
-      </Table>
-    </Section>
-  );
-}
-
-function FailedUnitsTable({ units }: { units: string[] }) {
-  return (
-    <Section title="Failed systemd units">
-      <ul className="space-y-1">
-        {units.map((u) => (
-          <li key={u} className="rounded bg-ink-800/40 px-2 py-1 font-mono text-xs text-red-300">
-            {u}
-          </li>
-        ))}
-      </ul>
-    </Section>
-  );
-}
-
-// ---- Hardware -------------------------------------------------------------
-//
-// "Hardware" is one section but four logical sub-tables: system (the
-// box itself: vendor, BIOS, mobo, chassis), memory modules, storage,
-// and network adapters/GPUs. Probe collects this once per 6h since
-// it doesn't change between snapshots, so the UI doesn't need to
-// re-render anything when it's missing — we just hide the section.
-
-function HardwareSection({ hw }: { hw: SnapshotHardware }) {
-  const empty =
-    !hw.system &&
-    !hw.cpu &&
-    (!hw.memoryModules || hw.memoryModules.length === 0) &&
-    (!hw.storage || hw.storage.length === 0) &&
-    (!hw.networkAdapters || hw.networkAdapters.length === 0) &&
-    (!hw.gpus || hw.gpus.length === 0);
-  if (empty) return null;
-
-  return (
-    <div className="space-y-3 rounded-xl border border-ink-800 bg-ink-900 p-4">
-      <div className="flex items-baseline justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-          Hardware
-        </h3>
-        <span className="text-[10px] text-slate-600">
-          collected once per probe lifetime
-        </span>
-      </div>
-
-      {(hw.system || hw.cpu) && <HardwareSystemBlock hw={hw} />}
-
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {hw.memoryModules && hw.memoryModules.length > 0 && (
-          <HardwareMemTable mods={hw.memoryModules} />
-        )}
-        {hw.storage && hw.storage.length > 0 && (
-          <HardwareDiskTable disks={hw.storage} />
-        )}
-        {hw.networkAdapters && hw.networkAdapters.length > 0 && (
-          <HardwareNICTable nics={hw.networkAdapters} />
-        )}
-        {hw.gpus && hw.gpus.length > 0 && <HardwareGPUTable gpus={hw.gpus} />}
-      </div>
-
-      {hw.collectionWarnings && hw.collectionWarnings.length > 0 && (
-        <div className="rounded border border-amber-800/40 bg-amber-950/20 p-2 text-[11px] text-amber-200">
-          <div className="mb-0.5 font-semibold">Hardware collector warnings</div>
-          <ul className="list-inside list-disc space-y-0.5">
-            {hw.collectionWarnings.map((w) => (
-              <li key={w}>{w}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function HardwareSystemBlock({ hw }: { hw: SnapshotHardware }) {
-  const sys = hw.system ?? {};
-  const cpu = hw.cpu ?? {};
-  // Lay out the most identity-sensitive fields first so an operator
-  // can confirm "yes this is the box I think it is" at a glance.
-  const items: Array<[string, string | undefined]> = (
-    [
-      ["Vendor", sys.manufacturer],
-      ["Product", sys.productName],
-      ["Serial", sys.serialNumber],
-      ["Chassis", joinNonEmpty([sys.chassisType, sys.chassisAssetTag], " · ")],
-      ["BIOS", joinNonEmpty([sys.biosVendor, sys.biosVersion, sys.biosDate], " · ")],
-      ["Board", joinNonEmpty([sys.boardManufacturer, sys.boardProduct], " · ")],
-      ["Board serial", sys.boardSerial],
-      [
-        "CPU",
-        joinNonEmpty(
-          [
-            cpu.model,
-            cpu.cores ? `${cpu.cores} cores` : undefined,
-            cpu.threads ? `${cpu.threads} threads` : undefined,
-            cpu.mhzNominal ? `${cpu.mhzNominal} MHz` : undefined,
-          ],
-          " · ",
-        ),
-      ],
-    ] as Array<[string, string | undefined]>
-  ).filter(([, v]) => v && v !== "");
-  if (items.length === 0) return null;
-  return (
-    <dl className="grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-2 lg:grid-cols-3">
-      {items.map(([k, v]) => (
-        <div key={k} className="flex gap-2">
-          <dt className="w-20 shrink-0 text-[10px] uppercase tracking-wide text-slate-500">
-            {k}
-          </dt>
-          <dd className="min-w-0 truncate font-mono text-slate-200" title={v}>
-            {v}
-          </dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
-function HardwareMemTable({ mods }: { mods: HardwareMemoryModule[] }) {
-  // Operators want the at-a-glance answer "how much RAM, what
-  // speed?" before they care about per-DIMM specifics. Provide a
-  // total in the section header.
-  const total = mods.reduce((s, m) => s + (m.sizeBytes ?? 0), 0);
-  const speeds = Array.from(
-    new Set(mods.map((m) => m.speedMhz).filter((n): n is number => !!n)),
-  );
-  return (
-    <Section
-      title={`Memory · ${formatBytes(total)}${speeds.length > 0 ? ` · ${speeds.join("/")} MHz` : ""}`}
-    >
-      <Table head={["Slot", "Size", "Type", "Mfg", "Part #", "Serial"]}>
-        {mods.map((m, i) => (
-          <tr key={i} className="border-t border-ink-800 align-top">
-            <td className="px-3 py-1 font-mono text-[11px] text-slate-300">
-              {m.slot || "—"}
-            </td>
-            <td className="px-3 py-1 text-[11px] tabular-nums">
-              {m.sizeBytes ? formatBytes(m.sizeBytes) : "—"}
-              {m.speedMhz ? <div className="text-[9px] text-slate-500">{m.speedMhz} MHz</div> : null}
-            </td>
-            <td className="px-3 py-1 text-[11px] text-slate-400">
-              {joinNonEmpty([m.type, m.formFactor], " ") || "—"}
-            </td>
-            <td className="px-3 py-1 text-[11px] text-slate-400">
-              {m.manufacturer || "—"}
-            </td>
-            <td className="px-3 py-1 font-mono text-[11px] text-slate-300">
-              {m.partNumber || "—"}
-            </td>
-            <td className="px-3 py-1 font-mono text-[10px] text-slate-500">
-              {m.serialNumber || "—"}
-            </td>
-          </tr>
-        ))}
-      </Table>
-    </Section>
-  );
-}
-
-function HardwareDiskTable({ disks }: { disks: HardwareDisk[] }) {
-  const total = disks.reduce((s, d) => s + (d.sizeBytes ?? 0), 0);
-  return (
-    <Section title={`Storage · ${formatBytes(total)} raw`}>
-      <Table head={["Device", "Model", "Bus", "Size", "Type", "Serial"]}>
-        {disks.map((d, i) => (
-          <tr key={i} className="border-t border-ink-800 align-top">
-            <td className="px-3 py-1 font-mono text-[11px] text-slate-300">
-              {d.device || "—"}
-            </td>
-            <td className="px-3 py-1 text-[11px]">
-              <div>{d.model || "—"}</div>
-              {d.vendor && (
-                <div className="text-[9px] text-slate-500">{d.vendor}</div>
-              )}
-            </td>
-            <td className="px-3 py-1 text-[11px] uppercase text-slate-400">
-              {d.busType || "—"}
-            </td>
-            <td className="px-3 py-1 text-[11px] tabular-nums">
-              {d.sizeBytes ? formatBytes(d.sizeBytes) : "—"}
-            </td>
-            <td className="px-3 py-1 text-[11px] text-slate-400">
-              {d.rotational == null ? "—" : d.rotational ? "HDD" : "SSD"}
-            </td>
-            <td className="px-3 py-1 font-mono text-[10px] text-slate-500">
-              {d.serial || "—"}
-            </td>
-          </tr>
-        ))}
-      </Table>
-    </Section>
-  );
-}
-
-function HardwareNICTable({ nics }: { nics: HardwareNIC[] }) {
-  return (
-    <Section title="Network adapters (hardware)">
-      <Table head={["Name", "Vendor / Product", "Driver", "Speed", "MAC"]}>
-        {nics.map((n, i) => (
-          <tr key={i} className="border-t border-ink-800 align-top">
-            <td className="px-3 py-1 font-mono text-[11px] text-slate-300">
-              {n.name || "—"}
-            </td>
-            <td className="px-3 py-1 text-[11px]">
-              <div>{n.product || "—"}</div>
-              {n.vendor && (
-                <div className="text-[9px] text-slate-500">{n.vendor}</div>
-              )}
-            </td>
-            <td className="px-3 py-1 font-mono text-[11px] text-slate-400">
-              {n.driver || "—"}
-            </td>
-            <td className="px-3 py-1 text-[11px] tabular-nums text-slate-400">
-              {n.speedMbps ? `${n.speedMbps} Mbps` : "—"}
-            </td>
-            <td className="px-3 py-1 font-mono text-[10px] text-slate-500">
-              {n.mac || "—"}
-            </td>
-          </tr>
-        ))}
-      </Table>
-    </Section>
-  );
-}
-
-function HardwareGPUTable({ gpus }: { gpus: HardwareGPU[] }) {
-  return (
-    <Section title="GPUs">
-      <Table head={["Vendor", "Product", "Driver"]}>
-        {gpus.map((g, i) => (
-          <tr key={i} className="border-t border-ink-800 align-top">
-            <td className="px-3 py-1 text-[11px] text-slate-400">{g.vendor || "—"}</td>
-            <td className="px-3 py-1 text-[11px]">{g.product || "—"}</td>
-            <td className="px-3 py-1 font-mono text-[11px] text-slate-400">
-              {g.driver || "—"}
-            </td>
-          </tr>
-        ))}
-      </Table>
-    </Section>
-  );
-}
-
-function joinNonEmpty(parts: Array<string | number | undefined | null>, sep: string): string {
-  return parts.filter((p) => p != null && p !== "").join(sep);
-}
-
-// ---- Host meta ------------------------------------------------------------
-
-function HostMeta({ snap }: { snap: NonNullable<AgentDetail["lastMetrics"]> }) {
-  const items: Array<[string, string]> = [
-    ["OS", `${snap.host.platform} ${snap.host.platformVersion}`],
-    ["Family", snap.host.platformFamily || "—"],
-    ["Kernel", `${snap.host.kernelVersion} (${snap.host.kernelArch})`],
-    ["Boot", snap.host.bootTime ? new Date(snap.host.bootTime).toLocaleString() : "—"],
-    ["Procs", String(snap.host.procs ?? 0)],
-    ...(snap.host.virtualization
-      ? ([["Virt", snap.host.virtualization]] as Array<[string, string]>)
-      : []),
-    [
-      "Load",
-      snap.loadAvg
-        ? `${snap.loadAvg.load1} / ${snap.loadAvg.load5} / ${snap.loadAvg.load15}`
-        : "—",
-    ],
-    ["Captured", formatRelative(snap.capturedAt)],
-  ];
-  return (
-    <Section title="Host">
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs md:grid-cols-4">
-        {items.map(([k, v]) => (
-          <div key={k}>
-            <dt className="text-slate-500">{k}</dt>
-            <dd className="font-mono text-slate-200">{v}</dd>
-          </div>
-        ))}
-      </dl>
-    </Section>
-  );
-}
-
-// ---- Shared bits ----------------------------------------------------------
-
-function Section({
-  title,
-  children,
-}: {
-  title: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-xl border border-ink-800 bg-ink-900 p-4">
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-        {title}
-      </h3>
-      {children}
-    </div>
-  );
-}
-
-function Table({ head, children }: { head: string[]; children: React.ReactNode }) {
-  return (
-    <table className="w-full text-left text-sm">
-      <thead className="text-xs uppercase tracking-wide text-slate-500">
-        <tr>
-          {head.map((h) => (
-            <th key={h} className="px-3 py-1.5">
-              {h}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>{children}</tbody>
-    </table>
-  );
-}
-
-function Empty({ children }: { children: React.ReactNode }) {
-  return <div className="text-xs text-slate-500">{children}</div>;
-}
-
-function UsageBar({ pct }: { pct: number }) {
-  const clamped = Math.min(100, Math.max(0, pct));
-  return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 w-24 overflow-hidden rounded bg-ink-800">
-        <div
-          className={"h-full " + pctBarColor(clamped)}
-          style={{ width: `${clamped}%` }}
-        />
-      </div>
-      <div className="w-10 text-right text-[10px] tabular-nums text-slate-400">
-        {clamped.toFixed(0)}%
-      </div>
-    </div>
-  );
-}
-
-function truncate(s: string, n: number) {
-  if (!s) return "";
-  return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }

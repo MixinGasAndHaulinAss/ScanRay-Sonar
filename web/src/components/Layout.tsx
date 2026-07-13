@@ -31,7 +31,7 @@ import ThemeToggle from "./ThemeToggle";
 // APP_VERSION is just the static fallback shown if /version hasn't
 // returned yet (or fails). The real source of truth is the Go binary's
 // embedded VERSION, fetched below via useQuery.
-const APP_VERSION = "2026.7.13.3";
+const APP_VERSION = "2026.7.13.5";
 
 type HeroIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -45,7 +45,7 @@ type NavItem = {
 const primaryNav: NavItem[] = [
   { to: "/", label: "Dashboard", icon: HomeIcon },
   { to: "/sites", label: "Sites", icon: GlobeAltIcon },
-  { to: "/agents", label: "Agents", icon: ComputerDesktopIcon },
+  { to: "/agents", label: "Devices", icon: ComputerDesktopIcon },
   { to: "/appliances", label: "Appliances", icon: ServerStackIcon },
   { to: "/collectors", label: "Collectors", icon: SignalIcon },
   { to: "/topology", label: "Topology", icon: ShareIcon },
