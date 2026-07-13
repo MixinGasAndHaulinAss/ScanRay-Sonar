@@ -45,9 +45,9 @@ type Snapshot struct {
 	// (refreshed every 6h) and inlined into every snapshot. Optional
 	// — older probe builds and platforms without a collector simply
 	// omit the field. See internal/probe/hardware.go.
-	Hardware  *Hardware    `json:"hardware,omitempty"`
-	TopByCPU  []ProcessRow `json:"topByCpu"`
-	TopByMem  []ProcessRow `json:"topByMem"`
+	Hardware *Hardware    `json:"hardware,omitempty"`
+	TopByCPU []ProcessRow `json:"topByCpu"`
+	TopByMem []ProcessRow `json:"topByMem"`
 	// ActiveProcesses is a larger live process table (union of high
 	// CPU/mem) for the ControlUp-style Active Processes device tab.
 	// Schema v5+. Older UIs ignore it and keep using TopBy*.
@@ -224,7 +224,7 @@ type Conversation struct {
 	PID         int32  `json:"pid,omitempty"`
 	ProcessName string `json:"processName,omitempty"`
 	User        string `json:"user,omitempty"` // schema v5+
-	Count       int    `json:"count"`         // number of socket rows aggregated
+	Count       int    `json:"count"`          // number of socket rows aggregated
 }
 
 type SessionRow struct {

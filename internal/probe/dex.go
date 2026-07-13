@@ -25,30 +25,30 @@ type InstalledApp struct {
 
 // MissingPatch is one outstanding Windows Update / patch.
 type MissingPatch struct {
-	Title    string `json:"title"`
-	KB       string `json:"kb,omitempty"`
-	Severity string `json:"severity,omitempty"`
+	Title    string   `json:"title"`
+	KB       string   `json:"kb,omitempty"`
+	Severity string   `json:"severity,omitempty"`
 	SizeMB   *float64 `json:"sizeMb,omitempty"`
 }
 
 // Win11Readiness summarises upgrade readiness signals.
 type Win11Readiness struct {
-	Eligible *bool  `json:"eligible,omitempty"`
-	Reason   string `json:"reason,omitempty"`
-	TPMReady *bool  `json:"tpmReady,omitempty"`
-	SecureBoot *bool `json:"secureBoot,omitempty"`
-	CPUOK    *bool  `json:"cpuOk,omitempty"`
-	RAMOK    *bool  `json:"ramOk,omitempty"`
-	StorageOK *bool `json:"storageOk,omitempty"`
+	Eligible   *bool  `json:"eligible,omitempty"`
+	Reason     string `json:"reason,omitempty"`
+	TPMReady   *bool  `json:"tpmReady,omitempty"`
+	SecureBoot *bool  `json:"secureBoot,omitempty"`
+	CPUOK      *bool  `json:"cpuOk,omitempty"`
+	RAMOK      *bool  `json:"ramOk,omitempty"`
+	StorageOK  *bool  `json:"storageOk,omitempty"`
 }
 
 // AppFocusRow is an aggregated foreground-app sample for Top Apps.
 type AppFocusRow struct {
-	Name       string  `json:"name"`
-	PID        int32   `json:"pid,omitempty"`
+	Name         string  `json:"name"`
+	PID          int32   `json:"pid,omitempty"`
 	FocusSeconds float64 `json:"focusSeconds"`
-	FocusPct   float64 `json:"focusPct,omitempty"`
-	LastSeen   string  `json:"lastSeen,omitempty"`
+	FocusPct     float64 `json:"focusPct,omitempty"`
+	LastSeen     string  `json:"lastSeen,omitempty"`
 }
 
 // ProcessStopEvent is a process that exited since a prior sample.
@@ -84,12 +84,12 @@ type PowerEvent struct {
 // paths are not always available; File may be empty and Bytes is the
 // combined read+write rate for the process over the sample interval.
 type StorageIOEvent struct {
-	Time    string `json:"time"`
-	Process string `json:"process"`
-	PID     int32  `json:"pid"`
-	File    string `json:"file,omitempty"`
-	Bytes   uint64 `json:"bytes"`
-	ReadBps uint64 `json:"readBps,omitempty"`
+	Time     string `json:"time"`
+	Process  string `json:"process"`
+	PID      int32  `json:"pid"`
+	File     string `json:"file,omitempty"`
+	Bytes    uint64 `json:"bytes"`
+	ReadBps  uint64 `json:"readBps,omitempty"`
 	WriteBps uint64 `json:"writeBps,omitempty"`
 }
 
@@ -109,9 +109,9 @@ type dexState struct {
 	inventory *DexInventory
 
 	// focusCounts accumulates seconds of foreground time by process name.
-	focusCounts map[string]float64
-	focusPID    map[string]int32
-	focusLast   map[string]time.Time
+	focusCounts  map[string]float64
+	focusPID     map[string]int32
+	focusLast    map[string]time.Time
 	focusSamples int
 
 	// stopped / storage rings (newest last).

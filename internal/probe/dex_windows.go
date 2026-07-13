@@ -219,11 +219,11 @@ func collectDEXInventoryOS(ctx context.Context) *DexInventory {
 }
 
 var (
-	modUser32                       = windows.NewLazySystemDLL("user32.dll")
-	procGetForegroundWindow         = modUser32.NewProc("GetForegroundWindow")
-	procGetWindowThreadProcessId    = modUser32.NewProc("GetWindowThreadProcessId")
-	procGetWindowTextW              = modUser32.NewProc("GetWindowTextW")
-	procGetWindowTextLengthW        = modUser32.NewProc("GetWindowTextLengthW")
+	modUser32                    = windows.NewLazySystemDLL("user32.dll")
+	procGetForegroundWindow      = modUser32.NewProc("GetForegroundWindow")
+	procGetWindowThreadProcessId = modUser32.NewProc("GetWindowThreadProcessId")
+	procGetWindowTextW           = modUser32.NewProc("GetWindowTextW")
+	procGetWindowTextLengthW     = modUser32.NewProc("GetWindowTextLengthW")
 )
 
 func sampleAppFocusOS() (name string, pid int32, ok bool) {
