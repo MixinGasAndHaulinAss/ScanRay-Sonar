@@ -213,17 +213,46 @@ func (c *Client) ListApplianceUplinkStatuses(ctx context.Context, orgID string) 
 
 // switchPortsBySwitchPage is the paginated envelope for bySwitch.
 // Meraki returns {"items":[...],"meta":{...}} rather than a bare array.
+// perPage is capped at 20 for this endpoint.
 type switchPortsBySwitchPage struct {
 	Items []SwitchPortsBySwitch `json:"items"`
+	Meta  struct {
+		Counts struct {
+			Items struct {
+				Remaining int `json:"remaining"`
+				Total     int `json:"total"`
+			} `json:"items"`
+		} `json:"counts"`
+	} `json:"meta"`
 }
 
 // ListSwitchPortsStatusesBySwitch returns all switch port statuses for an org.
 func (c *Client) ListSwitchPortsStatusesBySwitch(ctx context.Context, orgID string) ([]SwitchPortsBySwitch, error) {
-	var page switchPortsBySwitchPage
-	if err := c.get(ctx, "/organizations/"+orgID+"/switch/ports/statuses/bySwitch?perPage=1000", &page); err != nil {
-		return nil, err
+	var out []SwitchPortsBySwitch
+	startingAfter := ""
+	for {
+		path := "/organizations/" + orgID + "/switch/ports/statuses/bySwitch?perPage=20"
+		if startingAfter != "" {
+			path += "&startingAfter=" + startingAfter
+		}
+		var page switchPortsBySwitchPage
+		if err := c.get(ctx, path, &page); err != nil {
+			return nil, err
+		}
+		if len(page.Items) == 0 {
+			break
+		}
+		out = append(out, page.Items...)
+		if page.Meta.Counts.Items.Remaining <= 0 {
+			break
+		}
+		last := page.Items[len(page.Items)-1].Serial
+		if last == "" || last == startingAfter {
+			break
+		}
+		startingAfter = last
 	}
-	return page.Items, nil
+	return out, nil
 }
 
 // ListUplinksLossAndLatency returns MX path-quality samples for an org.
