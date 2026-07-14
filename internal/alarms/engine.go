@@ -351,6 +351,11 @@ func (e *Engine) maybeAutoClear(m metricEval, rl ruleRow, dedup string) {
 		// No row to clear (most common path) — silent.
 		return
 	}
+	short := m.targetKey
+	if len(short) > 8 {
+		short = short[:8]
+	}
+	title := rl.Name + " (" + short + ")"
 	if m.targetKind == "agent" {
 		aid := m.targetUUID
 		_ = agentevents.Emit(context.Background(), e.pool, m.siteID, &aid,
@@ -360,11 +365,6 @@ func (e *Engine) maybeAutoClear(m metricEval, rl ruleRow, dedup string) {
 	if e.nc != nil && e.nc.IsConnected() {
 		_ = e.nc.Publish("alarm.cleared", []byte(`{"alarmId":`+strconv.FormatInt(alarmID, 10)+`,"auto":true}`))
 	}
-	short := m.targetKey
-	if len(short) > 8 {
-		short = short[:8]
-	}
-	title := rl.Name + " (" + short + ")"
 	go e.dispatchAlarm(alarmID, rl, m.siteID, m.targetKind, m.targetUUID, title, dedup, m.payloadJSON, "alarm.cleared")
 }
 
