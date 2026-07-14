@@ -988,8 +988,9 @@ function MerakiSyncPanel({ siteId }: { siteId: string }) {
           <code className="font-mono">firewall</code>, <code className="font-mono">wap</code>,{" "}
           <code className="font-mono">switch</code>, …). Saving polls immediately; use{" "}
           <strong>Poll now</strong> anytime after. MX management IPs come from Addressing &amp; VLANs
-          (appliance LAN), not WAN. Create a key in Meraki Dashboard → Organization → Settings →
-          Dashboard API access.
+          (appliance LAN), not WAN. Live health (online status, WAN uplinks, switch ports, AP
+          clients) comes from the Dashboard API on the same interval — not SNMP. Create a key in
+          Meraki Dashboard → Organization → Settings → Dashboard API access.
         </p>
 
         <label className="flex items-center gap-2 text-sm text-slate-300">

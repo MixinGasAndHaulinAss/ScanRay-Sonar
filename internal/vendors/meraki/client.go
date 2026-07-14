@@ -1,4 +1,5 @@
-// Package meraki is a minimal Dashboard API client for inventory sync.
+// Package meraki is a minimal Dashboard API client for inventory sync
+// and live health telemetry.
 package meraki
 
 import (
@@ -23,7 +24,7 @@ type Client struct {
 func New(apiKey string) *Client {
 	return &Client{
 		apiKey: apiKey,
-		http:   &http.Client{Timeout: 45 * time.Second},
+		http:   &http.Client{Timeout: 60 * time.Second},
 	}
 }
 
@@ -62,6 +63,70 @@ type ApplianceVLAN struct {
 type ApplianceSingleLAN struct {
 	ApplianceIP string `json:"applianceIp"`
 	Subnet      string `json:"subnet"`
+}
+
+// DeviceStatus is one org-wide device reachability row.
+type DeviceStatus struct {
+	Name           string `json:"name"`
+	Serial         string `json:"serial"`
+	MAC            string `json:"mac"`
+	NetworkID      string `json:"networkId"`
+	ProductType    string `json:"productType"`
+	Status         string `json:"status"`
+	LastReportedAt string `json:"lastReportedAt"`
+	// Clients is present on wireless (and some other) status payloads.
+	Clients *struct {
+		Counts struct {
+			Total int `json:"total"`
+		} `json:"counts"`
+	} `json:"clients,omitempty"`
+}
+
+// ApplianceUplinkStatus is one MX/Z appliance's uplink snapshot.
+type ApplianceUplinkStatus struct {
+	NetworkID string         `json:"networkId"`
+	Serial    string         `json:"serial"`
+	Model     string         `json:"model"`
+	Uplinks   []UplinkStatus `json:"uplinks"`
+}
+
+// UplinkStatus is a single WAN/cellular uplink.
+type UplinkStatus struct {
+	Interface string `json:"interface"`
+	Status    string `json:"status"`
+	IP        string `json:"ip"`
+	PublicIP  string `json:"publicIp"`
+}
+
+// SwitchPortsBySwitch is one switch with all port statuses.
+type SwitchPortsBySwitch struct {
+	Serial string             `json:"serial"`
+	Name   string             `json:"name"`
+	Model  string             `json:"model"`
+	Ports  []SwitchPortStatus `json:"ports"`
+}
+
+// SwitchPortStatus is one switch port's live status.
+type SwitchPortStatus struct {
+	PortID   string   `json:"portId"`
+	Enabled  bool     `json:"enabled"`
+	Status   string   `json:"status"`
+	Speed    string   `json:"speed"`
+	IsUplink bool     `json:"isUplink"`
+	Errors   []string `json:"errors"`
+}
+
+// UplinkLossLatency is one device uplink path-quality series.
+type UplinkLossLatency struct {
+	NetworkID  string `json:"networkId"`
+	Serial     string `json:"serial"`
+	Uplink     string `json:"uplink"`
+	IP         string `json:"ip"`
+	TimeSeries []struct {
+		TS          string   `json:"ts"`
+		LossPercent *float64 `json:"lossPercent"`
+		LatencyMs   *float64 `json:"latencyMs"`
+	} `json:"timeSeries"`
 }
 
 func (c *Client) get(ctx context.Context, path string, out any) error {
@@ -124,6 +189,42 @@ func (c *Client) GetApplianceSingleLAN(ctx context.Context, networkID string) (A
 	var out ApplianceSingleLAN
 	if err := c.get(ctx, "/networks/"+networkID+"/appliance/singleLan", &out); err != nil {
 		return ApplianceSingleLAN{}, err
+	}
+	return out, nil
+}
+
+// ListDeviceStatuses returns online/offline status for every device in an org.
+func (c *Client) ListDeviceStatuses(ctx context.Context, orgID string) ([]DeviceStatus, error) {
+	var out []DeviceStatus
+	if err := c.get(ctx, "/organizations/"+orgID+"/devices/statuses?perPage=1000", &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ListApplianceUplinkStatuses returns MX/Z uplink IPs and state for an org.
+func (c *Client) ListApplianceUplinkStatuses(ctx context.Context, orgID string) ([]ApplianceUplinkStatus, error) {
+	var out []ApplianceUplinkStatus
+	if err := c.get(ctx, "/organizations/"+orgID+"/appliance/uplink/statuses?perPage=1000", &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ListSwitchPortsStatusesBySwitch returns all switch port statuses for an org.
+func (c *Client) ListSwitchPortsStatusesBySwitch(ctx context.Context, orgID string) ([]SwitchPortsBySwitch, error) {
+	var out []SwitchPortsBySwitch
+	if err := c.get(ctx, "/organizations/"+orgID+"/switch/ports/statuses/bySwitch?perPage=1000", &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ListUplinksLossAndLatency returns MX path-quality samples for an org.
+func (c *Client) ListUplinksLossAndLatency(ctx context.Context, orgID string) ([]UplinkLossLatency, error) {
+	var out []UplinkLossLatency
+	if err := c.get(ctx, "/organizations/"+orgID+"/devices/uplinksLossAndLatency?perPage=1000", &out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

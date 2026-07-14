@@ -622,7 +622,7 @@ export interface Appliance {
 export interface ApplianceDetail extends Appliance {
   sysDescr?: string | null;
   lastSnapshotAt?: string | null;
-  lastSnapshot?: ApplianceSnapshot | null;
+  lastSnapshot?: ApplianceSnapshot | MerakiDashboardSnapshot | null;
 }
 
 // ApplianceSnapshot mirrors internal/snmp/snapshot.go.
@@ -636,6 +636,52 @@ export interface ApplianceSnapshot {
   entities?: ApplianceEntity[];
   lldp?: ApplianceLLDP[];
   collectionWarnings?: string[];
+  /** Present on Meraki Dashboard snapshots only. */
+  source?: string;
+}
+
+/** Meraki Dashboard health snapshot (appliances.last_snapshot when source=meraki-dashboard). */
+export interface MerakiDashboardSnapshot {
+  schemaVersion: string;
+  source: "meraki-dashboard";
+  capturedAt: string;
+  status?: string;
+  productType?: string;
+  lastReportedAt?: string;
+  name?: string;
+  uplinks?: Array<{
+    interface: string;
+    status: string;
+    ip?: string;
+    publicIp?: string;
+  }>;
+  ports?: Array<{
+    portId: string;
+    status: string;
+    speed?: string;
+    enabled: boolean;
+    isUplink: boolean;
+    errors?: string[];
+  }>;
+  clientCount?: number | null;
+  physUp?: number | null;
+  physTotal?: number | null;
+  uplinkCount?: number | null;
+  lossLatency?: Array<{
+    uplink: string;
+    lossPercent?: number | null;
+    latencyMs?: number | null;
+  }>;
+}
+
+export function isMerakiDashboardSnapshot(
+  snap: unknown,
+): snap is MerakiDashboardSnapshot {
+  return (
+    !!snap &&
+    typeof snap === "object" &&
+    (snap as MerakiDashboardSnapshot).source === "meraki-dashboard"
+  );
 }
 export interface ApplianceSystem {
   description: string;

@@ -17,8 +17,11 @@ import type {
   ApplianceInterface,
   ApplianceLLDP,
   ApplianceMetricSeries,
+  ApplianceSnapshot,
+  MerakiDashboardSnapshot,
   Site,
 } from "../api/types";
+import { isMerakiDashboardSnapshot } from "../api/types";
 import Sparkline from "../components/Sparkline";
 import {
   formatBytes,
@@ -46,6 +49,8 @@ export default function ApplianceDetailPage() {
   const sites = useQuery({ queryKey: ["sites"], queryFn: () => api.get<Site[]>("/sites") });
 
   const snap = appliance.data?.lastSnapshot ?? null;
+  const merakiSnap = isMerakiDashboardSnapshot(snap) ? snap : null;
+  const snmpSnap = !merakiSnap && snap ? (snap as ApplianceSnapshot) : null;
 
   const cpuSeries = useMemo(
     () => (metrics.data?.samples ?? []).map((s) => Number(s.cpuPct ?? 0)),
@@ -83,13 +88,15 @@ export default function ApplianceDetailPage() {
     a.memUsedBytes != null && a.memTotalBytes && a.memTotalBytes > 0
       ? (Number(a.memUsedBytes) / Number(a.memTotalBytes)) * 100
       : null;
-  // "online" for a network device = we got a poll reply within
-  // 3 × pollInterval. Anything older typically means SNMP is failing
-  // or the device is unreachable.
+  // Meraki Dashboard telemetry often runs on the site sync interval (~15m);
+  // SNMP devices use 3× pollInterval.
+  const pollWindowSec =
+    a.vendor === "meraki"
+      ? Math.max(3 * a.pollIntervalSeconds, 45 * 60)
+      : Math.max(3 * a.pollIntervalSeconds, 180);
   const polledRecently =
     a.lastPolledAt &&
-    Date.now() - new Date(a.lastPolledAt).getTime() <
-      Math.max(3 * a.pollIntervalSeconds, 180) * 1000;
+    Date.now() - new Date(a.lastPolledAt).getTime() < pollWindowSec * 1000;
 
   return (
     <div className="space-y-6">
@@ -108,8 +115,13 @@ export default function ApplianceDetailPage() {
           </h2>
           <p className="text-sm text-slate-400">
             {siteName} · {a.vendor}
-            {a.model && <> · {a.model}</>} · SNMP {a.snmpVersion} ·{" "}
-            <span className="font-mono">{a.mgmtIp}</span>
+            {a.model && <> · {a.model}</>}
+            {a.vendor === "meraki" ? (
+              <> · Dashboard API</>
+            ) : (
+              <> · SNMP {a.snmpVersion}</>
+            )}{" "}
+            · <span className="font-mono">{a.mgmtIp}</span>
           </p>
         </div>
         <div className="text-right text-xs">
@@ -127,7 +139,9 @@ export default function ApplianceDetailPage() {
           <div className="mt-1 text-slate-500">
             polled {formatRelative(a.lastPolledAt)}
           </div>
-          <div className="text-slate-600">interval {a.pollIntervalSeconds}s</div>
+          {a.vendor !== "meraki" && (
+            <div className="text-slate-600">interval {a.pollIntervalSeconds}s</div>
+          )}
         </div>
       </div>
 
@@ -140,56 +154,69 @@ export default function ApplianceDetailPage() {
         </div>
       )}
 
-      {snap == null ? (
+      {merakiSnap ? (
+        <MerakiHealthBlock detail={a} snap={merakiSnap} />
+      ) : snmpSnap == null ? (
         <div className="rounded-xl border border-ink-800 bg-ink-900 p-6 text-sm text-slate-400">
-          No SNMP snapshot yet. The poller picks up new appliances within ~30
-          seconds and polls each on its configured interval. If nothing
-          appears within a couple of cycles, double-check the community
-          string / v3 user and that the device's SNMP ACL allows the poller
-          host's IP.
+          {a.vendor === "meraki" ? (
+            <>
+              No Meraki Dashboard health snapshot yet. With Meraki sync enabled,
+              the poller refreshes live status on the site sync interval (typically
+              every 15 minutes). Use Discovery → Meraki → Poll now to refresh
+              inventory; health follows on the next telemetry cycle.
+            </>
+          ) : (
+            <>
+              No SNMP snapshot yet. The poller picks up new appliances within ~30
+              seconds and polls each on its configured interval. If nothing
+              appears within a couple of cycles, double-check the community
+              string / v3 user and that the device&apos;s SNMP ACL allows the
+              poller host&apos;s IP.
+            </>
+          )}
         </div>
       ) : (
         <>
           <StatCards
-            cpuPct={a.cpuPct ?? snap.chassis.cpuPct ?? null}
+            cpuPct={a.cpuPct ?? snmpSnap.chassis.cpuPct ?? null}
             memPct={memPct}
-            uptime={a.uptimeSeconds ?? snap.system.uptimeSeconds}
+            uptime={a.uptimeSeconds ?? snmpSnap.system.uptimeSeconds}
             physUp={
               a.physUpCount ??
-              snap.interfaces.filter((i) => i.kind === "physical" && i.operUp).length
+              snmpSnap.interfaces.filter((i) => i.kind === "physical" && i.operUp).length
             }
             physTotal={
               a.physTotalCount ??
-              snap.interfaces.filter((i) => i.kind === "physical").length
+              snmpSnap.interfaces.filter((i) => i.kind === "physical").length
             }
             logicalCount={
-              snap.interfaces.length -
+              snmpSnap.interfaces.length -
               (a.physTotalCount ??
-                snap.interfaces.filter((i) => i.kind === "physical").length)
+                snmpSnap.interfaces.filter((i) => i.kind === "physical").length)
             }
             uplinkCount={
-              a.uplinkCount ?? snap.interfaces.filter((i) => i.isUplink).length
+              a.uplinkCount ?? snmpSnap.interfaces.filter((i) => i.isUplink).length
             }
-            memTotal={Number(a.memTotalBytes ?? snap.chassis.memTotalBytes ?? 0)}
+            memTotal={Number(a.memTotalBytes ?? snmpSnap.chassis.memTotalBytes ?? 0)}
           />
 
           <Charts cpu={cpuSeries} mem={memSeries} loading={metrics.isLoading} />
 
-          <InterfacesTable applianceId={a.id} interfaces={snap.interfaces ?? []} />
+          <InterfacesTable applianceId={a.id} interfaces={snmpSnap.interfaces ?? []} />
 
-          {snap.entities && snap.entities.length > 0 && (
-            <EntitiesTable entities={snap.entities} />
+          {snmpSnap.entities && snmpSnap.entities.length > 0 && (
+            <EntitiesTable entities={snmpSnap.entities} />
           )}
 
-          {snap.lldp && snap.lldp.length > 0 && <LLDPTable neighbors={snap.lldp} />}
+          {snmpSnap.lldp && snmpSnap.lldp.length > 0 && <LLDPTable neighbors={snmpSnap.lldp} />}
 
           <SystemMeta detail={a} />
 
-          {snap.collectionWarnings && snap.collectionWarnings.length > 0 && (
+          {snmpSnap.collectionWarnings && snmpSnap.collectionWarnings.length > 0 && (
             <div className="rounded-xl border border-amber-800/40 bg-amber-950/20 p-3 text-xs text-amber-200">
               <div className="mb-1 font-semibold">Collection warnings</div>
               <ul className="list-inside list-disc space-y-0.5">
-                {snap.collectionWarnings.map((w) => (
+                {snmpSnap.collectionWarnings.map((w) => (
                   <li key={w}>{w}</li>
                 ))}
               </ul>
@@ -197,6 +224,150 @@ export default function ApplianceDetailPage() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function MerakiHealthBlock({
+  detail,
+  snap,
+}: {
+  detail: ApplianceDetail;
+  snap: MerakiDashboardSnapshot;
+}) {
+  const status = (snap.status ?? "unknown").toLowerCase();
+  const statusClass =
+    status === "online"
+      ? "bg-emerald-900/40 text-emerald-300"
+      : status === "alerting"
+        ? "bg-amber-900/40 text-amber-200"
+        : "bg-red-900/40 text-red-200";
+  const lossByUplink = new Map(
+    (snap.lossLatency ?? []).map((l) => [l.uplink.toLowerCase(), l]),
+  );
+  const physUp = detail.physUpCount ?? snap.physUp ?? null;
+  const physTotal = detail.physTotalCount ?? snap.physTotal ?? null;
+  const uplinkCount = detail.uplinkCount ?? snap.uplinkCount ?? snap.uplinks?.length ?? null;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-ink-800 bg-ink-900 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Status</div>
+          <div className="mt-2">
+            <span className={`rounded px-2 py-0.5 text-sm capitalize ${statusClass}`}>
+              {snap.status ?? "unknown"}
+            </span>
+          </div>
+          {snap.lastReportedAt && (
+            <div className="mt-2 text-xs text-slate-500">
+              reported {formatRelative(snap.lastReportedAt)}
+            </div>
+          )}
+        </div>
+        <div className="rounded-xl border border-ink-800 bg-ink-900 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Product</div>
+          <div className="mt-2 text-lg text-slate-200">
+            {snap.productType ?? detail.model ?? "—"}
+          </div>
+        </div>
+        <div className="rounded-xl border border-ink-800 bg-ink-900 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Ports</div>
+          <div className="mt-2 text-lg text-slate-200">
+            {physTotal != null ? (
+              <>
+                <span className="text-emerald-300">{physUp ?? 0}</span>
+                <span className="text-slate-500"> / {physTotal}</span>
+              </>
+            ) : (
+              "—"
+            )}
+          </div>
+        </div>
+        <div className="rounded-xl border border-ink-800 bg-ink-900 p-4">
+          <div className="text-xs uppercase tracking-wide text-slate-500">
+            {snap.clientCount != null ? "Clients" : "Uplinks"}
+          </div>
+          <div className="mt-2 text-lg text-slate-200">
+            {snap.clientCount != null ? snap.clientCount : (uplinkCount ?? "—")}
+          </div>
+        </div>
+      </div>
+
+      {snap.uplinks && snap.uplinks.length > 0 && (
+        <section className="overflow-hidden rounded-xl border border-ink-800 bg-ink-900">
+          <div className="border-b border-ink-800 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            WAN uplinks (telemetry — not management IP)
+          </div>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-ink-800/40 text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-4 py-2">Interface</th>
+                <th className="px-4 py-2">Status</th>
+                <th className="px-4 py-2">IP</th>
+                <th className="px-4 py-2">Public IP</th>
+                <th className="px-4 py-2">Loss</th>
+                <th className="px-4 py-2">Latency</th>
+              </tr>
+            </thead>
+            <tbody>
+              {snap.uplinks.map((u) => {
+                const ll = lossByUplink.get(u.interface.toLowerCase());
+                return (
+                  <tr key={u.interface} className="border-t border-ink-800">
+                    <td className="px-4 py-2 font-mono text-slate-300">{u.interface}</td>
+                    <td className="px-4 py-2 capitalize text-slate-300">{u.status}</td>
+                    <td className="px-4 py-2 font-mono text-slate-400">{u.ip || "—"}</td>
+                    <td className="px-4 py-2 font-mono text-slate-400">
+                      {u.publicIp || "—"}
+                    </td>
+                    <td className="px-4 py-2 text-slate-300">
+                      {ll?.lossPercent != null ? `${ll.lossPercent.toFixed(2)}%` : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-slate-300">
+                      {ll?.latencyMs != null ? `${ll.latencyMs.toFixed(0)} ms` : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {snap.ports && snap.ports.length > 0 && (
+        <section className="overflow-hidden rounded-xl border border-ink-800 bg-ink-900">
+          <div className="border-b border-ink-800 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Switch ports (sample)
+          </div>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-ink-800/40 text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-4 py-2">Port</th>
+                <th className="px-4 py-2">Status</th>
+                <th className="px-4 py-2">Speed</th>
+                <th className="px-4 py-2">Uplink</th>
+              </tr>
+            </thead>
+            <tbody>
+              {snap.ports.slice(0, 48).map((p) => (
+                <tr key={p.portId} className="border-t border-ink-800">
+                  <td className="px-4 py-2 font-mono text-slate-300">{p.portId}</td>
+                  <td className="px-4 py-2 text-slate-300">{p.status}</td>
+                  <td className="px-4 py-2 text-slate-400">{p.speed || "—"}</td>
+                  <td className="px-4 py-2 text-slate-400">{p.isUplink ? "yes" : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      <SystemMeta detail={detail} />
+      <p className="text-xs text-slate-500">
+        Live health from Meraki Dashboard API (not SNMP). Management IP stays on the
+        LAN/appliance address.
+      </p>
     </div>
   );
 }
@@ -815,16 +986,38 @@ function LLDPTable({ neighbors }: { neighbors: ApplianceLLDP[] }) {
 function SystemMeta({ detail }: { detail: ApplianceDetail }) {
   const snap = detail.lastSnapshot;
   if (!snap) return null;
+  if (isMerakiDashboardSnapshot(snap)) {
+    return (
+      <div className="rounded-xl border border-ink-800 bg-ink-900 p-4 text-xs text-slate-400">
+        <div className="mb-2 text-sm font-semibold text-slate-200">System</div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <Meta label="name" value={snap.name || detail.sysName || detail.name || "—"} />
+          <Meta label="productType" value={snap.productType || "—"} />
+          <Meta label="status" value={snap.status || "—"} />
+          <Meta label="source" value={snap.source} />
+          <Meta
+            label="lastReported"
+            value={snap.lastReportedAt ? formatRelative(snap.lastReportedAt) : "—"}
+          />
+          <Meta
+            label="captured"
+            value={snap.capturedAt ? formatRelative(snap.capturedAt) : "—"}
+          />
+        </div>
+      </div>
+    );
+  }
+  const snmp = snap as ApplianceSnapshot;
   return (
     <div className="rounded-xl border border-ink-800 bg-ink-900 p-4 text-xs text-slate-400">
       <div className="mb-2 text-sm font-semibold text-slate-200">System</div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        <Meta label="sysName" value={snap.system.name} />
-        <Meta label="sysDescr" value={snap.system.description} />
-        <Meta label="sysObjectID" value={snap.system.objectId || "—"} />
-        <Meta label="sysContact" value={snap.system.contact || "—"} />
-        <Meta label="sysLocation" value={snap.system.location || "—"} />
-        <Meta label="captured" value={`${snap.collectMs} ms`} />
+        <Meta label="sysName" value={snmp.system.name} />
+        <Meta label="sysDescr" value={snmp.system.description} />
+        <Meta label="sysObjectID" value={snmp.system.objectId || "—"} />
+        <Meta label="sysContact" value={snmp.system.contact || "—"} />
+        <Meta label="sysLocation" value={snmp.system.location || "—"} />
+        <Meta label="captured" value={`${snmp.collectMs} ms`} />
       </div>
     </div>
   );
