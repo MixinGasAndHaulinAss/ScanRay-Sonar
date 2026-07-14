@@ -12,7 +12,6 @@ import { TopologyGraph, TopologyLinkLegend } from "./Topology";
 
 const TAG_FILTER_KEY = "sonar.topology.site.tags";
 const TAG_MODE_KEY = "sonar.topology.site.tagMode";
-const PHONES_KEY = "sonar.topology.site.includePhones";
 const LINKS_KEY = "sonar.topology.site.links";
 
 const DEFAULT_LINKS: LinkVisibility = {
@@ -83,13 +82,6 @@ function applyLinkFilter(data: Topology, links: LinkVisibility): Topology {
 export default function SiteNetworkMap() {
   const { siteId } = useParams<{ siteId: string }>();
 
-  const [includePhones, setIncludePhones] = useState(
-    () => localStorage.getItem(PHONES_KEY) === "1",
-  );
-  useEffect(() => {
-    localStorage.setItem(PHONES_KEY, includePhones ? "1" : "0");
-  }, [includePhones]);
-
   const [tagFilter, setTagFilter] = useState<string[]>(loadTags);
   useEffect(() => {
     localStorage.setItem(TAG_FILTER_KEY, JSON.stringify(tagFilter));
@@ -108,11 +100,8 @@ export default function SiteNetworkMap() {
   }, [links]);
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ["site-network-map", siteId, includePhones],
-    queryFn: () =>
-      api.get<Topology>(
-        `/sites/${siteId}/network-map${includePhones ? "?includePhones=1" : ""}`,
-      ),
+    queryKey: ["site-network-map", siteId],
+    queryFn: () => api.get<Topology>(`/sites/${siteId}/network-map`),
     enabled: !!siteId,
     refetchInterval: 30_000,
   });
@@ -136,7 +125,7 @@ export default function SiteNetworkMap() {
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Site network map</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            Topology limited to this site. React Flow + ELK layout; third-party VPN off by default.
+            Topology limited to this site. Use the phone role chip to show IP phones.
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
@@ -146,8 +135,6 @@ export default function SiteNetworkMap() {
             onTagsChange={setTagFilter}
             matchMode={tagMode}
             onMatchModeChange={setTagMode}
-            includePhones={includePhones}
-            onIncludePhonesChange={setIncludePhones}
             links={links}
             onLinksChange={setLinks}
             onRefresh={() => refetch()}

@@ -26,10 +26,10 @@
 //   useQuery → api.get<AgentNetworkGraph>("/agents/{id}/network-graph")
 //   peer list (already aggregated by remote IP, GeoIP-enriched on
 //   the server side) → in-memory aggregation + radial placement
-//   → ForceGraph in staticLayout mode
+//   → AgentNetworkFlow (React Flow) with static positions
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ComposableMap,
@@ -48,12 +48,15 @@ import worldTopo from "../assets/world-110m.json";
 import usStatesTopo from "../assets/us-states-10m.json";
 import { api } from "../api/client";
 import type { AgentNetworkGraph, AgentNetworkPeer } from "../api/types";
-import ForceGraph, {
-  type ForceEdgeInput,
-  type ForceGraphHandle,
-  type ForceNodeInput,
-  type SimNode,
-} from "./ForceGraph";
+import AgentNetworkFlow, {
+  type AgentNetworkFlowHandle,
+  type DisplayOptions,
+  type IspAgg,
+  type NetEdgeInput,
+  type NetNodeData,
+  type NodeKind,
+  type ProcessAgg,
+} from "./AgentNetworkFlow";
 
 // World features parsed once at module load — rerenders are cheap.
 const WORLD_FEATURES = (() => {
@@ -74,49 +77,6 @@ const US_STATE_FEATURES = (() => {
 
 const TAB_KEY = "sonar.agent.netgraph.tab";
 
-type NodeKind = "host" | "process" | "endpoint" | "isp";
-
-interface ProcessAgg {
-  key: string;
-  name: string;
-  pid?: number;
-  peers: Set<string>;
-  totalConns: number;
-}
-
-interface IspAgg {
-  key: string;
-  org: string;
-  asn?: number;
-  peers: Set<string>;
-  countries: Set<string>;
-}
-
-interface NetNodeData extends ForceNodeInput {
-  kind: NodeKind;
-  label: string;
-  sub?: string;
-  /** for "host" */
-  host?: AgentNetworkGraph["agent"];
-  /** for "process" */
-  process?: ProcessAgg;
-  /** for "endpoint" */
-  endpoint?: AgentNetworkPeer;
-  /** for "isp" */
-  isp?: IspAgg;
-}
-
-interface NetEdgeInput extends ForceEdgeInput {
-  tier: "h-p" | "p-i" | "p-e" | "e-i";
-  /** Number of connections this edge represents — used to weight the
-   *  stroke. Optional; falls back to 1. */
-  weight?: number;
-}
-
-// Connection index: pre-aggregated adjacency that the Node Details
-// panel uses to answer "which providers does this process talk to?"
-// and "which processes touch this ISP?". Computed in the same pass
-// as the radial layout so we don't iterate the peer list twice.
 interface ConnRow {
   key: string;
   label: string;
@@ -154,16 +114,6 @@ const EMPTY_INDEX: ConnIndex = {
 
 const DIRECTIONS: Array<"all" | "outbound" | "inbound"> = ["all", "outbound", "inbound"];
 const SCOPES: Array<"all" | "public" | "private"> = ["all", "public", "private"];
-
-interface DisplayOptions {
-  showIsp: boolean;
-  showEndpoints: boolean;
-  uniqueProcesses: boolean;
-  showProcessLabels: boolean;
-  showEndpointLabels: boolean;
-  showIspLabels: boolean;
-  showHostLabel: boolean;
-}
 
 const DEFAULT_OPTIONS: DisplayOptions = {
   showIsp: true,
@@ -203,15 +153,14 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
     localStorage.setItem(TAB_KEY, tab);
   }, [tab]);
 
-  const graphRef = useRef<ForceGraphHandle | null>(null);
+  const graphApi = useRef<AgentNetworkFlowHandle | null>(null);
+  const onFlowReady = useCallback((api: AgentNetworkFlowHandle) => {
+    graphApi.current = api;
+  }, []);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ w: W_DEFAULT, h: H_DEFAULT });
 
-  // Watch container size so the SVG fills the available area. We
-  // attach the observer in an effect — an inline ref callback would
-  // be re-invoked on every parent render, leaking observers and
-  // (crucially) causing re-renders on click that would shake the
-  // ForceGraph if any pixel changed.
+  // Watch container size so the radial layout fills the available area.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -735,25 +684,17 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
         <PeersMapView agent={data.agent} peers={filteredPeers} />
       ) : (
       <div ref={containerRef} className="relative h-[75vh] min-h-[520px] overflow-hidden bg-ink-950">
-        <ForceGraph<NetNodeData, NetEdgeInput>
-          ref={graphRef}
+        <AgentNetworkFlow
           nodes={nodes}
           edges={edges}
-          width={size.w}
-          height={size.h}
-          enableZoomPan
-          staticLayout
-          worldPadding={28}
-          renderEdge={(e, a, b) => <NetEdge edge={e} a={a} b={b} selectedId={selected} />}
-          renderNode={(s) => (
-            <NetNode sim={s} selected={selected === s.id} options={options} />
-          )}
-          onNodeClick={(n) => setSelected((cur) => (cur === n.id ? null : n.id))}
-          onBackgroundClick={() => setSelected(null)}
+          selectedId={selected}
+          options={options}
+          onSelect={setSelected}
+          onReady={onFlowReady}
         />
 
         {/* Display options (left, collapsible) */}
-        <div className="absolute left-3 top-3 w-64 rounded-lg border border-ink-700 bg-ink-900/95 text-xs shadow-xl backdrop-blur">
+        <div className="absolute left-3 top-3 z-10 w-64 rounded-lg border border-ink-700 bg-ink-900/95 text-xs shadow-xl backdrop-blur">
           <button
             type="button"
             onClick={() => setOptionsCollapsed((v) => !v)}
@@ -813,7 +754,7 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
 
         {/* Legend popover (top-right) */}
         {legendOpen && (
-          <div className="absolute right-3 top-3 w-60 rounded-lg border border-ink-700 bg-ink-900/95 p-3 text-xs shadow-xl backdrop-blur">
+          <div className="absolute right-3 top-3 z-10 w-60 rounded-lg border border-ink-700 bg-ink-900/95 p-3 text-xs shadow-xl backdrop-blur">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
                 Legend
@@ -875,30 +816,30 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
         )}
 
         {/* Zoom controls (bottom-right) */}
-        <div className="absolute bottom-3 right-3 flex flex-col rounded-md border border-ink-700 bg-ink-900/95 text-slate-200 shadow-xl backdrop-blur">
+        <div className="absolute bottom-3 right-3 z-10 flex flex-col rounded-md border border-ink-700 bg-ink-900/95 text-slate-200 shadow-xl backdrop-blur">
           <button
-            onClick={() => graphRef.current?.zoomBy(1.25)}
+            onClick={() => graphApi.current?.zoomIn()}
             className="border-b border-ink-800 px-2 py-1 hover:bg-ink-800"
             title="Zoom in"
           >
             +
           </button>
           <button
-            onClick={() => graphRef.current?.zoomBy(0.8)}
+            onClick={() => graphApi.current?.zoomOut()}
             className="border-b border-ink-800 px-2 py-1 hover:bg-ink-800"
             title="Zoom out"
           >
             −
           </button>
           <button
-            onClick={() => graphRef.current?.fit(60)}
+            onClick={() => graphApi.current?.fit()}
             className="border-b border-ink-800 px-2 py-1 text-[10px] hover:bg-ink-800"
             title="Fit to view"
           >
             ⤢
           </button>
           <button
-            onClick={() => graphRef.current?.resetView()}
+            onClick={() => graphApi.current?.reset()}
             className="px-2 py-1 text-[10px] hover:bg-ink-800"
             title="Reset view"
           >
@@ -913,308 +854,13 @@ export default function AgentNetworkGraphSection({ agentId }: { agentId: string 
             index={connIndex}
             uniqueProcesses={options.uniqueProcesses}
             onClose={() => setSelected(null)}
-            onCenter={() => graphRef.current?.centerOn(selectedNode.id)}
+            onCenter={() => graphApi.current?.centerOn(selectedNode.id)}
             onSelectId={(id) => setSelected(id)}
           />
         )}
       </div>
       )}
     </div>
-  );
-}
-
-// ===================== EDGE RENDERER =========================
-
-function NetEdge({
-  edge,
-  a,
-  b,
-  selectedId,
-}: {
-  edge: NetEdgeInput;
-  a: SimNode<NetNodeData>;
-  b: SimNode<NetNodeData>;
-  selectedId: string | null;
-}) {
-  const isSel =
-    selectedId != null && (a.id === selectedId || b.id === selectedId);
-  let stroke: string;
-  let dash: string | undefined;
-  let width: number;
-  switch (edge.tier) {
-    case "h-p":
-      stroke = isSel ? "#7dd3fc" : "#64748b";
-      width = isSel ? 2.2 : 1.6;
-      break;
-    case "p-i":
-      // Direct process → ISP edge (default view). Sky blue, lightly
-      // de-emphasised when no node is selected so the labels read
-      // through.
-      stroke = isSel ? "#38bdf8" : "#0ea5e9";
-      width = isSel ? 2.2 : 1.4;
-      break;
-    case "p-e":
-      stroke = isSel ? "#38bdf8" : "#0ea5e9";
-      width = isSel ? 2.2 : 1.3;
-      break;
-    case "e-i":
-      stroke = isSel ? "#94a3b8" : "#475569";
-      width = isSel ? 1.6 : 1.1;
-      dash = "3 4";
-      break;
-  }
-  return (
-    <line
-      key={`${edge.from}->${edge.to}`}
-      x1={a.x}
-      y1={a.y}
-      x2={b.x}
-      y2={b.y}
-      stroke={stroke}
-      strokeWidth={width}
-      strokeDasharray={dash}
-      opacity={isSel ? 1 : 0.55}
-    />
-  );
-}
-
-// ===================== NODE RENDERER =========================
-
-function NetNode({
-  sim,
-  selected,
-  options,
-}: {
-  sim: SimNode<NetNodeData>;
-  selected: boolean;
-  options: DisplayOptions;
-}) {
-  const n = sim.data;
-  switch (n.kind) {
-    case "host":
-      return <HostNode sim={sim} selected={selected} showLabel={options.showHostLabel} />;
-    case "process":
-      return <ProcessPill sim={sim} selected={selected} showLabel={options.showProcessLabels} />;
-    case "endpoint":
-      return <EndpointPin sim={sim} selected={selected} showLabel={options.showEndpointLabels} />;
-    case "isp":
-      return <IspPill sim={sim} selected={selected} showLabel={options.showIspLabels} />;
-  }
-}
-
-function HostNode({
-  sim,
-  selected,
-  showLabel,
-}: {
-  sim: SimNode<NetNodeData>;
-  selected: boolean;
-  showLabel: boolean;
-}) {
-  const n = sim.data;
-  const r = 28;
-  return (
-    <>
-      <circle
-        cx={sim.x}
-        cy={sim.y}
-        r={r + 6}
-        fill="#0ea5e933"
-        stroke="none"
-      />
-      <circle
-        cx={sim.x}
-        cy={sim.y}
-        r={r}
-        fill="#0ea5e9"
-        stroke={selected ? "#7dd3fc" : "#0284c7"}
-        strokeWidth={selected ? 3 : 2}
-      />
-      <SvgIconHost x={sim.x - 9} y={sim.y - 9} size={18} color="#ffffff" />
-      {showLabel && (
-        <>
-          <text
-            x={sim.x}
-            y={sim.y + r + 16}
-            textAnchor="middle"
-            className="pointer-events-none select-none fill-slate-100 text-[12px] font-semibold"
-          >
-            {truncate(n.label, 28)}
-          </text>
-          {n.sub && (
-            <text
-              x={sim.x}
-              y={sim.y + r + 30}
-              textAnchor="middle"
-              className="pointer-events-none select-none fill-slate-500 font-mono text-[10px]"
-            >
-              {n.sub}
-            </text>
-          )}
-        </>
-      )}
-    </>
-  );
-}
-
-function ProcessPill({
-  sim,
-  selected,
-  showLabel,
-}: {
-  sim: SimNode<NetNodeData>;
-  selected: boolean;
-  showLabel: boolean;
-}) {
-  const n = sim.data;
-  const proc = n.process!;
-  // Pill width is label-driven; we measure approximate width from
-  // string length — good enough since SVG <text> can't trivially be
-  // measured before render and we don't want to round-trip through
-  // getBBox each frame.
-  const text = proc.name + (proc.pid != null ? ` · ${proc.pid}` : "");
-  const charW = 6.4;
-  const pad = 12;
-  const iconW = 14;
-  const w = showLabel ? Math.max(60, iconW + pad * 2 + text.length * charW) : 28;
-  const h = 22;
-  const cx = sim.x;
-  const cy = sim.y;
-  const x = cx - w / 2;
-  const y = cy - h / 2;
-  return (
-    <>
-      <rect
-        x={x}
-        y={y}
-        width={w}
-        height={h}
-        rx={h / 2}
-        ry={h / 2}
-        fill="#f1f5f9"
-        stroke={selected ? "#0ea5e9" : "#cbd5e1"}
-        strokeWidth={selected ? 2 : 1}
-      />
-      <SvgIconGear x={x + pad - 2} y={cy - 7} size={14} color="#2563eb" />
-      {showLabel && (
-        <text
-          x={x + pad + iconW}
-          y={cy + 4}
-          className="pointer-events-none select-none fill-slate-800 text-[11px] font-medium"
-        >
-          {text}
-        </text>
-      )}
-    </>
-  );
-}
-
-function EndpointPin({
-  sim,
-  selected,
-  showLabel,
-}: {
-  sim: SimNode<NetNodeData>;
-  selected: boolean;
-  showLabel: boolean;
-}) {
-  const n = sim.data;
-  const peer = n.endpoint!;
-  const r = 9;
-  const fill =
-    peer.direction === "inbound"
-      ? "#22c55e33"
-      : peer.isPrivate
-        ? "#64748b33"
-        : "#0ea5e933";
-  const ring =
-    peer.direction === "inbound"
-      ? "#22c55e"
-      : peer.isPrivate
-        ? "#94a3b8"
-        : "#38bdf8";
-  return (
-    <>
-      <circle
-        cx={sim.x}
-        cy={sim.y}
-        r={r + (selected ? 4 : 2)}
-        fill={selected ? "#0ea5e933" : fill}
-        stroke={ring}
-        strokeWidth={selected ? 2 : 1.2}
-      />
-      <SvgIconPin x={sim.x - 6} y={sim.y - 7} size={12} color={ring} />
-      {showLabel && (
-        <>
-          <text
-            x={sim.x}
-            y={sim.y + r + 12}
-            textAnchor="middle"
-            className="pointer-events-none select-none fill-slate-200 text-[10px]"
-          >
-            {truncate(peer.host || peer.ip, 22)}
-          </text>
-          {n.sub && (
-            <text
-              x={sim.x}
-              y={sim.y + r + 24}
-              textAnchor="middle"
-              className="pointer-events-none select-none fill-slate-500 text-[9px]"
-            >
-              {truncate(n.sub, 24)}
-            </text>
-          )}
-        </>
-      )}
-    </>
-  );
-}
-
-function IspPill({
-  sim,
-  selected,
-  showLabel,
-}: {
-  sim: SimNode<NetNodeData>;
-  selected: boolean;
-  showLabel: boolean;
-}) {
-  const n = sim.data;
-  const isp = n.isp!;
-  const text = isp.org;
-  const charW = 6.6;
-  const pad = 14;
-  const iconW = 16;
-  const w = showLabel ? Math.max(80, iconW + pad * 2 + text.length * charW) : 28;
-  const h = 26;
-  const cx = sim.x;
-  const cy = sim.y;
-  const x = cx - w / 2;
-  const y = cy - h / 2;
-  return (
-    <>
-      <rect
-        x={x}
-        y={y}
-        width={w}
-        height={h}
-        rx={h / 2}
-        ry={h / 2}
-        fill="#f8fafc"
-        stroke={selected ? "#0ea5e9" : "#94a3b8"}
-        strokeWidth={selected ? 2 : 1.2}
-      />
-      <SvgIconGlobe x={x + pad - 4} y={cy - 8} size={16} color="#334155" />
-      {showLabel && (
-        <text
-          x={x + pad + iconW - 2}
-          y={cy + 5}
-          className="pointer-events-none select-none fill-slate-800 text-[11px] font-medium"
-        >
-          {truncate(text, 36)}
-        </text>
-      )}
-    </>
   );
 }
 
@@ -1776,10 +1422,6 @@ function SectionShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function truncate(s: string, n: number) {
-  if (!s) return "";
-  return s.length > n ? s.slice(0, n - 1) + "…" : s;
-}
 
 // ===================== PEERS MAP VIEW =========================
 //
@@ -2400,87 +2042,6 @@ function IconLegend({ size = 14, className, style }: IconProps) {
       <rect x="3" y="14" width="7" height="7" />
       <rect x="14" y="14" width="7" height="7" />
     </svg>
-  );
-}
-
-// In-canvas (path-only) versions — for use *inside* the outer
-// ForceGraph SVG. Render a <g> with the right transform so the
-// 24×24 source path becomes the requested pixel size.
-
-interface SvgIconProps {
-  x: number;
-  y: number;
-  size: number;
-  color: string;
-  strokeWidth?: number;
-  fillBg?: string;
-}
-
-function SvgIconGear({ x, y, size, color, strokeWidth = 2.2 }: SvgIconProps) {
-  const k = size / 24;
-  return (
-    <g
-      transform={`translate(${x}, ${y}) scale(${k})`}
-      fill="none"
-      stroke={color}
-      strokeWidth={strokeWidth / k}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      pointerEvents="none"
-    >
-      <PathGear />
-    </g>
-  );
-}
-
-function SvgIconGlobe({ x, y, size, color, strokeWidth = 1.8 }: SvgIconProps) {
-  const k = size / 24;
-  return (
-    <g
-      transform={`translate(${x}, ${y}) scale(${k})`}
-      fill="none"
-      stroke={color}
-      strokeWidth={strokeWidth / k}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      pointerEvents="none"
-    >
-      <PathGlobe />
-    </g>
-  );
-}
-
-function SvgIconPin({ x, y, size, color, strokeWidth = 2 }: SvgIconProps) {
-  const k = size / 24;
-  return (
-    <g
-      transform={`translate(${x}, ${y}) scale(${k})`}
-      fill="none"
-      stroke={color}
-      strokeWidth={strokeWidth / k}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      pointerEvents="none"
-    >
-      <PathPin pinFill={color} />
-    </g>
-  );
-}
-
-function SvgIconHost({ x, y, size, color, strokeWidth = 2 }: SvgIconProps) {
-  const k = size / 24;
-  return (
-    <g
-      transform={`translate(${x}, ${y}) scale(${k})`}
-      fill="none"
-      stroke={color}
-      strokeWidth={strokeWidth / k}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      pointerEvents="none"
-    >
-      <PathHost />
-    </g>
   );
 }
 

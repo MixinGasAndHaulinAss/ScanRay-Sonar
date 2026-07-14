@@ -164,3 +164,11 @@ body,
 .topology-flow .react-flow__attribution {
   display: none;
 }
+.agent-network-flow.react-flow {
+  --xy-background-color: transparent;
+  --xy-node-border-default: transparent;
+  --xy-node-background-color-default: transparent;
+}
+.agent-network-flow .react-flow__attribution {
+  display: none;
+}

@@ -972,7 +972,7 @@ export interface TopologyNode {
   portsTotal?: number;
   portsUp?: number;
   uplinkCount?: number;
-  /** User-defined tags carried over from the appliance row (managed nodes only). */
+  /** User-defined tags on appliances; foreign phones are tagged "phone". */
   tags?: string[];
 }
 

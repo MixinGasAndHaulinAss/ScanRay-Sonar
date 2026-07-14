@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.7.14.8"
+  version: "2026.7.14.9"
   license:
     name: MIT
 servers:
@@ -578,7 +578,7 @@ paths:
         - in: query
           name: includePhones
           schema: { type: string, enum: ["1"] }
-          description: Include IP phone neighbors (default suppressed)
+          description: Deprecated/ignored. IP phones are always included and tagged "phone" for UI filtering.
       responses:
         "200":
           description: Topology

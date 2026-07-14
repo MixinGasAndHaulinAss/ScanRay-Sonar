@@ -114,6 +114,7 @@ function isAP(n: TopologyNode): boolean {
 /** ELK partition: lower numbers sit above (direction DOWN). */
 function partitionOf(n: TopologyNode): number {
   if (n.kind === "cloud") return 0;
+  if ((n.tags ?? []).includes("phone")) return 5;
   if (n.kind === "foreign") return 4;
   if (isFirewall(n)) return 1;
   if (isAP(n)) return 3;
@@ -121,9 +122,10 @@ function partitionOf(n: TopologyNode): number {
 }
 
 function nodeSize(n: TopologyNode, compact: boolean): { w: number; h: number } {
-  if (n.kind === "cloud") return { w: 120, h: 64 };
-  if (n.kind === "foreign") return compact ? { w: 100, h: 36 } : { w: 140, h: 48 };
-  return compact ? { w: 128, h: 52 } : { w: 168, h: 68 };
+  if (n.kind === "cloud") return { w: 140, h: 72 };
+  if ((n.tags ?? []).includes("phone")) return compact ? { w: 110, h: 40 } : { w: 130, h: 48 };
+  if (n.kind === "foreign") return compact ? { w: 110, h: 40 } : { w: 150, h: 52 };
+  return compact ? { w: 148, h: 58 } : { w: 188, h: 74 };
 }
 
 function edgeVisual(e: TopologyEdge): {
@@ -179,13 +181,17 @@ async function layoutWithElk(
       "elk.algorithm": "layered",
       "elk.direction": "DOWN",
       "elk.edgeRouting": "ORTHOGONAL",
-      "elk.spacing.nodeNode": compact ? "36" : "48",
-      "elk.layered.spacing.nodeNodeBetweenLayers": "72",
-      "elk.spacing.edgeNode": "24",
-      "elk.spacing.edgeEdge": "16",
+      "elk.padding": "[top=40,left=40,bottom=40,right=40]",
+      "elk.spacing.nodeNode": compact ? "64" : "96",
+      "elk.layered.spacing.nodeNodeBetweenLayers": compact ? "110" : "160",
+      "elk.layered.spacing.edgeNodeBetweenLayers": "48",
+      "elk.spacing.edgeNode": "40",
+      "elk.spacing.edgeEdge": "28",
+      "elk.spacing.componentComponent": "100",
       "elk.partitioning.activate": "true",
       "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
       "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
+      "elk.layered.thoroughness": "12",
     },
     children: nodes.map((n) => {
       const { w, h } = nodeSize(n, compact);
@@ -359,7 +365,7 @@ function toFlowEdges(
 function TopologyFlowInner({ data }: { data: Topology }) {
   const navigate = useNavigate();
   const { fitView, zoomIn, zoomOut, setViewport } = useReactFlow();
-  const compact = data.nodes.length > 40;
+  const compact = data.nodes.length > 60;
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<TopoNodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge<TopoEdgeData>>([]);
   const [layouting, setLayouting] = useState(true);
@@ -386,7 +392,7 @@ function TopologyFlowInner({ data }: { data: Topology }) {
         setEdges(toFlowEdges(data.edges, idSet));
         setLayouting(false);
         requestAnimationFrame(() => {
-          fitView({ padding: 0.12, duration: 200 });
+          fitView({ padding: 0.2, duration: 280, maxZoom: 1.15 });
         });
       } catch (err) {
         if (cancelled) return;
@@ -397,13 +403,13 @@ function TopologyFlowInner({ data }: { data: Topology }) {
         data.nodes.forEach((n, i) => {
           const col = i % 8;
           const row = Math.floor(i / 8);
-          fallback.set(n.id, { x: col * 180, y: row * 100 });
+          fallback.set(n.id, { x: col * 200, y: row * 120 });
         });
         const idSet = new Set(data.nodes.map((n) => n.id));
         setNodes(toFlowNodes(data.nodes, fallback, compact));
         setEdges(toFlowEdges(data.edges, idSet));
         setLayouting(false);
-        requestAnimationFrame(() => fitView({ padding: 0.12 }));
+        requestAnimationFrame(() => fitView({ padding: 0.2, maxZoom: 1.15 }));
       }
     })();
     return () => {
@@ -473,7 +479,7 @@ function TopologyFlowInner({ data }: { data: Topology }) {
         <button
           type="button"
           className="rounded border border-ink-700 bg-ink-950/90 px-2 py-1 text-xs text-slate-300 hover:bg-ink-800"
-          onClick={() => fitView({ padding: 0.12, duration: 200 })}
+          onClick={() => fitView({ padding: 0.2, duration: 200, maxZoom: 1.15 })}
         >
           Fit
         </button>

@@ -139,12 +139,11 @@ func isWirelessIfName(name string) bool {
 //
 // Query params:
 //   - siteId — restrict to a single site
-//   - includePhones=1 — include IP phones (default suppressed because
-//     a single 48-port access switch can produce a hairball of 30+ phone
-//     leaves that drown out the inter-switch backbone)
+//   - includePhones — deprecated/ignored. IP phones are always included
+//     and tagged "phone" so the UI role chips can show/hide them.
 func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 	siteID := r.URL.Query().Get("siteId")
-	includePhones := r.URL.Query().Get("includePhones") == "1"
+	_ = r.URL.Query().Get("includePhones") // deprecated; phones always included + tagged
 
 	q := `SELECT id, site_id, name, vendor, model, host(mgmt_ip),
 	             sys_name, last_polled_at, last_error,
@@ -309,8 +308,14 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 		// them here and merge after the loop so multiple appliances
 		// reporting the same neighbor share one node.
 		if strings.HasPrefix(remoteID, "foreign:") {
-			if _, ok := foreignNodes[remoteID]; !ok {
-				foreignNodes[remoteID] = topologyNode{
+			phone := looksLikePhoneString(remoteSys + " " + remotePlatform + " " + remoteAddr)
+			if existing, ok := foreignNodes[remoteID]; ok {
+				if phone && !nodeHasTag(existing, "phone") {
+					existing.Tags = append(existing.Tags, "phone")
+					foreignNodes[remoteID] = existing
+				}
+			} else {
+				fn := topologyNode{
 					ID:       remoteID,
 					Kind:     "foreign",
 					Name:     remoteSys,
@@ -319,6 +324,10 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 					MgmtIP:   remoteAddr,
 					Status:   "unknown",
 				}
+				if phone {
+					fn.Tags = []string{"phone"}
+				}
+				foreignNodes[remoteID] = fn
 			}
 		}
 	}
@@ -329,7 +338,7 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 		}
 		if isMerakiSnapshot(a.snapBytes) {
 			ms := parseMerakiSnapshot(a.snapBytes)
-			addMerakiL2Neighbors(a.node.ID, ms, includePhones, addEdge)
+			addMerakiL2Neighbors(a.node.ID, ms, addEdge)
 			addMerakiWANAndVPN(a.node.ID, ms, sysIndex, edges, foreignNodes)
 			continue
 		}
@@ -354,20 +363,22 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, n := range snap.LLDP {
-			if !includePhones && isLLDPPhone(n) {
-				continue
-			}
 			p := ports[n.LocalIfIndex]
+			plat := n.RemoteSysDescr
+			if isLLDPPhone(n) {
+				plat = plat + " ip phone"
+			}
 			addEdge(a.node.ID, fallback(n.LocalPort, p.name), p.operUp, p.inBps, p.outBps, p.speedBps,
-				n.RemoteSysName, fallback(n.RemotePortDescr, n.RemotePortID), "", "", "lldp")
+				n.RemoteSysName, fallback(n.RemotePortDescr, n.RemotePortID), plat, "", "lldp")
 		}
 		for _, n := range snap.CDP {
-			if !includePhones && isCDPPhone(n) {
-				continue
-			}
 			p := ports[n.LocalIfIndex]
+			plat := n.RemotePlatform
+			if isCDPPhone(n) {
+				plat = plat + " ip phone"
+			}
 			addEdge(a.node.ID, p.name, p.operUp, p.inBps, p.outBps, p.speedBps,
-				n.RemoteSysName, n.RemotePortID, n.RemotePlatform, n.RemoteAddress, "cdp")
+				n.RemoteSysName, n.RemotePortID, plat, n.RemoteAddress, "cdp")
 		}
 		addSNMPTunnelStubs(a.node.ID, snap, edges, foreignNodes)
 	}
@@ -444,10 +455,8 @@ func mergeEdgeUtil(e *topologyEdge, inBps, outBps *uint64, speedBps uint64) {
 // phone (or other VoIP endpoint). The reliable signal is bit 5 of
 // lldpRemSysCapEnabled — the standard "telephone" capability — but
 // older firmware sometimes leaves it unset, so we also pattern-match
-// on the system description string. We err on the side of
-// suppression because a single switch's worth of phones can easily
-// dominate the topology view, and operators who really want them
-// can pass ?includePhones=1.
+// on the system description string. Phones are always included in the
+// topology payload and tagged "phone" for UI filtering.
 func isLLDPPhone(n snmp.LLDP) bool {
 	const telephoneCap = 0x20 // bit 5 of LldpSystemCapabilitiesMap
 	if n.RemoteCaps&telephoneCap != 0 {
@@ -467,6 +476,15 @@ func isCDPPhone(n snmp.CDP) bool {
 		return true
 	}
 	return looksLikePhoneString(n.RemotePlatform + " " + n.RemoteSysName + " " + n.RemoteVersion)
+}
+
+func nodeHasTag(n topologyNode, tag string) bool {
+	for _, t := range n.Tags {
+		if t == tag {
+			return true
+		}
+	}
+	return false
 }
 
 // looksLikePhoneString is the string-matching fallback for devices

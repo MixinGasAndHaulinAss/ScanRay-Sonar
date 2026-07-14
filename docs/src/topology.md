@@ -11,13 +11,13 @@
 ## Filters
 
 - **Links** — **WAN**, **Auto VPN**, and **3rd-party VPN** toggles. Third-party VPN is **off by default** (peer lists are huge and turn the map into a hairball).
-- **Show IP phones** — off by default so access-switch phone leaves do not drown the backbone.
-- **Role chips** — quick toggles for common Meraki tags (`firewall`, `switch`, `wap`, `meraki`, …).
+- **Role chips** — quick toggles for common tags (`firewall`, `switch`, `wap`, `meraki`, `phone`, …). Click a chip on/off.
+- **phone** — IP phone neighbors are always collected and tagged `phone`, but **hidden unless the phone chip is selected**.
 - **Tag filter** with **AND / OR**:
   - AND — appliance must have every selected tag.
   - OR — appliance must have any selected tag (use this when selecting multiple roles).
 
-Layout uses **React Flow + ELK** (layered, top-down). L2 and WAN edges place nodes (Internet → firewall → switch → AP); VPN lines are visual overlays only and do not pull the layout.
+Layout uses **React Flow + ELK** (layered, top-down) with generous spacing so the first view is readable. L2 and WAN edges place nodes (Internet → firewall → switch → AP); VPN lines are visual overlays only.
 
 ## What the edges mean
 

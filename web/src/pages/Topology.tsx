@@ -95,13 +95,6 @@ function applyLinkFilter(data: Topology, links: LinkVisibility): Topology {
 }
 
 export default function Topology() {
-  const [includePhones, setIncludePhones] = useState(() => {
-    return localStorage.getItem("sonar.topology.includePhones") === "1";
-  });
-  useEffect(() => {
-    localStorage.setItem("sonar.topology.includePhones", includePhones ? "1" : "0");
-  }, [includePhones]);
-
   const [tagFilter, setTagFilter] = useState<string[]>(loadTags);
   useEffect(() => {
     localStorage.setItem(TAG_FILTER_KEY, JSON.stringify(tagFilter));
@@ -118,11 +111,8 @@ export default function Topology() {
   }, [links]);
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ["topology", includePhones],
-    queryFn: () =>
-      api.get<Topology>(
-        includePhones ? "/topology?includePhones=1" : "/topology",
-      ),
+    queryKey: ["topology"],
+    queryFn: () => api.get<Topology>("/topology"),
     refetchInterval: 30_000,
   });
 
@@ -146,8 +136,8 @@ export default function Topology() {
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Topology</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            React Flow + ELK layered layout. L2/WAN place nodes; VPN is overlay only.
-            Third-party VPN is off by default.
+            React Flow + ELK layered layout. Toggle roles (including phone) and link
+            layers. Third-party VPN is off by default.
           </p>
         </div>
         <TopologyFilterBar
@@ -156,8 +146,6 @@ export default function Topology() {
           onTagsChange={setTagFilter}
           matchMode={tagMode}
           onMatchModeChange={setTagMode}
-          includePhones={includePhones}
-          onIncludePhonesChange={setIncludePhones}
           links={links}
           onLinksChange={setLinks}
           onRefresh={() => refetch()}

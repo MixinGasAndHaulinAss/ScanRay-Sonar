@@ -108,7 +108,6 @@ func ensureInternetCloud(foreignNodes map[string]topologyNode) {
 func addMerakiL2Neighbors(
 	localID string,
 	snap *poller.MerakiTelemetrySnapshot,
-	includePhones bool,
 	addEdge func(localID, localPort string, operUp bool, inBps, outBps *uint64, speedBps uint64, remoteSys, remotePortID, remotePlatform, remoteAddr, proto string),
 ) {
 	if snap == nil {
@@ -120,8 +119,9 @@ func addMerakiL2Neighbors(
 		if remote == "" {
 			continue
 		}
-		if !includePhones && looksLikePhoneString(remote+" "+n.Summary) {
-			continue
+		plat := n.Summary
+		if looksLikePhoneString(remote + " " + n.Summary) {
+			plat = plat + " ip phone"
 		}
 		proto := strings.ToLower(n.Protocol)
 		if proto != "cdp" {
@@ -132,7 +132,7 @@ func addMerakiL2Neighbors(
 			continue
 		}
 		seen[key] = true
-		addEdge(localID, n.PortID, true, nil, nil, 0, remote, "", "", "", proto)
+		addEdge(localID, n.PortID, true, nil, nil, 0, remote, "", plat, "", proto)
 	}
 	// Port-embedded neighbor strings as a fallback when Neighbors[] is empty.
 	for _, p := range snap.Ports {
@@ -143,8 +143,9 @@ func addMerakiL2Neighbors(
 		if remote == "" {
 			continue
 		}
-		if !includePhones && looksLikePhoneString(remote+" "+p.Neighbor) {
-			continue
+		plat := p.Neighbor
+		if looksLikePhoneString(remote + " " + p.Neighbor) {
+			plat = plat + " ip phone"
 		}
 		proto := "lldp"
 		if len(p.LLDP) == 0 && len(p.CDP) > 0 {
@@ -157,7 +158,7 @@ func addMerakiL2Neighbors(
 		seen[key] = true
 		var inBps, outBps *uint64
 		inBps, outBps = p.InBps, p.OutBps
-		addEdge(localID, p.PortID, strings.EqualFold(p.Status, "Connected") || p.Enabled, inBps, outBps, 0, remote, "", "", "", proto)
+		addEdge(localID, p.PortID, strings.EqualFold(p.Status, "Connected") || p.Enabled, inBps, outBps, 0, remote, "", plat, "", proto)
 	}
 }
 
