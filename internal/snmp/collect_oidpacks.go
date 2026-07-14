@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	oidPackMaxTableRows  = 200
+	oidPackMaxTableRows   = 200
 	oidPackPerPackTimeout = 8 * time.Second
-	oidPackMaxMetricsGet = 80
+	oidPackMaxMetricsGet  = 80
 )
 
 // CollectOIDPacks selects and runs OID packs for this device into

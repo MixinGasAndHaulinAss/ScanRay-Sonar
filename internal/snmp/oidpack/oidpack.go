@@ -7,8 +7,8 @@
 package oidpack
 
 import (
-	"encoding/json"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"path"
 	"strings"
