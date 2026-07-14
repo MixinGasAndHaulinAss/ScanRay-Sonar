@@ -79,15 +79,15 @@ type AlarmLine struct {
 
 // AgentLine is one endpoint row for agent report templates.
 type AgentLine struct {
-	Hostname            string
-	GroupName           string
-	Score               string
-	ComplianceScore     string
-	ComplianceSeverity  string
-	IssuesCount         int
-	PatchCount          int
-	PendingReboot       string
-	Status              string
+	Hostname           string
+	GroupName          string
+	Score              string
+	ComplianceScore    string
+	ComplianceSeverity string
+	IssuesCount        int
+	PatchCount         int
+	PendingReboot      string
+	Status             string
 }
 
 // ComplianceIssueLine is a fleet compliance issue row.
@@ -100,25 +100,25 @@ type ComplianceIssueLine struct {
 
 // ComplianceSummary aggregates fleet posture for templates.
 type ComplianceSummary struct {
-	AgentCount          int
-	AvgScore            string
-	OpenIssues          int
-	OpenCVEs            int
-	HighPatchIssues     int
-	PendingRebootCount  int
+	AgentCount         int
+	AvgScore           string
+	OpenIssues         int
+	OpenCVEs           int
+	HighPatchIssues    int
+	PendingRebootCount int
 }
 
 // Context is the root template object.
 type Context struct {
-	Site              SiteContext
-	Now               time.Time
-	Appliances        []ApplianceLine
-	OpenAlarms        []AlarmLine
-	OpenAgentAlarms   []AlarmLine
-	DiscoveredCount   int
-	Agents            []AgentLine
-	Compliance        ComplianceSummary
-	ComplianceIssues  []ComplianceIssueLine
+	Site             SiteContext
+	Now              time.Time
+	Appliances       []ApplianceLine
+	OpenAlarms       []AlarmLine
+	OpenAgentAlarms  []AlarmLine
+	DiscoveredCount  int
+	Agents           []AgentLine
+	Compliance       ComplianceSummary
+	ComplianceIssues []ComplianceIssueLine
 }
 
 // Generated is what Generate returns: the rendered body plus the

@@ -49,7 +49,7 @@ type dexSnapshot struct {
 		GPUs    []dexGPU  `json:"gpus"`
 		Storage []dexDisk `json:"storage"`
 	} `json:"hardware"`
-	InstalledExtensions []dexExtension `json:"installedExtensions"`
+	InstalledExtensions []dexExtension  `json:"installedExtensions"`
 	Latency             []parsedLatency `json:"latency"`
 }
 
@@ -95,7 +95,7 @@ type dexGPU struct {
 }
 
 type dexDisk struct {
-	TempC  *float64 `json:"tempC"`
+	TempC   *float64 `json:"tempC"`
 	WearPct *float64 `json:"wearPct"`
 }
 
