@@ -23,6 +23,8 @@ Exact wording in the Users UI:
 | View dashboard, devices, appliances | readonly |
 | Enroll collectors / agents, edit discovery | siteadmin |
 | Create sites, manage users, retention | superadmin |
+
+Retention fields (hot window, rollups, flow/vendor samples, cleared alarms, audit roll-off) are documented in [Data storage and retention](data-retention.md).
 | Create API keys for yourself | any signed-in user (see [API keys](api-keys.md)) |
 
 API keys can also call the API; keys may be limited to specific sites. Prefer the least privilege that still does the job.

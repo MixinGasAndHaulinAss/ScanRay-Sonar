@@ -21,7 +21,8 @@ You must be signed in to open this documentation. The **Documentation** item in 
 | Know what your role can change | [Roles and permissions](rbac.md) |
 | Enroll a probe or collector | [Devices](devices.md), [Collectors](collectors.md) |
 | Add or tune network gear | [Appliances](appliances.md), [Site discovery](site-discovery.md) |
-| Configure SMTP, webhooks, retention | [Settings](settings.md) |
+| Configure SMTP, webhooks | [Settings](settings.md) |
+| Understand hot/trend storage and roll-off | [Data storage and retention](data-retention.md) |
 
 !!! tip "Documents vs Documentation"
     **Documents** in the main nav is for uploading site files (runbooks, diagrams). **Documentation** (this guide) is the product manual.
