@@ -12,6 +12,37 @@ import (
 	"time"
 )
 
+// VMwareCred is what's required to talk to vCenter REST.
+type VMwareCred struct {
+	URL      string
+	Username string
+	Password string
+	Insecure bool
+}
+
+// VMwareInventory is the shape the poller wants back from vCenter.
+type VMwareInventory struct {
+	Hosts       []VMwareHost `json:"hosts"`
+	VMs         []VMwareVM   `json:"vms"`
+	Datacenters []string     `json:"datacenters"`
+	CollectedAt time.Time    `json:"collectedAt"`
+}
+
+type VMwareHost struct {
+	Name       string `json:"name"`
+	MgmtIP     string `json:"mgmtIp,omitempty"`
+	HardwareID string `json:"hardwareId,omitempty"`
+	Vendor     string `json:"vendor,omitempty"`
+	Model      string `json:"model,omitempty"`
+}
+
+type VMwareVM struct {
+	Name     string `json:"name"`
+	GuestOS  string `json:"guestOs,omitempty"`
+	HostName string `json:"hostName,omitempty"`
+	PowerOn  bool   `json:"powerOn"`
+}
+
 // VMwareCollect lists VMs and hosts via the vCenter HTTPS REST API.
 // When the endpoint is unreachable or credentials fail, returns an empty
 // inventory with a logged warning rather than failing discovery.
