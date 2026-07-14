@@ -31,6 +31,7 @@ import (
 	"github.com/NCLGISA/ScanRay-Sonar/internal/geoip"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/notify"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/objectstore"
+	"github.com/NCLGISA/ScanRay-Sonar/internal/retention"
 )
 
 // Server is the long-lived HTTP/WS service. Construct once via New and
@@ -228,6 +229,8 @@ func (s *Server) Routes() http.Handler {
 			r.With(requireRole(auth.RoleSiteAdmin)).Get("/settings/smtp", s.handleGetSMTPSettings)
 			r.With(requireRole(auth.RoleSiteAdmin)).Put("/settings/smtp", s.handlePutSMTPSettings)
 			r.With(requireRole(auth.RoleSiteAdmin)).Post("/settings/smtp/test", s.handleSMTPTest)
+			r.With(requireRole(auth.RoleSuperAdmin)).Get("/settings/retention", s.handleGetRetentionSettings)
+			r.With(requireRole(auth.RoleSuperAdmin)).Put("/settings/retention", s.handlePutRetentionSettings)
 			r.With(requireRole(auth.RoleSiteAdmin)).Get("/settings/webhooks", s.handleListWebhooks)
 			r.With(requireRole(auth.RoleSiteAdmin)).Post("/settings/webhooks", s.handleCreateWebhook)
 			r.With(requireRole(auth.RoleSiteAdmin)).Patch("/settings/webhooks/{id}", s.handlePatchWebhook)
@@ -414,6 +417,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		eng := alarms.NewEngine(s.pool, s.log.With(slog.String("component", "alarms")), s.nats, s.sealer, s.store, smtpFB)
 		go eng.Run(ctx)
 	}
+	go retention.Runner(ctx, s.pool, s.log.With(slog.String("component", "retention")))
 	go func() {
 		s.log.Info("listening", "addr", s.cfg.BindAddr, "env", s.cfg.Env)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

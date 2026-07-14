@@ -123,7 +123,7 @@ func (s *Server) handleApplianceMetrics(w http.ResponseWriter, r *http.Request) 
 	if rangeStr == "" {
 		rangeStr = "24h"
 	}
-	dur, err := parseRangeDuration(rangeStr)
+	dur, useRollup, _, err := s.clampMetricRange(r, rangeStr)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
@@ -132,12 +132,26 @@ func (s *Server) handleApplianceMetrics(w http.ResponseWriter, r *http.Request) 
 	to := time.Now().UTC()
 	from := to.Add(-dur)
 
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT time, cpu_pct, mem_used_bytes, mem_total_bytes
-		  FROM appliance_metric_samples
-		 WHERE appliance_id = $1 AND time >= $2 AND time <= $3
-		 ORDER BY time ASC
-	`, id, from, to)
+	var rows pgx.Rows
+	if useRollup {
+		rows, err = s.pool.Query(r.Context(), `
+			SELECT bucket AS time, cpu_pct, mem_used_bytes, mem_total_bytes
+			  FROM appliance_metric_samples_hourly
+			 WHERE appliance_id = $1 AND bucket >= $2 AND bucket <= $3
+			 ORDER BY bucket ASC
+		`, id, from, to)
+		if err != nil {
+			useRollup = false
+		}
+	}
+	if !useRollup {
+		rows, err = s.pool.Query(r.Context(), `
+			SELECT time, cpu_pct, mem_used_bytes, mem_total_bytes
+			  FROM appliance_metric_samples
+			 WHERE appliance_id = $1 AND time >= $2 AND time <= $3
+			 ORDER BY time ASC
+		`, id, from, to)
+	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "server_error", "query metrics failed")
 		return
@@ -146,17 +160,18 @@ func (s *Server) handleApplianceMetrics(w http.ResponseWriter, r *http.Request) 
 
 	out := []applianceMetricSample{}
 	for rows.Next() {
-		var s applianceMetricSample
-		if err := rows.Scan(&s.Time, &s.CPUPct, &s.MemUsedBytes, &s.MemTotalBytes); err != nil {
+		var smp applianceMetricSample
+		if err := rows.Scan(&smp.Time, &smp.CPUPct, &smp.MemUsedBytes, &smp.MemTotalBytes); err != nil {
 			writeErr(w, http.StatusInternalServerError, "server_error", "scan failed")
 			return
 		}
-		out = append(out, s)
+		out = append(out, smp)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"applianceId":  id.String(),
 		"range":        rangeStr,
+		"rollup":       useRollup,
 		"capturedAtTo": to,
 		"samples":      out,
 	})
@@ -188,7 +203,7 @@ func (s *Server) handleApplianceIfaceMetrics(w http.ResponseWriter, r *http.Requ
 	if rangeStr == "" {
 		rangeStr = "24h"
 	}
-	dur, err := parseRangeDuration(rangeStr)
+	dur, useRollup, _, err := s.clampMetricRange(r, rangeStr)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
@@ -197,13 +212,28 @@ func (s *Server) handleApplianceIfaceMetrics(w http.ResponseWriter, r *http.Requ
 	to := time.Now().UTC()
 	from := to.Add(-dur)
 
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT time, in_bps, out_bps, in_errors, out_errors, in_discards, out_discards
-		  FROM appliance_iface_samples
-		 WHERE appliance_id = $1 AND if_index = $2
-		   AND time >= $3 AND time <= $4
-		 ORDER BY time ASC
-	`, id, ifIdx, from, to)
+	var rows pgx.Rows
+	if useRollup {
+		rows, err = s.pool.Query(r.Context(), `
+			SELECT bucket AS time, in_bps, out_bps, in_errors, out_errors, in_discards, out_discards
+			  FROM appliance_iface_samples_hourly
+			 WHERE appliance_id = $1 AND if_index = $2
+			   AND bucket >= $3 AND bucket <= $4
+			 ORDER BY bucket ASC
+		`, id, ifIdx, from, to)
+		if err != nil {
+			useRollup = false
+		}
+	}
+	if !useRollup {
+		rows, err = s.pool.Query(r.Context(), `
+			SELECT time, in_bps, out_bps, in_errors, out_errors, in_discards, out_discards
+			  FROM appliance_iface_samples
+			 WHERE appliance_id = $1 AND if_index = $2
+			   AND time >= $3 AND time <= $4
+			 ORDER BY time ASC
+		`, id, ifIdx, from, to)
+	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "server_error", "query iface metrics failed")
 		return
@@ -225,6 +255,7 @@ func (s *Server) handleApplianceIfaceMetrics(w http.ResponseWriter, r *http.Requ
 		"applianceId":  id.String(),
 		"ifIndex":      ifIdx,
 		"range":        rangeStr,
+		"rollup":       useRollup,
 		"capturedAtTo": to,
 		"samples":      out,
 	})
@@ -247,10 +278,14 @@ func (s *Server) handleApplianceVendorMetrics(w http.ResponseWriter, r *http.Req
 	if rangeStr == "" {
 		rangeStr = "24h"
 	}
-	dur, err := parseRangeDuration(rangeStr)
+	dur, _, cfg, err := s.clampMetricRange(r, rangeStr)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
+	}
+	vendorMax := time.Duration(cfg.VendorSamplesDays) * 24 * time.Hour
+	if dur > vendorMax {
+		dur = vendorMax
 	}
 	keysRaw := strings.TrimSpace(r.URL.Query().Get("keys"))
 	var keys []string

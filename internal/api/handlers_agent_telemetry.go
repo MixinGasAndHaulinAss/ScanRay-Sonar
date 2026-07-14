@@ -729,8 +729,9 @@ type metricSample struct {
 }
 
 // handleAgentMetrics returns the time-series samples in [now-range, now].
-// `range` accepts plain Go durations ("1h", "24h", "7d") with a 30d
-// cap so a hostile or buggy client can't ask for the entire table.
+// `range` accepts plain Go durations ("1h", "24h", "7d") capped to the
+// configured rollup retention. Ranges longer than the hot window read
+// from the hourly continuous aggregate when available.
 func (s *Server) handleAgentMetrics(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -742,24 +743,37 @@ func (s *Server) handleAgentMetrics(w http.ResponseWriter, r *http.Request) {
 	if rng == "" {
 		rng = "24h"
 	}
-	dur, err := parseRangeDuration(rng)
+	dur, useRollup, _, err := s.clampMetricRange(r, rng)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	const maxRange = 30 * 24 * time.Hour
-	if dur > maxRange {
-		dur = maxRange
-	}
 
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT time, cpu_pct, mem_used_bytes, mem_total_bytes,
-		       root_disk_used_bytes, root_disk_total_bytes
-		  FROM agent_metric_samples
-		 WHERE agent_id = $1
-		   AND time >= NOW() - $2::interval
-		 ORDER BY time ASC
-	`, id, fmt.Sprintf("%d seconds", int64(dur.Seconds())))
+	intervalSecs := fmt.Sprintf("%d seconds", int64(dur.Seconds()))
+	var rows pgx.Rows
+	if useRollup {
+		rows, err = s.pool.Query(r.Context(), `
+			SELECT bucket AS time, cpu_pct, mem_used_bytes, mem_total_bytes,
+			       root_disk_used_bytes, root_disk_total_bytes
+			  FROM agent_metric_samples_hourly
+			 WHERE agent_id = $1
+			   AND bucket >= NOW() - $2::interval
+			 ORDER BY bucket ASC
+		`, id, intervalSecs)
+		if err != nil {
+			useRollup = false
+		}
+	}
+	if !useRollup {
+		rows, err = s.pool.Query(r.Context(), `
+			SELECT time, cpu_pct, mem_used_bytes, mem_total_bytes,
+			       root_disk_used_bytes, root_disk_total_bytes
+			  FROM agent_metric_samples
+			 WHERE agent_id = $1
+			   AND time >= NOW() - $2::interval
+			 ORDER BY time ASC
+		`, id, intervalSecs)
+	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "server_error", "query metrics failed")
 		return
@@ -783,6 +797,7 @@ func (s *Server) handleAgentMetrics(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"agentId":      id.String(),
 		"range":        dur.String(),
+		"rollup":       useRollup,
 		"samples":      out,
 		"capturedAtTo": time.Now().UTC(),
 	})
@@ -823,26 +838,37 @@ func (s *Server) handleAgentNetwork(w http.ResponseWriter, r *http.Request) {
 	if rng == "" {
 		rng = "24h"
 	}
-	dur, err := parseRangeDuration(rng)
+	dur, useRollup, _, err := s.clampMetricRange(r, rng)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	const maxRange = 30 * 24 * time.Hour
-	if dur > maxRange {
-		dur = maxRange
-	}
 
 	intervalSecs := fmt.Sprintf("%d seconds", int64(dur.Seconds()))
 
-	// Per-sample series.
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT time, in_bps, out_bps
-		  FROM agent_network_samples
-		 WHERE agent_id = $1
-		   AND time >= NOW() - $2::interval
-		 ORDER BY time ASC
-	`, id, intervalSecs)
+	// Per-sample series (hourly buckets when past the hot window).
+	var rows pgx.Rows
+	if useRollup {
+		rows, err = s.pool.Query(r.Context(), `
+			SELECT bucket AS time, in_bps, out_bps
+			  FROM agent_network_samples_hourly
+			 WHERE agent_id = $1
+			   AND bucket >= NOW() - $2::interval
+			 ORDER BY bucket ASC
+		`, id, intervalSecs)
+		if err != nil {
+			useRollup = false
+		}
+	}
+	if !useRollup {
+		rows, err = s.pool.Query(r.Context(), `
+			SELECT time, in_bps, out_bps
+			  FROM agent_network_samples
+			 WHERE agent_id = $1
+			   AND time >= NOW() - $2::interval
+			 ORDER BY time ASC
+		`, id, intervalSecs)
+	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "server_error", "query network samples failed")
 		return
@@ -862,40 +888,55 @@ func (s *Server) handleAgentNetwork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Hourly aggregate. AVG(bps) * 3600 ≈ bytes-this-hour. We allow
-	// nulls through so the frontend can render gaps as gaps.
-	hRows, err := s.pool.Query(r.Context(), `
-		SELECT date_trunc('hour', time) AS hour,
-		       AVG(in_bps)::BIGINT  * 3600 AS in_bytes,
-		       AVG(out_bps)::BIGINT * 3600 AS out_bytes
-		  FROM agent_network_samples
-		 WHERE agent_id = $1
-		   AND time >= NOW() - $2::interval
-		 GROUP BY hour
-		 ORDER BY hour ASC
-	`, id, intervalSecs)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "server_error", "query hourly network failed")
-		return
-	}
-	defer hRows.Close()
+	// Hourly aggregate. When already on rollups, reuse samples as hourly bars.
 	hourly := []networkHourly{}
-	for hRows.Next() {
-		var h networkHourly
-		if err := hRows.Scan(&h.Hour, &h.InBytes, &h.OutBytes); err != nil {
-			writeErr(w, http.StatusInternalServerError, "server_error", "scan hourly network failed")
+	if useRollup {
+		for _, m := range samples {
+			h := networkHourly{Hour: m.Time}
+			if m.InBps != nil {
+				v := *m.InBps * 3600
+				h.InBytes = &v
+			}
+			if m.OutBps != nil {
+				v := *m.OutBps * 3600
+				h.OutBytes = &v
+			}
+			hourly = append(hourly, h)
+		}
+	} else {
+		hRows, err := s.pool.Query(r.Context(), `
+			SELECT date_trunc('hour', time) AS hour,
+			       AVG(in_bps)::BIGINT  * 3600 AS in_bytes,
+			       AVG(out_bps)::BIGINT * 3600 AS out_bytes
+			  FROM agent_network_samples
+			 WHERE agent_id = $1
+			   AND time >= NOW() - $2::interval
+			 GROUP BY hour
+			 ORDER BY hour ASC
+		`, id, intervalSecs)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "server_error", "query hourly network failed")
 			return
 		}
-		hourly = append(hourly, h)
-	}
-	if err := hRows.Err(); err != nil {
-		writeErr(w, http.StatusInternalServerError, "server_error", "iter hourly network failed")
-		return
+		defer hRows.Close()
+		for hRows.Next() {
+			var h networkHourly
+			if err := hRows.Scan(&h.Hour, &h.InBytes, &h.OutBytes); err != nil {
+				writeErr(w, http.StatusInternalServerError, "server_error", "scan hourly network failed")
+				return
+			}
+			hourly = append(hourly, h)
+		}
+		if err := hRows.Err(); err != nil {
+			writeErr(w, http.StatusInternalServerError, "server_error", "iter hourly network failed")
+			return
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"agentId":      id.String(),
 		"range":        dur.String(),
+		"rollup":       useRollup,
 		"samples":      samples,
 		"hourly":       hourly,
 		"capturedAtTo": time.Now().UTC(),
@@ -927,14 +968,10 @@ func (s *Server) handleAgentLatency(w http.ResponseWriter, r *http.Request) {
 	if rng == "" {
 		rng = "24h"
 	}
-	dur, err := parseRangeDuration(rng)
+	dur, useRollup, _, err := s.clampMetricRange(r, rng)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
-	}
-	const maxRange = 30 * 24 * time.Hour
-	if dur > maxRange {
-		dur = maxRange
 	}
 
 	target := strings.TrimSpace(r.URL.Query().Get("target"))
@@ -945,14 +982,30 @@ func (s *Server) handleAgentLatency(w http.ResponseWriter, r *http.Request) {
 		args = append(args, target)
 	}
 
-	rows, err := s.pool.Query(r.Context(), `
-		SELECT time, target, address::text, avg_ms, min_ms, max_ms, loss_pct
-		  FROM agent_latency_samples
-		 WHERE agent_id = $1
-		   AND time >= NOW() - $2::interval
-		   `+filter+`
-		 ORDER BY time ASC, target ASC
-	`, args...)
+	var rows pgx.Rows
+	if useRollup {
+		rows, err = s.pool.Query(r.Context(), `
+			SELECT bucket AS time, target, NULL::text AS address, avg_ms, min_ms, max_ms, loss_pct
+			  FROM agent_latency_samples_hourly
+			 WHERE agent_id = $1
+			   AND bucket >= NOW() - $2::interval
+			   `+filter+`
+			 ORDER BY bucket ASC, target ASC
+		`, args...)
+		if err != nil {
+			useRollup = false
+		}
+	}
+	if !useRollup {
+		rows, err = s.pool.Query(r.Context(), `
+			SELECT time, target, address::text, avg_ms, min_ms, max_ms, loss_pct
+			  FROM agent_latency_samples
+			 WHERE agent_id = $1
+			   AND time >= NOW() - $2::interval
+			   `+filter+`
+			 ORDER BY time ASC, target ASC
+		`, args...)
+	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "server_error", "query latency failed")
 		return
@@ -977,6 +1030,7 @@ func (s *Server) handleAgentLatency(w http.ResponseWriter, r *http.Request) {
 		"agentId":      id.String(),
 		"range":        dur.String(),
 		"target":       target,
+		"rollup":       useRollup,
 		"samples":      out,
 		"capturedAtTo": time.Now().UTC(),
 	})

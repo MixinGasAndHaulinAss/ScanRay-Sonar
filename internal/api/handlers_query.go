@@ -65,7 +65,7 @@ func (s *Server) handleQueryMetrics(w http.ResponseWriter, r *http.Request) {
 	if rangeStr == "" {
 		rangeStr = "24h"
 	}
-	dur, err := parseRangeDuration(rangeStr)
+	dur, _, _, err := s.clampMetricRange(r, rangeStr)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
 		return

@@ -28,7 +28,20 @@ type snmpTargetRow struct {
 	EncSNMPCreds        string    `json:"encSnmpCreds"` // base64
 }
 
-// RunSNMPPoller polls SNMP for appliances assigned to this collector and pushes snapshots over HTTPS.
+type snmpWorkerHandle struct {
+	cancel       context.CancelFunc
+	pollInterval time.Duration
+}
+
+const (
+	snmpReconcileInterval = 30 * time.Second
+	snmpMinPollInterval   = 15 * time.Second
+	snmpDefaultPoll       = 60 * time.Second
+)
+
+// RunSNMPPoller polls SNMP for appliances assigned to this collector and
+// pushes snapshots over HTTPS. Each target runs on its own ticker at
+// pollIntervalSeconds (floor 15s, default 60s) — matching the central poller.
 func RunSNMPPoller(ctx context.Context, log *slog.Logger, cfg *Config) error {
 	mkb := os.Getenv("SONAR_MASTER_KEY")
 	if mkb == "" {
@@ -44,30 +57,101 @@ func RunSNMPPoller(ctx context.Context, log *slog.Logger, cfg *Config) error {
 	rt := &rateTracker{}
 	cli := &http.Client{Timeout: 120 * time.Second}
 
-	ticker := time.NewTicker(30 * time.Second)
+	var workersMu sync.Mutex
+	workers := map[uuid.UUID]snmpWorkerHandle{}
+	defer func() {
+		workersMu.Lock()
+		defer workersMu.Unlock()
+		for id, h := range workers {
+			h.cancel()
+			delete(workers, id)
+		}
+	}()
+
+	normalizeInterval := func(secs int) time.Duration {
+		if secs <= 0 {
+			return snmpDefaultPoll
+		}
+		d := time.Duration(secs) * time.Second
+		if d < snmpMinPollInterval {
+			return snmpMinPollInterval
+		}
+		return d
+	}
+
+	reconcile := func() {
+		targets, err := fetchTargets(ctx, cli, cfg)
+		if err != nil {
+			log.Warn("fetch snmp targets failed", "err", err)
+			return
+		}
+		seen := map[uuid.UUID]bool{}
+		for _, t := range targets {
+			t := t
+			seen[t.ID] = true
+			interval := normalizeInterval(t.PollIntervalSeconds)
+
+			workersMu.Lock()
+			existing, ok := workers[t.ID]
+			workersMu.Unlock()
+			if ok && existing.pollInterval == interval {
+				continue
+			}
+			if ok {
+				existing.cancel()
+			}
+
+			wctx, cancel := context.WithCancel(ctx)
+			workersMu.Lock()
+			workers[t.ID] = snmpWorkerHandle{cancel: cancel, pollInterval: interval}
+			workersMu.Unlock()
+
+			go func(wctx context.Context, t snmpTargetRow, interval time.Duration) {
+				log.Info("collector snmp worker started",
+					"appliance_id", t.ID.String(), "interval_s", int(interval.Seconds()))
+				poll := func() {
+					cctx, cc := context.WithTimeout(wctx, 45*time.Second)
+					defer cc()
+					if err := pollOne(cctx, cli, cfg, sealer, rt, t); err != nil {
+						log.Warn("collector snmp poll failed", "appliance_id", t.ID.String(), "err", err)
+						_ = postPollError(cctx, cli, cfg, t.ID, err.Error())
+					}
+				}
+				poll()
+				ticker := time.NewTicker(interval)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-wctx.Done():
+						log.Info("collector snmp worker stopped", "appliance_id", t.ID.String())
+						return
+					case <-ticker.C:
+						poll()
+					}
+				}
+			}(wctx, t, interval)
+		}
+
+		workersMu.Lock()
+		for id, h := range workers {
+			if !seen[id] {
+				h.cancel()
+				delete(workers, id)
+			}
+		}
+		workersMu.Unlock()
+	}
+
+	ticker := time.NewTicker(snmpReconcileInterval)
 	defer ticker.Stop()
+	reconcile()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			targets, err := fetchTargets(ctx, cli, cfg)
-			if err != nil {
-				log.Warn("fetch snmp targets failed", "err", err)
-				continue
-			}
-			for _, t := range targets {
-				t := t
-				go func() {
-					cctx, cc := context.WithTimeout(ctx, 45*time.Second)
-					defer cc()
-					if err := pollOne(cctx, cli, cfg, sealer, rt, t); err != nil {
-						log.Warn("collector snmp poll failed", "appliance_id", t.ID.String(), "err", err)
-						_ = postPollError(cctx, cli, cfg, t.ID, err.Error())
-					}
-				}()
-			}
+			reconcile()
 		}
 	}
 }

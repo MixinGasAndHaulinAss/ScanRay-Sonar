@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.7.13.19"
+  version: "2026.7.14.1"
   license:
     name: MIT
 servers:
@@ -51,6 +51,18 @@ components:
             properties:
               ok: { type: boolean }
               detail: { type: string }
+
+    RetentionSettings:
+      type: object
+      properties:
+        hotWindowDays: { type: integer, minimum: 7, maximum: 90, default: 30 }
+        compressAfterDays: { type: integer, minimum: 0, maximum: 7, default: 1 }
+        rollupRetentionDays: { type: integer, minimum: 30, maximum: 1825, default: 365 }
+        flowHotWindowDays: { type: integer, minimum: 3, maximum: 90, default: 14 }
+        vendorSamplesDays: { type: integer, minimum: 30, maximum: 730, default: 180 }
+        alarmsClearedDays: { type: integer, minimum: 30, maximum: 1825, default: 365 }
+        auditLogDays: { type: integer, minimum: 30, maximum: 1825, default: 365 }
+        updatedAt: { type: string, format: date-time }
 
     VersionInfo:
       type: object
@@ -1238,6 +1250,40 @@ paths:
                 type: object
                 properties:
                   ok: { type: boolean }
+
+  /settings/retention:
+    get:
+      summary: Get platform data retention settings
+      description: |
+        Superadmin-only. Controls hot raw sample window, compression delay,
+        hourly rollup retention, flow/vendor overrides, and alarm/audit roll-off.
+      tags: [Settings]
+      responses:
+        "200":
+          description: retention settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionSettings'
+    put:
+      summary: Update platform data retention settings
+      description: |
+        Superadmin-only. Persists settings and applies Timescale retention /
+        compression policies plus alarm/audit prune.
+      tags: [Settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetentionSettings'
+      responses:
+        "200":
+          description: updated settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionSettings'
 
   /settings/webhooks/{id}:
     patch:

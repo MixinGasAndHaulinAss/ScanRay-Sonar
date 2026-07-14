@@ -120,7 +120,7 @@ A one-shot backfill in the same migration walks every existing chunk older than 
 
 ### Capacity planning
 
-Per-unit storage at 30-day retention, with compression enabled:
+Per-unit storage at 30-day **hot** retention, with compression enabled:
 
 | Source                                | ~30-day footprint |
 | ------------------------------------- | ----------------- |
@@ -129,16 +129,19 @@ Per-unit storage at 30-day retention, with compression enabled:
 | One 48-port appliance                 | ~60 MB            |
 | One 128-port chassis                  | ~150 MB           |
 
-Fleet projections (steady state, 30-day retention):
+Fleet projections (steady state). Default product model is **30-day hot raw + 365-day hourly rollups** (~5% the cost of keeping raw for a year). Disk scales near-linearly with the admin **hot window**; rollup retention is far cheaper.
 
-| Fleet                          | DB size   |
-| ------------------------------ | --------- |
-| 6 agents / 3 appliances        | ~250 MB   |
-| 50 agents / 5 appliances       | ~1 GB     |
-| 250 agents / 10 appliances     | ~3 GB     |
-| 500 agents / 20 appliances     | ~7 GB     |
+| Fleet                          | ~30d hot only | ~30d hot + 365d hourly | Naive 365d raw |
+| ------------------------------ | ------------- | ---------------------- | -------------- |
+| 6 agents / 3 appliances        | ~250 MB       | ~300–400 MB            | ~3 GB          |
+| **50 agents / 40 appliances**  | **~2–4 GB**   | **~3–6 GB**            | ~25–50 GB      |
+| 250 agents / 10 appliances     | ~3 GB         | ~4–5 GB                | ~36 GB         |
+| **250 agents / 100 appliances**| **~8–15 GB**  | **~12–25 GB**          | ~100–180 GB    |
+| 500 agents / 20 appliances     | ~7 GB         | ~9–12 GB               | ~84 GB         |
 
-Without compression these numbers are roughly 10× larger; the migration is the difference between a 25 GB database and a 2.5 GB database at the 250-agent scale.
+Without compression these numbers are roughly 10× larger. Recommended Postgres volume for a mid-size customer (50/40): **≥ 50 GB**; with NetFlow or growth toward 100 appliances: **≥ 100 GB**.
+
+Superadmins configure hot window, compress-after, trend/rollup retention, and alarm/audit roll-off under **Settings → Data retention** (`GET/PUT /settings/retention`). Timescale policies are applied live when those values change.
 
 ### Verifying compression after deploy
 
@@ -157,10 +160,9 @@ SELECT hypertable_name, chunk_name, is_compressed
  ORDER BY hypertable_name, range_start DESC;
 ```
 
-### Future levers (not yet wired)
+### Long-range trends
 
-- **Continuous aggregates** — hourly rollups of `appliance_iface_samples` would let us keep raw data at 7 days and aggregated trend data at 1 year for ~5 % the cost. Add when an operator actually wants long-range trend charts; premature otherwise.
-- **Tiered storage** — `move_chunk(...)` can park old chunks on a slower tablespace if disk pressure ever appears at the 1+ year horizon.
+Hourly **continuous aggregates** retain chart history past the hot window (default 365 days). Chart APIs use raw samples when `range ≤ hot_window_days`, and hourly aggregates when the requested range is longer. Optional later: Timescale `move_chunk` to park cold chunks on a slower tablespace.
 
 ---
 

@@ -20,10 +20,22 @@ interface WebhookRow {
   createdAt: string;
 }
 
+interface RetentionSettings {
+  hotWindowDays: number;
+  compressAfterDays: number;
+  rollupRetentionDays: number;
+  flowHotWindowDays: number;
+  vendorSamplesDays: number;
+  alarmsClearedDays: number;
+  auditLogDays: number;
+  updatedAt?: string;
+}
+
 export default function Settings() {
   const qc = useQueryClient();
   const me = useQuery({ queryKey: ["me"], queryFn: () => api.get<User>("/auth/me") });
   const canEdit = me.data?.role === "siteadmin" || me.data?.role === "superadmin";
+  const isSuper = me.data?.role === "superadmin";
 
   const smtp = useQuery({
     queryKey: ["settings-smtp"],
@@ -35,6 +47,12 @@ export default function Settings() {
     queryKey: ["settings-webhooks"],
     queryFn: () => api.get<WebhookRow[]>("/settings/webhooks"),
     enabled: !!me.data && canEdit,
+  });
+
+  const retention = useQuery({
+    queryKey: ["settings-retention"],
+    queryFn: () => api.get<RetentionSettings>("/settings/retention"),
+    enabled: !!me.data && isSuper,
   });
 
   const [host, setHost] = useState("");
@@ -50,6 +68,15 @@ export default function Settings() {
   const [whUrl, setWhUrl] = useState("");
   const [whSecret, setWhSecret] = useState("");
 
+  const [hotWindowDays, setHotWindowDays] = useState(30);
+  const [compressAfterDays, setCompressAfterDays] = useState(1);
+  const [rollupRetentionDays, setRollupRetentionDays] = useState(365);
+  const [flowHotWindowDays, setFlowHotWindowDays] = useState(14);
+  const [vendorSamplesDays, setVendorSamplesDays] = useState(180);
+  const [alarmsClearedDays, setAlarmsClearedDays] = useState(365);
+  const [auditLogDays, setAuditLogDays] = useState(365);
+  const [retErr, setRetErr] = useState<string | null>(null);
+
   useEffect(() => {
     if (!smtp.data) return;
     setHost(smtp.data.host ?? "");
@@ -58,6 +85,17 @@ export default function Settings() {
     setFromAddr(smtp.data.fromAddr ?? "");
     setUseTls(!!smtp.data.useTls);
   }, [smtp.data]);
+
+  useEffect(() => {
+    if (!retention.data) return;
+    setHotWindowDays(retention.data.hotWindowDays);
+    setCompressAfterDays(retention.data.compressAfterDays);
+    setRollupRetentionDays(retention.data.rollupRetentionDays);
+    setFlowHotWindowDays(retention.data.flowHotWindowDays);
+    setVendorSamplesDays(retention.data.vendorSamplesDays);
+    setAlarmsClearedDays(retention.data.alarmsClearedDays);
+    setAuditLogDays(retention.data.auditLogDays);
+  }, [retention.data]);
 
   const saveSmtp = useMutation({
     mutationFn: () =>
@@ -83,6 +121,25 @@ export default function Settings() {
     onError: (e: unknown) =>
       setSmtpErr(e instanceof ApiError ? e.message : "SMTP test failed"),
     onSuccess: () => setSmtpErr(null),
+  });
+
+  const saveRetention = useMutation({
+    mutationFn: () =>
+      api.put<RetentionSettings>("/settings/retention", {
+        hotWindowDays,
+        compressAfterDays,
+        rollupRetentionDays,
+        flowHotWindowDays,
+        vendorSamplesDays,
+        alarmsClearedDays,
+        auditLogDays,
+      }),
+    onSuccess: async () => {
+      setRetErr(null);
+      await qc.invalidateQueries({ queryKey: ["settings-retention"] });
+    },
+    onError: (e: unknown) =>
+      setRetErr(e instanceof ApiError ? e.message : "Save failed"),
   });
 
   const createWh = useMutation({
@@ -130,9 +187,123 @@ export default function Settings() {
       <div>
         <h2 className="text-2xl font-semibold tracking-tight">Settings</h2>
         <p className="mt-0.5 text-xs text-slate-500">
-          Outbound email and signed webhook endpoints used by notifications.
+          Outbound email, signed webhooks, and platform data retention.
         </p>
       </div>
+
+      {isSuper && (
+        <section className="space-y-4 rounded-xl border border-ink-800 bg-ink-900 p-5">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-200">Data retention</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Hot = full-resolution samples. After the hot window, charts use hourly
+              trends until rollup retention expires. Cleared alarms and audit rows
+              roll off separately.
+            </p>
+            <ol className="mt-2 list-decimal space-y-0.5 pl-4 text-xs text-slate-500">
+              <li>Hot — raw samples at poll cadence</li>
+              <li>Compressed — same hot data, less disk (transparent to queries)</li>
+              <li>Trend — hourly rollups after hot window</li>
+              <li>Gone — past rollup / alarm / audit limits</li>
+            </ol>
+            <p className="mt-2 text-xs text-slate-500">
+              Mid-size fleets (~50 servers / 40 appliances) typically need ≥50 GB for
+              30-day hot + 365-day trends; ≥100 GB with NetFlow or ~100 appliances.
+            </p>
+          </div>
+          {retErr && <p className="text-xs text-red-400">{retErr}</p>}
+          {saveRetention.isSuccess && !retErr && (
+            <p className="text-xs text-emerald-400">Retention saved and policies applied.</p>
+          )}
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="block text-xs text-slate-400">
+              Hot data window (days)
+              <input
+                type="number"
+                min={7}
+                max={90}
+                className="mt-1 w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm"
+                value={hotWindowDays}
+                onChange={(e) => setHotWindowDays(Number(e.target.value))}
+              />
+            </label>
+            <label className="block text-xs text-slate-400">
+              Compress after (days)
+              <input
+                type="number"
+                min={0}
+                max={7}
+                className="mt-1 w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm"
+                value={compressAfterDays}
+                onChange={(e) => setCompressAfterDays(Number(e.target.value))}
+              />
+            </label>
+            <label className="block text-xs text-slate-400">
+              Trend / rollup retention (days)
+              <input
+                type="number"
+                min={30}
+                max={1825}
+                className="mt-1 w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm"
+                value={rollupRetentionDays}
+                onChange={(e) => setRollupRetentionDays(Number(e.target.value))}
+              />
+            </label>
+            <label className="block text-xs text-slate-400">
+              Flow hot window (days)
+              <input
+                type="number"
+                min={3}
+                max={90}
+                className="mt-1 w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm"
+                value={flowHotWindowDays}
+                onChange={(e) => setFlowHotWindowDays(Number(e.target.value))}
+              />
+            </label>
+            <label className="block text-xs text-slate-400">
+              Vendor samples (days)
+              <input
+                type="number"
+                min={30}
+                max={730}
+                className="mt-1 w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm"
+                value={vendorSamplesDays}
+                onChange={(e) => setVendorSamplesDays(Number(e.target.value))}
+              />
+            </label>
+            <label className="block text-xs text-slate-400">
+              Cleared alarms roll-off (days)
+              <input
+                type="number"
+                min={30}
+                max={1825}
+                className="mt-1 w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm"
+                value={alarmsClearedDays}
+                onChange={(e) => setAlarmsClearedDays(Number(e.target.value))}
+              />
+            </label>
+            <label className="block text-xs text-slate-400">
+              Audit log roll-off (days)
+              <input
+                type="number"
+                min={30}
+                max={1825}
+                className="mt-1 w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm"
+                value={auditLogDays}
+                onChange={(e) => setAuditLogDays(Number(e.target.value))}
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            disabled={saveRetention.isPending || retention.isLoading}
+            onClick={() => saveRetention.mutate()}
+            className="rounded-full border border-ink-700 bg-ink-950 px-4 py-1.5 text-xs text-slate-200 hover:bg-ink-800 disabled:opacity-40"
+          >
+            Save retention
+          </button>
+        </section>
+      )}
 
       <section className="space-y-3 rounded-xl border border-ink-800 bg-ink-900 p-5">
         <h3 className="text-sm font-semibold text-slate-200">SMTP</h3>
