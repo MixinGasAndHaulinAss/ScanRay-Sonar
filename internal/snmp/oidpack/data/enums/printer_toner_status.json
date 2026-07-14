@@ -1,0 +1,8 @@
+{
+  "id": "printer_toner_status",
+  "values": {
+    "0": "Toner Okay",
+    "1": "Toner Low",
+    "2": "No Toner Cartridge Loaded"
+  }
+}

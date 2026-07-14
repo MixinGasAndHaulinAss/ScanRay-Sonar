@@ -33,7 +33,7 @@ Thumbs.db
 .git-commit-msg.tmp
 
 # Local SNMP OID extract (reference only). Transform into
-# internal/snmp/oidpacks via scripts/build-oidpacks.py — do not commit.
+# internal/snmp/oidpack/data via scripts/build-oidpacks.py — do not commit.
 /oid_bundle/
 
 # Environment / secrets — never commit
@@ -55,6 +55,9 @@ master.key
 
 # Local data (only used outside containers)
 data/
+# Embedded SNMP OID packs (generated offline; required by go:embed)
+!internal/snmp/oidpack/data/
+!internal/snmp/oidpack/data/**
 *.db
 *.sqlite
 

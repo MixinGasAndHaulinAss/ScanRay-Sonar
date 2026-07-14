@@ -1,0 +1,68 @@
+{
+  "id": "printer_hp",
+  "title": "HP LaserJet status",
+  "enterprises": [
+    "11"
+  ],
+  "vendorAliases": [
+    "printer",
+    "printer-hp",
+    "hp"
+  ],
+  "sysObjectPrefixes": [
+    "1.3.6.1.4.1.11.2.3.9"
+  ],
+  "metrics": [
+    {
+      "key": "printer_hp.toner",
+      "oid": "1.3.6.1.4.1.11.2.3.9.1.1.2.10.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Toner",
+      "enumMap": "printer_toner_status",
+      "alarm": {
+        "op": ">",
+        "value": 0,
+        "severity": "warning",
+        "name": "Printer toner not OK",
+        "flatField": "printer_toner_status"
+      }
+    },
+    {
+      "key": "printer_hp.paper",
+      "oid": "1.3.6.1.4.1.11.2.3.9.1.1.2.8.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Paper",
+      "enumMap": "printer_paper_status",
+      "alarm": {
+        "op": ">",
+        "value": 0,
+        "severity": "warning",
+        "name": "Printer paper not OK",
+        "flatField": "printer_paper_status"
+      }
+    },
+    {
+      "key": "printer_hp.jam",
+      "oid": "1.3.6.1.4.1.11.2.3.9.1.1.2.9.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Jam",
+      "enumMap": "printer_jam_status",
+      "alarm": {
+        "op": ">",
+        "value": 0,
+        "severity": "critical",
+        "name": "Printer jam",
+        "flatField": "printer_jam_status"
+      }
+    }
+  ]
+}

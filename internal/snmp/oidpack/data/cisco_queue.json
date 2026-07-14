@@ -1,0 +1,87 @@
+{
+  "id": "cisco_queue",
+  "title": "Cisco interface queues",
+  "enterprises": [
+    "9"
+  ],
+  "vendorAliases": [
+    "cisco"
+  ],
+  "sysObjectPrefixes": [
+    "1.3.6.1.4.1.9.9.37"
+  ],
+  "metrics": [
+    {
+      "key": "cisco_queue.cqifqtype",
+      "oid": "1.3.6.1.4.1.9.9.37.1.1.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cqifqtype"
+    },
+    {
+      "key": "cisco_queue.cqif_tx_limit",
+      "oid": "1.3.6.1.4.1.9.9.37.1.1.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cqif tx limit"
+    },
+    {
+      "key": "cisco_queue.cqif_subqueues",
+      "oid": "1.3.6.1.4.1.9.9.37.1.1.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cqif subqueues"
+    },
+    {
+      "key": "cisco_queue.cqstatsqnumber",
+      "oid": "1.3.6.1.4.1.9.9.37.1.2.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cqstatsqnumber"
+    },
+    {
+      "key": "cisco_queue.cqstats_depth",
+      "oid": "1.3.6.1.4.1.9.9.37.1.2.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cqstats depth"
+    },
+    {
+      "key": "cisco_queue.cqstats_max_depth",
+      "oid": "1.3.6.1.4.1.9.9.37.1.2.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cqstats max depth"
+    },
+    {
+      "key": "cisco_queue.cqstats_discards",
+      "oid": "1.3.6.1.4.1.9.9.37.1.2.1.4",
+      "mode": "walk",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cqstats discards"
+    },
+    {
+      "key": "cisco_queue.cqrotation_octets",
+      "oid": "1.3.6.1.4.1.9.9.37.1.3.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cqrotation octets"
+    }
+  ]
+}

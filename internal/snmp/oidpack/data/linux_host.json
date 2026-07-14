@@ -1,0 +1,1708 @@
+{
+  "id": "linux_host",
+  "title": "Linux/Unix host (UCD-SNMP)",
+  "enterprises": [
+    "2021"
+  ],
+  "vendorAliases": [
+    "linux",
+    "unix"
+  ],
+  "sysObjectPrefixes": [
+    "1.3.6.1.4.1.8072",
+    "1.3.6.1.4.1.2021"
+  ],
+  "metrics": [
+    {
+      "key": "linux_host.processes_index",
+      "oid": "1.3.6.1.4.1.2021.2.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Processes Index"
+    },
+    {
+      "key": "linux_host.processes_count",
+      "oid": "1.3.6.1.4.1.2021.2.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Processes Count"
+    },
+    {
+      "key": "linux_host.processes_error_flag",
+      "oid": "1.3.6.1.4.1.2021.2.1.100",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Processes Error Flag"
+    },
+    {
+      "key": "linux_host.memory_total_swap",
+      "oid": "1.3.6.1.4.1.2021.4.3.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "kilobytes",
+      "label": "Memory Total Swap"
+    },
+    {
+      "key": "linux_host.available_swap_space",
+      "oid": "1.3.6.1.4.1.2021.4.4.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "kilobytes",
+      "label": "Available Swap Space"
+    },
+    {
+      "key": "linux_host.memory_total_real",
+      "oid": "1.3.6.1.4.1.2021.4.5.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "kilobytes",
+      "label": "Memory Total Real"
+    },
+    {
+      "key": "linux_host.memory_available",
+      "oid": "1.3.6.1.4.1.2021.4.6.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "kilobytes",
+      "label": "Memory available"
+    },
+    {
+      "key": "linux_host.memory_total_swap_used_by_text",
+      "oid": "1.3.6.1.4.1.2021.4.7.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "kilobytes",
+      "label": "Memory Total Swap used by text"
+    },
+    {
+      "key": "linux_host.active_virtual_memory_used_by_text",
+      "oid": "1.3.6.1.4.1.2021.4.8.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "kilobytes",
+      "label": "Active virtual Memory used by text"
+    },
+    {
+      "key": "linux_host.memory_total_real_used_by_text",
+      "oid": "1.3.6.1.4.1.2021.4.9.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "kilobytes",
+      "label": "Memory Total Real used by text"
+    },
+    {
+      "key": "linux_host.active_real_physical_memory_used_by_text",
+      "oid": "1.3.6.1.4.1.2021.4.10.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "kilobytes",
+      "label": "Active Real/Physical Memory used by text"
+    },
+    {
+      "key": "linux_host.memory_total_free",
+      "oid": "1.3.6.1.4.1.2021.4.11.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "kilobytes",
+      "label": "Memory Total Free"
+    },
+    {
+      "key": "linux_host.memory_shared",
+      "oid": "1.3.6.1.4.1.2021.4.13.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "kilobytes",
+      "label": "Memory Shared"
+    },
+    {
+      "key": "linux_host.memory_buffered",
+      "oid": "1.3.6.1.4.1.2021.4.14.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "kilobytes",
+      "label": "Memory Buffered"
+    },
+    {
+      "key": "linux_host.memory_cached",
+      "oid": "1.3.6.1.4.1.2021.4.15.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "kilobytes",
+      "label": "Memory Cached"
+    },
+    {
+      "key": "linux_host.memory_swap_error_flag",
+      "oid": "1.3.6.1.4.1.2021.4.100.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Memory Swap Error Flag"
+    },
+    {
+      "key": "linux_host.disk_index",
+      "oid": "1.3.6.1.4.1.2021.9.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Disk index"
+    },
+    {
+      "key": "linux_host.disk_minimum",
+      "oid": "1.3.6.1.4.1.2021.9.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Disk minimum"
+    },
+    {
+      "key": "linux_host.disk_min",
+      "oid": "1.3.6.1.4.1.2021.9.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "%",
+      "label": "Disk min",
+      "alarm": {
+        "op": "<",
+        "value": 10,
+        "severity": "warning",
+        "name": "Disk free space low",
+        "flatField": "disk_free_pct"
+      }
+    },
+    {
+      "key": "linux_host.disk_total",
+      "oid": "1.3.6.1.4.1.2021.9.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "kilobytes",
+      "label": "Disk total"
+    },
+    {
+      "key": "linux_host.disk_avail",
+      "oid": "1.3.6.1.4.1.2021.9.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "kilobytes",
+      "label": "Disk avail"
+    },
+    {
+      "key": "linux_host.disk_used",
+      "oid": "1.3.6.1.4.1.2021.9.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "kilobytes",
+      "label": "Disk used"
+    },
+    {
+      "key": "linux_host.dsk",
+      "oid": "1.3.6.1.4.1.2021.9.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "%",
+      "label": "dsk",
+      "alarm": {
+        "op": "<",
+        "value": 10,
+        "severity": "warning",
+        "name": "Disk free space low",
+        "flatField": "disk_free_pct"
+      }
+    },
+    {
+      "key": "linux_host.disk_node",
+      "oid": "1.3.6.1.4.1.2021.9.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "%",
+      "label": "Disk node",
+      "alarm": {
+        "op": "<",
+        "value": 10,
+        "severity": "warning",
+        "name": "Disk free space low",
+        "flatField": "disk_free_pct"
+      }
+    },
+    {
+      "key": "linux_host.disk_error_flag",
+      "oid": "1.3.6.1.4.1.2021.9.1.100",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Disk error flag"
+    },
+    {
+      "key": "linux_host.memory_swapped_in",
+      "oid": "1.3.6.1.4.1.2021.11.3.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "kB/sec",
+      "label": "Memory Swapped In"
+    },
+    {
+      "key": "linux_host.memory_swapped_out",
+      "oid": "1.3.6.1.4.1.2021.11.4.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "kB/sec",
+      "label": "Memory Swapped Out"
+    },
+    {
+      "key": "linux_host.system_io_sent",
+      "oid": "1.3.6.1.4.1.2021.11.5.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "blocks/sec",
+      "label": "System IO sent"
+    },
+    {
+      "key": "linux_host.system_io_received",
+      "oid": "1.3.6.1.4.1.2021.11.6.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "blocks/s",
+      "label": "System IO received"
+    },
+    {
+      "key": "linux_host.system_interrupts",
+      "oid": "1.3.6.1.4.1.2021.11.7.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "System Interrupts"
+    },
+    {
+      "key": "linux_host.system_context_switches",
+      "oid": "1.3.6.1.4.1.2021.11.8.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "System Context Switches"
+    },
+    {
+      "key": "linux_host.system_cpu_user",
+      "oid": "1.3.6.1.4.1.2021.11.9.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "%",
+      "label": "System CPU user"
+    },
+    {
+      "key": "linux_host.system_cpu_system",
+      "oid": "1.3.6.1.4.1.2021.11.10.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "%",
+      "label": "System CPU system"
+    },
+    {
+      "key": "linux_host.system_cpu_idle",
+      "oid": "1.3.6.1.4.1.2021.11.11.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "%",
+      "label": "System CPU idle"
+    },
+    {
+      "key": "linux_host.system_cpu_raw_user",
+      "oid": "1.3.6.1.4.1.2021.11.50.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "ticks",
+      "label": "System CPU raw user"
+    },
+    {
+      "key": "linux_host.system_cpu_raw_nice",
+      "oid": "1.3.6.1.4.1.2021.11.51.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "ticks",
+      "label": "System CPU raw nice"
+    },
+    {
+      "key": "linux_host.system_cpu_raw_system",
+      "oid": "1.3.6.1.4.1.2021.11.52.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "ticks",
+      "label": "System CPU raw system"
+    },
+    {
+      "key": "linux_host.system_cpu_raw_idle",
+      "oid": "1.3.6.1.4.1.2021.11.53.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "ticks",
+      "label": "System CPU raw idle"
+    },
+    {
+      "key": "linux_host.system_cpu_raw_wait",
+      "oid": "1.3.6.1.4.1.2021.11.54.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "ticks",
+      "label": "System CPU raw wait"
+    },
+    {
+      "key": "linux_host.system_cpu_raw_kernel",
+      "oid": "1.3.6.1.4.1.2021.11.55.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "ticks",
+      "label": "System CPU raw kernel"
+    },
+    {
+      "key": "linux_host.system_cpu_raw_interrupt",
+      "oid": "1.3.6.1.4.1.2021.11.56.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "ticks",
+      "label": "System CPU raw interrupt"
+    },
+    {
+      "key": "linux_host.system_io_raw_sent",
+      "oid": "1.3.6.1.4.1.2021.11.57.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "System IO raw sent"
+    },
+    {
+      "key": "linux_host.system_io_raw_received",
+      "oid": "1.3.6.1.4.1.2021.11.58.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "System IO raw received"
+    },
+    {
+      "key": "linux_host.interrupts",
+      "oid": "1.3.6.1.4.1.2021.11.59.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "interrupts",
+      "label": "Interrupts"
+    },
+    {
+      "key": "linux_host.context_switches",
+      "oid": "1.3.6.1.4.1.2021.11.60.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "context switches",
+      "label": "Context Switches"
+    },
+    {
+      "key": "linux_host.system_cpu_raw_soft_irq",
+      "oid": "1.3.6.1.4.1.2021.11.61.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "ticks",
+      "label": "System CPU raw soft irq"
+    },
+    {
+      "key": "linux_host.blocks_swapped_in",
+      "oid": "1.3.6.1.4.1.2021.11.62.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "blocks",
+      "label": "Blocks Swapped In"
+    },
+    {
+      "key": "linux_host.blocks_swapped_in.0",
+      "oid": "1.3.6.1.4.1.2021.11.63.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "blocks",
+      "label": "Blocks Swapped In"
+    },
+    {
+      "key": "linux_host.cpu_load_1_min_avg",
+      "oid": "1.3.6.1.4.1.2021.10.1.5.1",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "CPU Load (1 min. avg.)",
+      "alarm": {
+        "op": ">",
+        "value": 5,
+        "severity": "warning",
+        "name": "Host load average high",
+        "flatField": "linux_load_1min"
+      }
+    },
+    {
+      "key": "linux_host.cpu_load_5_min_avg",
+      "oid": "1.3.6.1.4.1.2021.10.1.5.2",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "CPU Load (5 min. avg.)"
+    },
+    {
+      "key": "linux_host.cpu_load_15_min_avg",
+      "oid": "1.3.6.1.4.1.2021.10.1.5.3",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "CPU Load (15 min. avg.)",
+      "alarm": {
+        "op": ">",
+        "value": 5,
+        "severity": "warning",
+        "name": "Host load average high",
+        "flatField": "linux_load_1min"
+      }
+    },
+    {
+      "key": "linux_host.lm_temp_sensors_index",
+      "oid": "1.3.6.1.4.1.2021.13.16.2.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lm temp sensors index"
+    },
+    {
+      "key": "linux_host.lm_fan_sensors_index",
+      "oid": "1.3.6.1.4.1.2021.13.16.3.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lm fan sensors index"
+    },
+    {
+      "key": "linux_host.lm_fan_sensors_value",
+      "oid": "1.3.6.1.4.1.2021.13.16.3.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lm fan sensors value"
+    },
+    {
+      "key": "linux_host.lm_misc_sensors_index",
+      "oid": "1.3.6.1.4.1.2021.13.16.5.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lm misc sensors index"
+    },
+    {
+      "key": "linux_host.lm_misc_sensors_value",
+      "oid": "1.3.6.1.4.1.2021.13.16.5.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lm misc sensors value"
+    },
+    {
+      "key": "linux_host.lm_temp_sensors_index.1",
+      "oid": "1.3.6.1.4.1.2021.13.16.2.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lm temp sensors index"
+    },
+    {
+      "key": "linux_host.lm_temp_sensors_value",
+      "oid": "1.3.6.1.4.1.2021.13.16.2.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lm temp sensors value"
+    },
+    {
+      "key": "linux_host.lm_volt_sensors_index",
+      "oid": "1.3.6.1.4.1.2021.13.16.4.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lm volt sensors index"
+    },
+    {
+      "key": "linux_host.lm_volt_sensors_value",
+      "oid": "1.3.6.1.4.1.2021.13.16.4.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lm volt sensors value"
+    },
+    {
+      "key": "linux_host.ucd_demo_reset_keys",
+      "oid": "1.3.6.1.4.1.2021.14.1.1.1.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ucd demo reset keys"
+    },
+    {
+      "key": "linux_host.ucd_demo_reset_keys.0",
+      "oid": "1.3.6.1.4.1.2021.14.1.1.1.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ucd demo reset keys"
+    },
+    {
+      "key": "linux_host.diskioindex",
+      "oid": "1.3.6.1.4.1.2021.13.15.1.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "diskioindex"
+    },
+    {
+      "key": "linux_host.diskioindex.1",
+      "oid": "1.3.6.1.4.1.2021.13.15.1.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "diskioindex"
+    },
+    {
+      "key": "linux_host.diskiola1",
+      "oid": "1.3.6.1.4.1.2021.13.15.1.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "diskiola1"
+    },
+    {
+      "key": "linux_host.diskiola15",
+      "oid": "1.3.6.1.4.1.2021.13.15.1.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "diskiola15"
+    },
+    {
+      "key": "linux_host.diskiola5",
+      "oid": "1.3.6.1.4.1.2021.13.15.1.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "diskiola5"
+    },
+    {
+      "key": "linux_host.diskionread",
+      "oid": "1.3.6.1.4.1.2021.13.15.1.1.3",
+      "mode": "walk",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "diskionread"
+    },
+    {
+      "key": "linux_host.diskionreadx",
+      "oid": "1.3.6.1.4.1.2021.13.15.1.1.12",
+      "mode": "walk",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "diskionreadx"
+    },
+    {
+      "key": "linux_host.diskionwritten",
+      "oid": "1.3.6.1.4.1.2021.13.15.1.1.4",
+      "mode": "walk",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "diskionwritten"
+    },
+    {
+      "key": "linux_host.diskionwrittenx",
+      "oid": "1.3.6.1.4.1.2021.13.15.1.1.13",
+      "mode": "walk",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "diskionwrittenx"
+    },
+    {
+      "key": "linux_host.diskioreads",
+      "oid": "1.3.6.1.4.1.2021.13.15.1.1.5",
+      "mode": "walk",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "diskioreads"
+    },
+    {
+      "key": "linux_host.diskiowrites",
+      "oid": "1.3.6.1.4.1.2021.13.15.1.1.6",
+      "mode": "walk",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "diskiowrites"
+    },
+    {
+      "key": "linux_host.dlmod_next_index",
+      "oid": "1.3.6.1.4.1.2021.13.14.1.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "dlmod next index"
+    },
+    {
+      "key": "linux_host.dlmod_index",
+      "oid": "1.3.6.1.4.1.2021.13.14.2.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "dlmod index"
+    },
+    {
+      "key": "linux_host.dlmod_status",
+      "oid": "1.3.6.1.4.1.2021.13.14.2.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "dlmod status"
+    },
+    {
+      "key": "linux_host.dlmod_next_index.0",
+      "oid": "1.3.6.1.4.1.2021.13.14.1.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "dlmod next index"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_index",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc index"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_bidir",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc bidir"
+    },
+    {
+      "key": "linux_host.ip_fw_acc",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.11",
+      "mode": "walk",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "bytes",
+      "label": "ip fw acc"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_dir",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc dir"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_dst_is_range",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.16",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc dst is range"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_index.1",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc index"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_nr_dst_ports",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc nr dst ports"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_nr_src_ports",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.13",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc nr src ports"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_packets",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.12",
+      "mode": "walk",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc packets"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_port1",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.17",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc port1"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_port10",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.26",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc port10"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_port2",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.18",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc port2"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_port3",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.19",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc port3"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_port4",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.20",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc port4"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_port5",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.21",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc port5"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_port6",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.22",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc port6"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_port7",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.23",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc port7"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_port8",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.24",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc port8"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_port9",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.25",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc port9"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_proto",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc proto"
+    },
+    {
+      "key": "linux_host.ip_fw_acc_src_is_range",
+      "oid": "1.3.6.1.4.1.2021.13.1.1.1.15",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ip fw acc src is range"
+    },
+    {
+      "key": "linux_host.pr_index",
+      "oid": "1.3.6.1.4.1.2021.2.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pr index"
+    },
+    {
+      "key": "linux_host.dsk_avail",
+      "oid": "1.3.6.1.4.1.2021.9.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "dsk avail"
+    },
+    {
+      "key": "linux_host.dsk_error_flag",
+      "oid": "1.3.6.1.4.1.2021.9.1.100",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "dsk error flag"
+    },
+    {
+      "key": "linux_host.dsk_index",
+      "oid": "1.3.6.1.4.1.2021.9.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "dsk index"
+    },
+    {
+      "key": "linux_host.dsk_min",
+      "oid": "1.3.6.1.4.1.2021.9.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "%",
+      "label": "dsk min"
+    },
+    {
+      "key": "linux_host.dsk_minimum",
+      "oid": "1.3.6.1.4.1.2021.9.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "dsk minimum"
+    },
+    {
+      "key": "linux_host.dsk.9",
+      "oid": "1.3.6.1.4.1.2021.9.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "%",
+      "label": "dsk"
+    },
+    {
+      "key": "linux_host.dsk_node",
+      "oid": "1.3.6.1.4.1.2021.9.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "%",
+      "label": "dsk node"
+    },
+    {
+      "key": "linux_host.dsk_total",
+      "oid": "1.3.6.1.4.1.2021.9.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "dsk total"
+    },
+    {
+      "key": "linux_host.dsk_used",
+      "oid": "1.3.6.1.4.1.2021.9.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "dsk used"
+    },
+    {
+      "key": "linux_host.ext_err_fix",
+      "oid": "1.3.6.1.4.1.2021.8.1.102",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ext err fix"
+    },
+    {
+      "key": "linux_host.ext_index",
+      "oid": "1.3.6.1.4.1.2021.8.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ext index"
+    },
+    {
+      "key": "linux_host.ext_result",
+      "oid": "1.3.6.1.4.1.2021.8.1.100",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ext result"
+    },
+    {
+      "key": "linux_host.file_error_flag",
+      "oid": "1.3.6.1.4.1.2021.15.1.100",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "file error flag"
+    },
+    {
+      "key": "linux_host.file_index",
+      "oid": "1.3.6.1.4.1.2021.15.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "file index"
+    },
+    {
+      "key": "linux_host.file_max",
+      "oid": "1.3.6.1.4.1.2021.15.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "file max"
+    },
+    {
+      "key": "linux_host.file_size",
+      "oid": "1.3.6.1.4.1.2021.15.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "file size"
+    },
+    {
+      "key": "linux_host.la_error_flag",
+      "oid": "1.3.6.1.4.1.2021.10.1.100",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "la error flag"
+    },
+    {
+      "key": "linux_host.la_index",
+      "oid": "1.3.6.1.4.1.2021.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "la index"
+    },
+    {
+      "key": "linux_host.la_load_float",
+      "oid": "1.3.6.1.4.1.2021.10.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "la load float"
+    },
+    {
+      "key": "linux_host.la_load_int",
+      "oid": "1.3.6.1.4.1.2021.10.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "la load int"
+    },
+    {
+      "key": "linux_host.log_match_max_entries",
+      "oid": "1.3.6.1.4.1.2021.16.1.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "log match max entries"
+    },
+    {
+      "key": "linux_host.log_match_count",
+      "oid": "1.3.6.1.4.1.2021.16.2.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "log match count"
+    },
+    {
+      "key": "linux_host.log_match_counter",
+      "oid": "1.3.6.1.4.1.2021.16.2.1.9",
+      "mode": "walk",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "log match counter"
+    },
+    {
+      "key": "linux_host.log_match_current_count",
+      "oid": "1.3.6.1.4.1.2021.16.2.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "log match current count"
+    },
+    {
+      "key": "linux_host.log_match_current_counter",
+      "oid": "1.3.6.1.4.1.2021.16.2.1.7",
+      "mode": "walk",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "log match current counter"
+    },
+    {
+      "key": "linux_host.log_match_cycle",
+      "oid": "1.3.6.1.4.1.2021.16.2.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "log match cycle"
+    },
+    {
+      "key": "linux_host.log_match_error_flag",
+      "oid": "1.3.6.1.4.1.2021.16.2.1.100",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "log match error flag"
+    },
+    {
+      "key": "linux_host.log_match_global_count",
+      "oid": "1.3.6.1.4.1.2021.16.2.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "log match global count"
+    },
+    {
+      "key": "linux_host.log_match_global_counter",
+      "oid": "1.3.6.1.4.1.2021.16.2.1.5",
+      "mode": "walk",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "log match global counter"
+    },
+    {
+      "key": "linux_host.log_match_index",
+      "oid": "1.3.6.1.4.1.2021.16.2.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "log match index"
+    },
+    {
+      "key": "linux_host.mem_avail_real",
+      "oid": "1.3.6.1.4.1.2021.4.6.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mem avail real"
+    },
+    {
+      "key": "linux_host.mem_avail_realtxt",
+      "oid": "1.3.6.1.4.1.2021.4.10.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mem avail realtxt"
+    },
+    {
+      "key": "linux_host.mem_avail_swap",
+      "oid": "1.3.6.1.4.1.2021.4.4.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mem avail swap"
+    },
+    {
+      "key": "linux_host.mem_avail_swaptxt",
+      "oid": "1.3.6.1.4.1.2021.4.8.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mem avail swaptxt"
+    },
+    {
+      "key": "linux_host.mem_buffer",
+      "oid": "1.3.6.1.4.1.2021.4.14.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mem buffer"
+    },
+    {
+      "key": "linux_host.mem_cached",
+      "oid": "1.3.6.1.4.1.2021.4.15.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mem cached"
+    },
+    {
+      "key": "linux_host.mem_index",
+      "oid": "1.3.6.1.4.1.2021.4.1.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mem index"
+    },
+    {
+      "key": "linux_host.mem_minimum_swap",
+      "oid": "1.3.6.1.4.1.2021.4.12.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mem minimum swap"
+    },
+    {
+      "key": "linux_host.mem_shared",
+      "oid": "1.3.6.1.4.1.2021.4.13.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mem shared"
+    },
+    {
+      "key": "linux_host.mem_swap_error",
+      "oid": "1.3.6.1.4.1.2021.4.100.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mem swap error"
+    },
+    {
+      "key": "linux_host.mem_total_free",
+      "oid": "1.3.6.1.4.1.2021.4.11.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mem total free"
+    },
+    {
+      "key": "linux_host.mem_total_real",
+      "oid": "1.3.6.1.4.1.2021.4.5.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mem total real"
+    },
+    {
+      "key": "linux_host.mem_total_realtxt",
+      "oid": "1.3.6.1.4.1.2021.4.9.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mem total realtxt"
+    },
+    {
+      "key": "linux_host.mem_total_swap",
+      "oid": "1.3.6.1.4.1.2021.4.3.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mem total swap"
+    },
+    {
+      "key": "linux_host.mem_total_swaptxt",
+      "oid": "1.3.6.1.4.1.2021.4.7.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mem total swaptxt"
+    },
+    {
+      "key": "linux_host.mem_used_realtxt",
+      "oid": "1.3.6.1.4.1.2021.4.17.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mem used realtxt"
+    },
+    {
+      "key": "linux_host.mem_used_swaptxt",
+      "oid": "1.3.6.1.4.1.2021.4.16.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mem used swaptxt"
+    },
+    {
+      "key": "linux_host.pr_count",
+      "oid": "1.3.6.1.4.1.2021.2.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pr count"
+    },
+    {
+      "key": "linux_host.pr_err_fix",
+      "oid": "1.3.6.1.4.1.2021.2.1.102",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pr err fix"
+    },
+    {
+      "key": "linux_host.pr_error_flag",
+      "oid": "1.3.6.1.4.1.2021.2.1.100",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pr error flag"
+    },
+    {
+      "key": "linux_host.pr_index.1",
+      "oid": "1.3.6.1.4.1.2021.2.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pr index"
+    },
+    {
+      "key": "linux_host.pr_max",
+      "oid": "1.3.6.1.4.1.2021.2.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pr max"
+    },
+    {
+      "key": "linux_host.pr_min",
+      "oid": "1.3.6.1.4.1.2021.2.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pr min"
+    },
+    {
+      "key": "linux_host.snmperr_error_flag",
+      "oid": "1.3.6.1.4.1.2021.101.100.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "snmperr error flag"
+    },
+    {
+      "key": "linux_host.snmperr_index",
+      "oid": "1.3.6.1.4.1.2021.101.1.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "snmperr index"
+    },
+    {
+      "key": "linux_host.ss_cpu_idle",
+      "oid": "1.3.6.1.4.1.2021.11.11.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss cpu idle"
+    },
+    {
+      "key": "linux_host.ss_cpu_raw_idle",
+      "oid": "1.3.6.1.4.1.2021.11.53.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss cpu raw idle"
+    },
+    {
+      "key": "linux_host.ss_cpu_raw_interrupt",
+      "oid": "1.3.6.1.4.1.2021.11.56.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss cpu raw interrupt"
+    },
+    {
+      "key": "linux_host.ss_cpu_raw_kernel",
+      "oid": "1.3.6.1.4.1.2021.11.55.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss cpu raw kernel"
+    },
+    {
+      "key": "linux_host.ss_cpu_raw_nice",
+      "oid": "1.3.6.1.4.1.2021.11.51.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss cpu raw nice"
+    },
+    {
+      "key": "linux_host.ss_cpu_raw_softirq",
+      "oid": "1.3.6.1.4.1.2021.11.61.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss cpu raw softirq"
+    },
+    {
+      "key": "linux_host.ss_cpu_raw_system",
+      "oid": "1.3.6.1.4.1.2021.11.52.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss cpu raw system"
+    },
+    {
+      "key": "linux_host.ss_cpu_raw_user",
+      "oid": "1.3.6.1.4.1.2021.11.50.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss cpu raw user"
+    },
+    {
+      "key": "linux_host.ss_cpu_raw_wait",
+      "oid": "1.3.6.1.4.1.2021.11.54.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss cpu raw wait"
+    },
+    {
+      "key": "linux_host.ss_cpu_system",
+      "oid": "1.3.6.1.4.1.2021.11.10.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss cpu system"
+    },
+    {
+      "key": "linux_host.ss_cpu_user",
+      "oid": "1.3.6.1.4.1.2021.11.9.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss cpu user"
+    },
+    {
+      "key": "linux_host.ss_index",
+      "oid": "1.3.6.1.4.1.2021.11.1.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss index"
+    },
+    {
+      "key": "linux_host.ss_raw_contexts",
+      "oid": "1.3.6.1.4.1.2021.11.60.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss raw contexts"
+    },
+    {
+      "key": "linux_host.ss_raw_interrupts",
+      "oid": "1.3.6.1.4.1.2021.11.59.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss raw interrupts"
+    },
+    {
+      "key": "linux_host.ss_raw_swap_in",
+      "oid": "1.3.6.1.4.1.2021.11.62.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss raw swap in"
+    },
+    {
+      "key": "linux_host.ss_raw_swap_out",
+      "oid": "1.3.6.1.4.1.2021.11.63.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss raw swap out"
+    },
+    {
+      "key": "linux_host.ss_swap_in",
+      "oid": "1.3.6.1.4.1.2021.11.3.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss swap in"
+    },
+    {
+      "key": "linux_host.ss_swap_out",
+      "oid": "1.3.6.1.4.1.2021.11.4.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss swap out"
+    },
+    {
+      "key": "linux_host.ss_sys_context",
+      "oid": "1.3.6.1.4.1.2021.11.8.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss sys context"
+    },
+    {
+      "key": "linux_host.ss_sys_interrupts",
+      "oid": "1.3.6.1.4.1.2021.11.7.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ss sys interrupts"
+    },
+    {
+      "key": "linux_host.ssioraw_received",
+      "oid": "1.3.6.1.4.1.2021.11.58.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ssioraw received"
+    },
+    {
+      "key": "linux_host.ssioraw_sent",
+      "oid": "1.3.6.1.4.1.2021.11.57.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ssioraw sent"
+    },
+    {
+      "key": "linux_host.ssioreceive",
+      "oid": "1.3.6.1.4.1.2021.11.6.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ssioreceive"
+    },
+    {
+      "key": "linux_host.ssiosent",
+      "oid": "1.3.6.1.4.1.2021.11.5.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ssiosent"
+    },
+    {
+      "key": "linux_host.version_clear_cache",
+      "oid": "1.3.6.1.4.1.2021.100.10.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "version clear cache"
+    },
+    {
+      "key": "linux_host.version_do_debugging",
+      "oid": "1.3.6.1.4.1.2021.100.20.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "version do debugging"
+    },
+    {
+      "key": "linux_host.version_index",
+      "oid": "1.3.6.1.4.1.2021.100.1.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "version index"
+    },
+    {
+      "key": "linux_host.version_restart_agent",
+      "oid": "1.3.6.1.4.1.2021.100.12.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "version restart agent"
+    },
+    {
+      "key": "linux_host.version_save_persistent_data",
+      "oid": "1.3.6.1.4.1.2021.100.13.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "version save persistent data"
+    },
+    {
+      "key": "linux_host.version_update_config",
+      "oid": "1.3.6.1.4.1.2021.100.11.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "version update config"
+    }
+  ]
+}

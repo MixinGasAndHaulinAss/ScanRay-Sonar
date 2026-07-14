@@ -1,0 +1,6312 @@
+{
+  "id": "dell_server",
+  "title": "Dell server management",
+  "enterprises": [
+    "674"
+  ],
+  "vendorAliases": [
+    "dell",
+    "dell-server"
+  ],
+  "sysObjectPrefixes": [
+    "1.3.6.1.4.1.674.10892"
+  ],
+  "metrics": [
+    {
+      "key": "dell_server.mibmajor_version_number",
+      "oid": "1.3.6.1.4.1.674.10892.1.1.1.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mibmajor version number"
+    },
+    {
+      "key": "dell_server.mibminor_version_number",
+      "oid": "1.3.6.1.4.1.674.10892.1.1.2.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mibminor version number"
+    },
+    {
+      "key": "dell_server.mibmaintenance_version_number",
+      "oid": "1.3.6.1.4.1.674.10892.1.1.3.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "mibmaintenance version number"
+    },
+    {
+      "key": "dell_server.system_management_software_build_number",
+      "oid": "1.3.6.1.4.1.674.10892.1.100.3.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system management software build number"
+    },
+    {
+      "key": "dell_server.system_management_software_supported_protocol",
+      "oid": "1.3.6.1.4.1.674.10892.1.100.5.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system management software supported protocol"
+    },
+    {
+      "key": "dell_server.system_management_software_preferred_protocol",
+      "oid": "1.3.6.1.4.1.674.10892.1.100.6.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system management software preferred protocol"
+    },
+    {
+      "key": "dell_server.system_management_software_feature_flags",
+      "oid": "1.3.6.1.4.1.674.10892.1.100.11.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system management software feature flags"
+    },
+    {
+      "key": "dell_server.system_management_software_snmp_agent_feature_flags",
+      "oid": "1.3.6.1.4.1.674.10892.1.100.12.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system management software snmp agent feature flags"
+    },
+    {
+      "key": "dell_server.system_statechassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system statechassis index"
+    },
+    {
+      "key": "dell_server.system_state_global_system_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state global system status",
+      "alarm": {
+        "op": "!=",
+        "value": 3,
+        "severity": "warning",
+        "name": "Dell server health not OK",
+        "flatField": "dell_server_overall_status"
+      }
+    },
+    {
+      "key": "dell_server.system_state_chassis_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state chassis state"
+    },
+    {
+      "key": "dell_server.system_state_chassis_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state chassis status"
+    },
+    {
+      "key": "dell_server.system_state_power_unit_status_redundancy",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state power unit status redundancy"
+    },
+    {
+      "key": "dell_server.system_state_power_supply_status_combined",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state power supply status combined"
+    },
+    {
+      "key": "dell_server.system_state_voltage_status_combined",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state voltage status combined"
+    },
+    {
+      "key": "dell_server.system_state_amperage_status_combined",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.15",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state amperage status combined"
+    },
+    {
+      "key": "dell_server.system_state_cooling_unit_status_redundancy",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.18",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state cooling unit status redundancy"
+    },
+    {
+      "key": "dell_server.system_state_cooling_device_status_combined",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.21",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state cooling device status combined"
+    },
+    {
+      "key": "dell_server.system_state_temperature_status_combined",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.24",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state temperature status combined"
+    },
+    {
+      "key": "dell_server.system_state_memory_device_status_combined",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.27",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state memory device status combined"
+    },
+    {
+      "key": "dell_server.system_state_chassis_intrusion_status_combined",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.30",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state chassis intrusion status combined"
+    },
+    {
+      "key": "dell_server.system_state_ac_power_switch_status_redundancy",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.33",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state ac power switch status redundancy"
+    },
+    {
+      "key": "dell_server.system_state_ac_power_cord_status_combined",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.36",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state ac power cord status combined"
+    },
+    {
+      "key": "dell_server.system_state_redundant_memory_unit_status_redundancy",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.39",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state redundant memory unit status redundancy"
+    },
+    {
+      "key": "dell_server.system_state_event_log_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.41",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state event log status"
+    },
+    {
+      "key": "dell_server.system_state_power_unit_status_combined",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.42",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state power unit status combined"
+    },
+    {
+      "key": "dell_server.system_state_cooling_unit_status_combined",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.44",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state cooling unit status combined"
+    },
+    {
+      "key": "dell_server.system_state_ac_power_switch_status_combined",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.46",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state ac power switch status combined"
+    },
+    {
+      "key": "dell_server.system_state_redundant_memory_unit_status_combined",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.48",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state redundant memory unit status combined"
+    },
+    {
+      "key": "dell_server.system_state_processor_device_status_combined",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.50",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state processor device status combined"
+    },
+    {
+      "key": "dell_server.system_state_battery_status_combined",
+      "oid": "1.3.6.1.4.1.674.10892.1.200.10.1.52",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system state battery status combined"
+    },
+    {
+      "key": "dell_server.chassis_index_chassis_information",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis index chassis information"
+    },
+    {
+      "key": "dell_server.chassis_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis state capabilities"
+    },
+    {
+      "key": "dell_server.chassis_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis state settings"
+    },
+    {
+      "key": "dell_server.chassis_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis status"
+    },
+    {
+      "key": "dell_server.chassisparent_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassisparent index reference"
+    },
+    {
+      "key": "dell_server.chassis_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis type"
+    },
+    {
+      "key": "dell_server.chassis_id",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis id"
+    },
+    {
+      "key": "dell_server.chassis_id_extension",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.13",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis id extension"
+    },
+    {
+      "key": "dell_server.chassis_system_class",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis system class"
+    },
+    {
+      "key": "dell_server.chassis_connection_status_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.21",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis connection status unique"
+    },
+    {
+      "key": "dell_server.chassis_fan_control_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.22",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis fan control capabilities unique"
+    },
+    {
+      "key": "dell_server.chassis_fan_control_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.23",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis fan control settings unique"
+    },
+    {
+      "key": "dell_server.chassis_led_control_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.24",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis led control capabilities unique"
+    },
+    {
+      "key": "dell_server.chassis_led_control_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.25",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis led control settings unique"
+    },
+    {
+      "key": "dell_server.chassishdfault_clear_control_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.26",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassishdfault clear control capabilities"
+    },
+    {
+      "key": "dell_server.chassishdfault_clear_control_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.27",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassishdfault clear control settings"
+    },
+    {
+      "key": "dell_server.chassis_identify_flash_control_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.28",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis identify flash control capabilities"
+    },
+    {
+      "key": "dell_server.chassis_identify_flash_control_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.29",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis identify flash control settings"
+    },
+    {
+      "key": "dell_server.chassis_lock_present",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.30",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis lock present"
+    },
+    {
+      "key": "dell_server.chassishost_control_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.31",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassishost control capabilities unique"
+    },
+    {
+      "key": "dell_server.chassishost_control_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.32",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassishost control settings unique"
+    },
+    {
+      "key": "dell_server.chassiswatch_dog_control_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.33",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassiswatch dog control capabilities unique"
+    },
+    {
+      "key": "dell_server.chassiswatch_dog_control_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.34",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassiswatch dog control settings unique"
+    },
+    {
+      "key": "dell_server.chassiswatch_dog_control_expiry_time_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.35",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassiswatch dog control expiry time capabilities unique"
+    },
+    {
+      "key": "dell_server.chassiswatch_dog_control_expiry_time",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.36",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassiswatch dog control expiry time"
+    },
+    {
+      "key": "dell_server.chassisallow_set_commandsfrom_snmp",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.37",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassisallow set commandsfrom snmp"
+    },
+    {
+      "key": "dell_server.chassis_power_button_control_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.38",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis power button control capabilities unique"
+    },
+    {
+      "key": "dell_server.chassis_power_button_control_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.39",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis power button control settings unique"
+    },
+    {
+      "key": "dell_server.chassis_reseller_system_id",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.43",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis reseller system id"
+    },
+    {
+      "key": "dell_server.chassis_nmi_button_control_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.44",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis nmi button control capabilities unique"
+    },
+    {
+      "key": "dell_server.chassis_nmi_button_control_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.10.1.45",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "chassis nmi button control settings unique"
+    },
+    {
+      "key": "dell_server.uuidchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.20.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "uuidchassis index"
+    },
+    {
+      "key": "dell_server.uuidindex",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.20.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "uuidindex"
+    },
+    {
+      "key": "dell_server.uuidtype",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.20.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "uuidtype"
+    },
+    {
+      "key": "dell_server.post_logchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.30.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "post logchassis index"
+    },
+    {
+      "key": "dell_server.post_log_record_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.30.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "post log record index"
+    },
+    {
+      "key": "dell_server.post_log_state_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.30.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "post log state capabilities unique"
+    },
+    {
+      "key": "dell_server.post_log_state_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.30.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "post log state settings unique"
+    },
+    {
+      "key": "dell_server.post_log_format",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.30.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "post log format"
+    },
+    {
+      "key": "dell_server.event_logchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.40.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "event logchassis index"
+    },
+    {
+      "key": "dell_server.event_log_record_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.40.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "event log record index"
+    },
+    {
+      "key": "dell_server.event_log_state_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.40.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "event log state capabilities unique"
+    },
+    {
+      "key": "dell_server.event_log_state_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.40.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "event log state settings unique"
+    },
+    {
+      "key": "dell_server.event_log_format",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.40.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "event log format"
+    },
+    {
+      "key": "dell_server.event_log_severity_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.40.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "event log severity status"
+    },
+    {
+      "key": "dell_server.systembioschassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.50.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "systembioschassis index"
+    },
+    {
+      "key": "dell_server.system_bios_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.50.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system bios index"
+    },
+    {
+      "key": "dell_server.system_bios_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.50.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system bios state capabilities"
+    },
+    {
+      "key": "dell_server.system_bios_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.50.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system bios state settings"
+    },
+    {
+      "key": "dell_server.system_bios_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.50.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system bios status"
+    },
+    {
+      "key": "dell_server.system_bios_size",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.50.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system bios size"
+    },
+    {
+      "key": "dell_server.system_bios_characteristics_ext1",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.50.1.13",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system bios characteristics ext1"
+    },
+    {
+      "key": "dell_server.system_bios_characteristics_ext2",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.50.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system bios characteristics ext2"
+    },
+    {
+      "key": "dell_server.firmwarechassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.60.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "firmwarechassis index"
+    },
+    {
+      "key": "dell_server.firmware_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.60.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "firmware index"
+    },
+    {
+      "key": "dell_server.firmware_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.60.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "firmware state capabilities"
+    },
+    {
+      "key": "dell_server.firmware_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.60.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "firmware state settings"
+    },
+    {
+      "key": "dell_server.firmware_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.60.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "firmware status"
+    },
+    {
+      "key": "dell_server.firmware_size",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.60.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "firmware size"
+    },
+    {
+      "key": "dell_server.firmware_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.60.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "firmware type"
+    },
+    {
+      "key": "dell_server.firmware_update_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.60.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "firmware update capabilities"
+    },
+    {
+      "key": "dell_server.intrusionchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.70.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "intrusionchassis index"
+    },
+    {
+      "key": "dell_server.intrusion_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.70.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "intrusion index"
+    },
+    {
+      "key": "dell_server.intrusion_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.70.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "intrusion state capabilities"
+    },
+    {
+      "key": "dell_server.intrusion_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.70.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "intrusion state settings"
+    },
+    {
+      "key": "dell_server.intrusion_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.70.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "intrusion status"
+    },
+    {
+      "key": "dell_server.intrusion_reading",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.70.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "intrusion reading"
+    },
+    {
+      "key": "dell_server.intrusion_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.70.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "intrusion type"
+    },
+    {
+      "key": "dell_server.base_board_chassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.80.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "base board chassis index"
+    },
+    {
+      "key": "dell_server.base_board_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.80.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "base board index"
+    },
+    {
+      "key": "dell_server.base_board_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.80.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "base board state capabilities"
+    },
+    {
+      "key": "dell_server.base_board_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.80.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "base board state settings"
+    },
+    {
+      "key": "dell_server.base_board_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.80.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "base board status"
+    },
+    {
+      "key": "dell_server.base_board_feature_flags",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.80.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "base board feature flags"
+    },
+    {
+      "key": "dell_server.base_board_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.300.80.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "base board type"
+    },
+    {
+      "key": "dell_server.operating_systemchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.400.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "operating systemchassis index"
+    },
+    {
+      "key": "dell_server.operating_system_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.400.10.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "operating system state capabilities"
+    },
+    {
+      "key": "dell_server.operating_system_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.400.10.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "operating system state settings"
+    },
+    {
+      "key": "dell_server.operating_system_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.400.10.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "operating system status",
+      "alarm": {
+        "op": "!=",
+        "value": 3,
+        "severity": "warning",
+        "name": "Dell server health not OK",
+        "flatField": "dell_server_overall_status"
+      }
+    },
+    {
+      "key": "dell_server.operating_system_is_primary",
+      "oid": "1.3.6.1.4.1.674.10892.1.400.10.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "operating system is primary"
+    },
+    {
+      "key": "dell_server.operating_system_memorychassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.400.20.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "operating system memorychassis index"
+    },
+    {
+      "key": "dell_server.operating_system_memory_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.400.20.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "operating system memory state capabilities"
+    },
+    {
+      "key": "dell_server.operating_system_memory_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.400.20.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "operating system memory state settings"
+    },
+    {
+      "key": "dell_server.operating_system_memory_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.400.20.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "operating system memory status"
+    },
+    {
+      "key": "dell_server.operating_system_memory_total_physical_size",
+      "oid": "1.3.6.1.4.1.674.10892.1.400.20.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "operating system memory total physical size"
+    },
+    {
+      "key": "dell_server.operating_system_memory_available_physical_size",
+      "oid": "1.3.6.1.4.1.674.10892.1.400.20.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "operating system memory available physical size"
+    },
+    {
+      "key": "dell_server.operating_system_memory_total_page_file_size",
+      "oid": "1.3.6.1.4.1.674.10892.1.400.20.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "operating system memory total page file size"
+    },
+    {
+      "key": "dell_server.operating_system_memory_available_page_file_size",
+      "oid": "1.3.6.1.4.1.674.10892.1.400.20.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "operating system memory available page file size"
+    },
+    {
+      "key": "dell_server.operating_system_memory_total_virtual_size",
+      "oid": "1.3.6.1.4.1.674.10892.1.400.20.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "operating system memory total virtual size"
+    },
+    {
+      "key": "dell_server.operating_system_memory_available_virtual_size",
+      "oid": "1.3.6.1.4.1.674.10892.1.400.20.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "operating system memory available virtual size"
+    },
+    {
+      "key": "dell_server.system_resource_mapchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource mapchassis index"
+    },
+    {
+      "key": "dell_server.system_resource_map_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.10.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource map index"
+    },
+    {
+      "key": "dell_server.system_resource_map_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.10.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource map state capabilities"
+    },
+    {
+      "key": "dell_server.system_resource_map_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.10.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource map state settings"
+    },
+    {
+      "key": "dell_server.system_resource_map_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.10.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource map status"
+    },
+    {
+      "key": "dell_server.system_resource_map_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.10.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource map type"
+    },
+    {
+      "key": "dell_server.system_resource_ownerchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.20.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource ownerchassis index"
+    },
+    {
+      "key": "dell_server.system_resource_owner_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.20.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource owner index"
+    },
+    {
+      "key": "dell_server.system_resource_owner_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.20.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource owner state capabilities"
+    },
+    {
+      "key": "dell_server.system_resource_owner_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.20.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource owner state settings"
+    },
+    {
+      "key": "dell_server.system_resource_owner_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.20.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource owner status"
+    },
+    {
+      "key": "dell_server.system_resource_owner_interface_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.20.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource owner interface type"
+    },
+    {
+      "key": "dell_server.system_resource_map_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.20.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource map index reference"
+    },
+    {
+      "key": "dell_server.system_resource_owner_interface_instance",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.20.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource owner interface instance"
+    },
+    {
+      "key": "dell_server.system_resourceioportchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.30.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resourceioportchassis index"
+    },
+    {
+      "key": "dell_server.system_resourceioport_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.30.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resourceioport index"
+    },
+    {
+      "key": "dell_server.system_resourceioport_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.30.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resourceioport state capabilities"
+    },
+    {
+      "key": "dell_server.system_resourceioport_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.30.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resourceioport state settings"
+    },
+    {
+      "key": "dell_server.system_resourceioport_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.30.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resourceioport status"
+    },
+    {
+      "key": "dell_server.system_resourceioport_owner_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.30.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resourceioport owner index reference"
+    },
+    {
+      "key": "dell_server.system_resourceioport_share_disposition",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.30.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resourceioport share disposition"
+    },
+    {
+      "key": "dell_server.system_resource_memorychassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.40.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource memorychassis index"
+    },
+    {
+      "key": "dell_server.system_resource_memory_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.40.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource memory index"
+    },
+    {
+      "key": "dell_server.system_resource_memory_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.40.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource memory state capabilities"
+    },
+    {
+      "key": "dell_server.system_resource_memory_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.40.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource memory state settings"
+    },
+    {
+      "key": "dell_server.system_resource_memory_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.40.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource memory status"
+    },
+    {
+      "key": "dell_server.system_resource_memory_owner_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.40.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource memory owner index reference"
+    },
+    {
+      "key": "dell_server.system_resource_memory_share_disposition",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.40.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource memory share disposition"
+    },
+    {
+      "key": "dell_server.system_resource_memory_flags",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.40.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource memory flags"
+    },
+    {
+      "key": "dell_server.system_resource_interruptchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.50.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource interruptchassis index"
+    },
+    {
+      "key": "dell_server.system_resource_interrupt_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.50.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource interrupt index"
+    },
+    {
+      "key": "dell_server.system_resource_interrupt_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.50.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource interrupt state capabilities"
+    },
+    {
+      "key": "dell_server.system_resource_interrupt_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.50.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource interrupt state settings"
+    },
+    {
+      "key": "dell_server.system_resource_interrupt_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.50.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource interrupt status"
+    },
+    {
+      "key": "dell_server.system_resource_interrupt_owner_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.50.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource interrupt owner index reference"
+    },
+    {
+      "key": "dell_server.system_resource_interrupt_share_disposition",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.50.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource interrupt share disposition"
+    },
+    {
+      "key": "dell_server.system_resource_interrupt_level",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.50.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource interrupt level"
+    },
+    {
+      "key": "dell_server.system_resource_interrupt_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.50.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource interrupt type"
+    },
+    {
+      "key": "dell_server.system_resource_interrupt_trigger",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.50.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource interrupt trigger"
+    },
+    {
+      "key": "dell_server.system_resourcedmachassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.60.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resourcedmachassis index"
+    },
+    {
+      "key": "dell_server.system_resource_dma_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.60.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource dma index"
+    },
+    {
+      "key": "dell_server.system_resource_dma_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.60.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource dma state capabilities"
+    },
+    {
+      "key": "dell_server.system_resource_dma_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.60.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource dma state settings"
+    },
+    {
+      "key": "dell_server.system_resource_dma_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.60.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource dma status"
+    },
+    {
+      "key": "dell_server.system_resource_dma_owner_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.60.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource dma owner index reference"
+    },
+    {
+      "key": "dell_server.system_resource_dma_share_disposition",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.60.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource dma share disposition"
+    },
+    {
+      "key": "dell_server.system_resource_dma_maximum_transfer_size",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.60.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource dma maximum transfer size"
+    },
+    {
+      "key": "dell_server.system_resource_dma_transfer_width",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.60.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource dma transfer width"
+    },
+    {
+      "key": "dell_server.system_resource_dma_bus_master",
+      "oid": "1.3.6.1.4.1.674.10892.1.500.60.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system resource dma bus master"
+    },
+    {
+      "key": "dell_server.power_unitchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power unitchassis index"
+    },
+    {
+      "key": "dell_server.power_unit_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.10.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power unit index"
+    },
+    {
+      "key": "dell_server.power_unit_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.10.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power unit state capabilities"
+    },
+    {
+      "key": "dell_server.power_unit_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.10.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power unit state settings"
+    },
+    {
+      "key": "dell_server.power_unit_redundancy_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.10.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power unit redundancy status"
+    },
+    {
+      "key": "dell_server.power_supply_count_for_redundancy",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.10.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply count for redundancy"
+    },
+    {
+      "key": "dell_server.power_unit_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.10.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power unit status"
+    },
+    {
+      "key": "dell_server.power_supplychassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.12.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supplychassis index"
+    },
+    {
+      "key": "dell_server.power_supply_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.12.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply index"
+    },
+    {
+      "key": "dell_server.power_supply_state_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.12.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply state capabilities unique"
+    },
+    {
+      "key": "dell_server.power_supply_state_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.12.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply state settings unique"
+    },
+    {
+      "key": "dell_server.power_supply_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.12.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply status"
+    },
+    {
+      "key": "dell_server.power_supply_output_watts",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.12.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply output watts"
+    },
+    {
+      "key": "dell_server.power_supply_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.12.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply type"
+    },
+    {
+      "key": "dell_server.power_supply_input_voltage",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.12.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply input voltage"
+    },
+    {
+      "key": "dell_server.power_supplypower_unit_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.12.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supplypower unit index reference"
+    },
+    {
+      "key": "dell_server.power_supply_sensor_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.12.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply sensor state"
+    },
+    {
+      "key": "dell_server.power_supply_configuration_error_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.12.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply configuration error type"
+    },
+    {
+      "key": "dell_server.voltage_probechassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.20.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "voltage probechassis index"
+    },
+    {
+      "key": "dell_server.voltage_probe_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.20.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "voltage probe index"
+    },
+    {
+      "key": "dell_server.voltage_probe_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.20.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "voltage probe state capabilities"
+    },
+    {
+      "key": "dell_server.voltage_probe_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.20.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "voltage probe state settings"
+    },
+    {
+      "key": "dell_server.voltage_probe_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.20.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "voltage probe status"
+    },
+    {
+      "key": "dell_server.voltage_probe_reading",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.20.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "voltage probe reading"
+    },
+    {
+      "key": "dell_server.voltage_probe_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.20.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "voltage probe type"
+    },
+    {
+      "key": "dell_server.voltage_probe_upper_non_recoverable_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.20.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "voltage probe upper non recoverable threshold"
+    },
+    {
+      "key": "dell_server.voltage_probe_upper_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.20.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "voltage probe upper critical threshold"
+    },
+    {
+      "key": "dell_server.voltage_probe_upper_non_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.20.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "voltage probe upper non critical threshold"
+    },
+    {
+      "key": "dell_server.voltage_probe_lower_non_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.20.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "voltage probe lower non critical threshold"
+    },
+    {
+      "key": "dell_server.voltage_probe_lower_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.20.1.13",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "voltage probe lower critical threshold"
+    },
+    {
+      "key": "dell_server.voltage_probe_lower_non_recoverable_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.20.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "voltage probe lower non recoverable threshold"
+    },
+    {
+      "key": "dell_server.voltage_probe_probe_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.20.1.15",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "voltage probe probe capabilities"
+    },
+    {
+      "key": "dell_server.voltage_probe_discrete_reading",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.20.1.16",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "voltage probe discrete reading"
+    },
+    {
+      "key": "dell_server.amperage_probechassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.30.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "amperage probechassis index"
+    },
+    {
+      "key": "dell_server.amperage_probe_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.30.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "amperage probe index"
+    },
+    {
+      "key": "dell_server.amperage_probe_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.30.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "amperage probe state capabilities"
+    },
+    {
+      "key": "dell_server.amperage_probe_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.30.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "amperage probe state settings"
+    },
+    {
+      "key": "dell_server.amperage_probe_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.30.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "amperage probe status"
+    },
+    {
+      "key": "dell_server.amperage_probe_reading",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.30.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "amperage probe reading"
+    },
+    {
+      "key": "dell_server.amperage_probe_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.30.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "amperage probe type"
+    },
+    {
+      "key": "dell_server.amperage_probe_upper_non_recoverable_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.30.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "amperage probe upper non recoverable threshold"
+    },
+    {
+      "key": "dell_server.amperage_probe_upper_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.30.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "amperage probe upper critical threshold"
+    },
+    {
+      "key": "dell_server.amperage_probe_upper_non_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.30.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "amperage probe upper non critical threshold"
+    },
+    {
+      "key": "dell_server.amperage_probe_lower_non_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.30.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "amperage probe lower non critical threshold"
+    },
+    {
+      "key": "dell_server.amperage_probe_lower_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.30.1.13",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "amperage probe lower critical threshold"
+    },
+    {
+      "key": "dell_server.amperage_probe_lower_non_recoverable_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.30.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "amperage probe lower non recoverable threshold"
+    },
+    {
+      "key": "dell_server.amperage_probe_probe_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.30.1.15",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "amperage probe probe capabilities"
+    },
+    {
+      "key": "dell_server.amperage_probe_discrete_reading",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.30.1.16",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "amperage probe discrete reading"
+    },
+    {
+      "key": "dell_server.acpower_switchchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.40.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "acpower switchchassis index"
+    },
+    {
+      "key": "dell_server.acpower_switch_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.40.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "acpower switch index"
+    },
+    {
+      "key": "dell_server.acpower_switch_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.40.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "acpower switch capabilities"
+    },
+    {
+      "key": "dell_server.acpower_switch_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.40.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "acpower switch settings"
+    },
+    {
+      "key": "dell_server.acpower_switch_redundancy_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.40.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "acpower switch redundancy status"
+    },
+    {
+      "key": "dell_server.acpower_cord_count_for_redundancy",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.40.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "acpower cord count for redundancy"
+    },
+    {
+      "key": "dell_server.acpower_switch_redundancy_mode",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.40.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "acpower switch redundancy mode"
+    },
+    {
+      "key": "dell_server.acpower_switch_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.40.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "acpower switch status"
+    },
+    {
+      "key": "dell_server.acpower_cordchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.42.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "acpower cordchassis index"
+    },
+    {
+      "key": "dell_server.acpower_cord_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.42.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "acpower cord index"
+    },
+    {
+      "key": "dell_server.acpower_cord_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.42.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "acpower cord state capabilities"
+    },
+    {
+      "key": "dell_server.acpower_cord_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.42.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "acpower cord state settings"
+    },
+    {
+      "key": "dell_server.acpower_cord_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.42.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "acpower cord status"
+    },
+    {
+      "key": "dell_server.acpower_cordacpower_switch_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.42.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "acpower cordacpower switch index reference"
+    },
+    {
+      "key": "dell_server.battery_chassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.50.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery chassis index"
+    },
+    {
+      "key": "dell_server.battery_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.50.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery index"
+    },
+    {
+      "key": "dell_server.battery_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.50.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery state capabilities"
+    },
+    {
+      "key": "dell_server.battery_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.50.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery state settings"
+    },
+    {
+      "key": "dell_server.battery_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.50.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery status"
+    },
+    {
+      "key": "dell_server.battery_reading",
+      "oid": "1.3.6.1.4.1.674.10892.1.600.50.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery reading"
+    },
+    {
+      "key": "dell_server.cooling_unitchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling unitchassis index"
+    },
+    {
+      "key": "dell_server.cooling_unit_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.10.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling unit index"
+    },
+    {
+      "key": "dell_server.cooling_unit_state_capabilties",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.10.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling unit state capabilties"
+    },
+    {
+      "key": "dell_server.cooling_unit_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.10.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling unit state settings"
+    },
+    {
+      "key": "dell_server.cooling_unit_redundancy_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.10.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling unit redundancy status"
+    },
+    {
+      "key": "dell_server.cooling_device_count_for_redundancy",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.10.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling device count for redundancy"
+    },
+    {
+      "key": "dell_server.cooling_unit_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.10.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling unit status"
+    },
+    {
+      "key": "dell_server.cooling_devicechassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.12.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling devicechassis index"
+    },
+    {
+      "key": "dell_server.cooling_device_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.12.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling device index"
+    },
+    {
+      "key": "dell_server.cooling_device_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.12.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling device state capabilities"
+    },
+    {
+      "key": "dell_server.cooling_device_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.12.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling device state settings"
+    },
+    {
+      "key": "dell_server.cooling_device_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.12.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling device status"
+    },
+    {
+      "key": "dell_server.cooling_device_reading",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.12.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling device reading"
+    },
+    {
+      "key": "dell_server.cooling_device_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.12.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling device type"
+    },
+    {
+      "key": "dell_server.cooling_device_upper_non_recoverable_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.12.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling device upper non recoverable threshold"
+    },
+    {
+      "key": "dell_server.cooling_device_upper_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.12.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling device upper critical threshold"
+    },
+    {
+      "key": "dell_server.cooling_device_upper_non_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.12.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling device upper non critical threshold"
+    },
+    {
+      "key": "dell_server.cooling_device_lower_non_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.12.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling device lower non critical threshold"
+    },
+    {
+      "key": "dell_server.cooling_device_lower_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.12.1.13",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling device lower critical threshold"
+    },
+    {
+      "key": "dell_server.cooling_device_lower_non_recoverable_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.12.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling device lower non recoverable threshold"
+    },
+    {
+      "key": "dell_server.cooling_devicecooling_unit_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.12.1.15",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling devicecooling unit index reference"
+    },
+    {
+      "key": "dell_server.cooling_device_sub_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.12.1.16",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling device sub type"
+    },
+    {
+      "key": "dell_server.cooling_device_probe_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.12.1.17",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling device probe capabilities"
+    },
+    {
+      "key": "dell_server.cooling_device_discrete_reading",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.12.1.18",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cooling device discrete reading"
+    },
+    {
+      "key": "dell_server.temperature_probechassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.20.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probechassis index"
+    },
+    {
+      "key": "dell_server.temperature_probe_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.20.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe index"
+    },
+    {
+      "key": "dell_server.temperature_probe_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.20.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe state capabilities"
+    },
+    {
+      "key": "dell_server.temperature_probe_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.20.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe state settings"
+    },
+    {
+      "key": "dell_server.temperature_probe_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.20.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe status"
+    },
+    {
+      "key": "dell_server.temperature_probe_reading",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.20.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe reading"
+    },
+    {
+      "key": "dell_server.temperature_probe_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.20.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe type"
+    },
+    {
+      "key": "dell_server.temperature_probe_upper_non_recoverable_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.20.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe upper non recoverable threshold"
+    },
+    {
+      "key": "dell_server.temperature_probe_upper_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.20.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe upper critical threshold"
+    },
+    {
+      "key": "dell_server.temperature_probe_upper_non_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.20.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe upper non critical threshold"
+    },
+    {
+      "key": "dell_server.temperature_probe_lower_non_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.20.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe lower non critical threshold"
+    },
+    {
+      "key": "dell_server.temperature_probe_lower_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.20.1.13",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe lower critical threshold"
+    },
+    {
+      "key": "dell_server.temperature_probe_lower_non_recoverable_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.20.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe lower non recoverable threshold"
+    },
+    {
+      "key": "dell_server.temperature_probe_probe_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.20.1.15",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe probe capabilities"
+    },
+    {
+      "key": "dell_server.temperature_probe_discrete_reading",
+      "oid": "1.3.6.1.4.1.674.10892.1.700.20.1.16",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe discrete reading"
+    },
+    {
+      "key": "dell_server.user_securitychassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.800.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "user securitychassis index"
+    },
+    {
+      "key": "dell_server.user_security_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.800.10.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "user security index"
+    },
+    {
+      "key": "dell_server.remote_flashbioschassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.900.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "remote flashbioschassis index"
+    },
+    {
+      "key": "dell_server.remote_flash_bios_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.900.10.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "remote flash bios index"
+    },
+    {
+      "key": "dell_server.remote_flash_bios_state_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.900.10.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "remote flash bios state capabilities unique"
+    },
+    {
+      "key": "dell_server.remote_flash_bios_state_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.900.10.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "remote flash bios state settings unique"
+    },
+    {
+      "key": "dell_server.remote_flash_bios_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.900.10.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "remote flash bios status"
+    },
+    {
+      "key": "dell_server.remote_flash_bios_completion_code",
+      "oid": "1.3.6.1.4.1.674.10892.1.900.10.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "remote flash bios completion code"
+    },
+    {
+      "key": "dell_server.remote_flash_bios_minimum_contiguous_memory",
+      "oid": "1.3.6.1.4.1.674.10892.1.900.10.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "remote flash bios minimum contiguous memory"
+    },
+    {
+      "key": "dell_server.pointing_portchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pointing portchassis index"
+    },
+    {
+      "key": "dell_server.pointing_port_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.10.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pointing port index"
+    },
+    {
+      "key": "dell_server.pointing_port_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.10.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pointing port state capabilities"
+    },
+    {
+      "key": "dell_server.pointing_port_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.10.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pointing port state settings"
+    },
+    {
+      "key": "dell_server.pointing_port_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.10.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pointing port status"
+    },
+    {
+      "key": "dell_server.pointing_port_security_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.10.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pointing port security state"
+    },
+    {
+      "key": "dell_server.pointing_port_connector_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.10.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pointing port connector type"
+    },
+    {
+      "key": "dell_server.pointing_port_bios_connector_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.10.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pointing port bios connector type"
+    },
+    {
+      "key": "dell_server.keyboard_portchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.20.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "keyboard portchassis index"
+    },
+    {
+      "key": "dell_server.keyboard_port_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.20.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "keyboard port index"
+    },
+    {
+      "key": "dell_server.keyboard_port_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.20.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "keyboard port state capabilities"
+    },
+    {
+      "key": "dell_server.keyboard_port_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.20.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "keyboard port state settings"
+    },
+    {
+      "key": "dell_server.keyboard_port_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.20.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "keyboard port status"
+    },
+    {
+      "key": "dell_server.keyboard_port_security_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.20.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "keyboard port security state"
+    },
+    {
+      "key": "dell_server.keyboard_port_connector_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.20.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "keyboard port connector type"
+    },
+    {
+      "key": "dell_server.keyboard_port_bios_connector_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.20.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "keyboard port bios connector type"
+    },
+    {
+      "key": "dell_server.processor_portchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.30.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor portchassis index"
+    },
+    {
+      "key": "dell_server.processor_port_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.30.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor port index"
+    },
+    {
+      "key": "dell_server.processor_port_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.30.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor port state capabilities"
+    },
+    {
+      "key": "dell_server.processor_port_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.30.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor port state settings"
+    },
+    {
+      "key": "dell_server.processor_port_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.30.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor port status"
+    },
+    {
+      "key": "dell_server.processor_port_security_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.30.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor port security state"
+    },
+    {
+      "key": "dell_server.processor_port_connector_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.30.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor port connector type"
+    },
+    {
+      "key": "dell_server.processor_port_bios_connector_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.30.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor port bios connector type"
+    },
+    {
+      "key": "dell_server.memory_device_portchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.40.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device portchassis index"
+    },
+    {
+      "key": "dell_server.memory_device_port_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.40.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device port index"
+    },
+    {
+      "key": "dell_server.memory_device_port_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.40.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device port state capabilities"
+    },
+    {
+      "key": "dell_server.memory_device_port_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.40.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device port state settings"
+    },
+    {
+      "key": "dell_server.memory_device_port_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.40.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device port status"
+    },
+    {
+      "key": "dell_server.memory_device_port_security_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.40.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device port security state"
+    },
+    {
+      "key": "dell_server.memory_device_port_connector_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.40.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device port connector type"
+    },
+    {
+      "key": "dell_server.memory_device_port_bios_connector_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.40.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device port bios connector type"
+    },
+    {
+      "key": "dell_server.memory_device_port_physical_memory_array_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.40.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device port physical memory array index reference"
+    },
+    {
+      "key": "dell_server.memory_device_port_physical_memory_card_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.40.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device port physical memory card index reference"
+    },
+    {
+      "key": "dell_server.monitor_portchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.50.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "monitor portchassis index"
+    },
+    {
+      "key": "dell_server.monitor_port_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.50.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "monitor port index"
+    },
+    {
+      "key": "dell_server.monitor_port_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.50.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "monitor port state capabilities"
+    },
+    {
+      "key": "dell_server.monitor_port_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.50.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "monitor port state settings"
+    },
+    {
+      "key": "dell_server.monitor_port_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.50.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "monitor port status"
+    },
+    {
+      "key": "dell_server.monitor_port_security_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.50.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "monitor port security state"
+    },
+    {
+      "key": "dell_server.monitor_port_connector_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.50.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "monitor port connector type"
+    },
+    {
+      "key": "dell_server.monitor_port_bios_connector_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.50.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "monitor port bios connector type"
+    },
+    {
+      "key": "dell_server.scsiportchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.60.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "scsiportchassis index"
+    },
+    {
+      "key": "dell_server.scsiport_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.60.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "scsiport index"
+    },
+    {
+      "key": "dell_server.scsiport_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.60.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "scsiport state capabilities"
+    },
+    {
+      "key": "dell_server.scsiport_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.60.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "scsiport state settings"
+    },
+    {
+      "key": "dell_server.scsiport_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.60.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "scsiport status"
+    },
+    {
+      "key": "dell_server.scsiport_security_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.60.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "scsiport security state"
+    },
+    {
+      "key": "dell_server.scsiport_connector_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.60.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "scsiport connector type"
+    },
+    {
+      "key": "dell_server.scsiport_bios_connector_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.60.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "scsiport bios connector type"
+    },
+    {
+      "key": "dell_server.parallel_portchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.70.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel portchassis index"
+    },
+    {
+      "key": "dell_server.parallel_port_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.70.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel port index"
+    },
+    {
+      "key": "dell_server.parallel_port_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.70.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel port state capabilities"
+    },
+    {
+      "key": "dell_server.parallel_port_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.70.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel port state settings"
+    },
+    {
+      "key": "dell_server.parallel_port_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.70.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel port status"
+    },
+    {
+      "key": "dell_server.parallel_port_security_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.70.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel port security state"
+    },
+    {
+      "key": "dell_server.parallel_port_connector_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.70.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel port connector type"
+    },
+    {
+      "key": "dell_server.parallel_port_connector_pin_out",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.70.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel port connector pin out"
+    },
+    {
+      "key": "dell_server.parallel_port_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.70.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel port capabilities unique"
+    },
+    {
+      "key": "dell_server.parallel_portirqlevel",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.70.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel portirqlevel"
+    },
+    {
+      "key": "dell_server.parallel_port_dma_support",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.70.1.13",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel port dma support"
+    },
+    {
+      "key": "dell_server.serial_portchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.80.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "serial portchassis index"
+    },
+    {
+      "key": "dell_server.serial_port_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.80.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "serial port index"
+    },
+    {
+      "key": "dell_server.serial_port_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.80.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "serial port state capabilities"
+    },
+    {
+      "key": "dell_server.serial_port_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.80.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "serial port state settings"
+    },
+    {
+      "key": "dell_server.serial_port_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.80.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "serial port status"
+    },
+    {
+      "key": "dell_server.serial_port_security_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.80.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "serial port security state"
+    },
+    {
+      "key": "dell_server.serial_port_connector_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.80.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "serial port connector type"
+    },
+    {
+      "key": "dell_server.serial_port_maximum_speed",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.80.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "serial port maximum speed"
+    },
+    {
+      "key": "dell_server.serial_port_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.80.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "serial port capabilities unique"
+    },
+    {
+      "key": "dell_server.serial_portirqlevel",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.80.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "serial portirqlevel"
+    },
+    {
+      "key": "dell_server.usbportchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.90.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "usbportchassis index"
+    },
+    {
+      "key": "dell_server.usbport_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.90.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "usbport index"
+    },
+    {
+      "key": "dell_server.usbport_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.90.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "usbport state capabilities"
+    },
+    {
+      "key": "dell_server.usbport_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.90.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "usbport state settings"
+    },
+    {
+      "key": "dell_server.usbport_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.90.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "usbport status"
+    },
+    {
+      "key": "dell_server.usbport_security_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.90.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "usbport security state"
+    },
+    {
+      "key": "dell_server.usbport_connector_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.90.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "usbport connector type"
+    },
+    {
+      "key": "dell_server.usbport_bios_connector_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1000.90.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "usbport bios connector type"
+    },
+    {
+      "key": "dell_server.pointing_devicechassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pointing devicechassis index"
+    },
+    {
+      "key": "dell_server.pointing_device_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.10.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pointing device index"
+    },
+    {
+      "key": "dell_server.pointing_device_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.10.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pointing device state capabilities"
+    },
+    {
+      "key": "dell_server.pointing_device_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.10.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pointing device state settings"
+    },
+    {
+      "key": "dell_server.pointing_device_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.10.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pointing device status"
+    },
+    {
+      "key": "dell_server.pointing_port_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.10.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pointing port index reference"
+    },
+    {
+      "key": "dell_server.pointing_device_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.10.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pointing device type"
+    },
+    {
+      "key": "dell_server.pointing_device_numberof_buttons",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.10.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pointing device numberof buttons"
+    },
+    {
+      "key": "dell_server.keyboard_devicechassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.20.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "keyboard devicechassis index"
+    },
+    {
+      "key": "dell_server.keyboard_device_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.20.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "keyboard device index"
+    },
+    {
+      "key": "dell_server.keyboard_device_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.20.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "keyboard device state capabilities"
+    },
+    {
+      "key": "dell_server.keyboard_device_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.20.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "keyboard device state settings"
+    },
+    {
+      "key": "dell_server.keyboard_device_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.20.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "keyboard device status"
+    },
+    {
+      "key": "dell_server.keyboard_port_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.20.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "keyboard port index reference"
+    },
+    {
+      "key": "dell_server.processor_devicechassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor devicechassis index"
+    },
+    {
+      "key": "dell_server.processor_device_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device index"
+    },
+    {
+      "key": "dell_server.processor_device_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device state capabilities"
+    },
+    {
+      "key": "dell_server.processor_device_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device state settings"
+    },
+    {
+      "key": "dell_server.processor_device_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device status"
+    },
+    {
+      "key": "dell_server.processor_port_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor port index reference"
+    },
+    {
+      "key": "dell_server.processor_device_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device type"
+    },
+    {
+      "key": "dell_server.processor_device_status_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device status state"
+    },
+    {
+      "key": "dell_server.processor_device_family",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device family"
+    },
+    {
+      "key": "dell_server.processor_device_maximum_speed",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device maximum speed"
+    },
+    {
+      "key": "dell_server.processor_device_current_speed",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device current speed"
+    },
+    {
+      "key": "dell_server.processor_device_external_clock_speed",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.13",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device external clock speed"
+    },
+    {
+      "key": "dell_server.processor_device_voltage",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device voltage"
+    },
+    {
+      "key": "dell_server.processor_device_upgrade_information",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.15",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device upgrade information"
+    },
+    {
+      "key": "dell_server.processor_device_core_count",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.17",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device core count"
+    },
+    {
+      "key": "dell_server.processor_device_core_enabled_count",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.18",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device core enabled count"
+    },
+    {
+      "key": "dell_server.processor_device_thread_count",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.19",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device thread count"
+    },
+    {
+      "key": "dell_server.processor_device_characteristics",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.20",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device characteristics"
+    },
+    {
+      "key": "dell_server.processor_device_extended_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.21",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device extended capabilities"
+    },
+    {
+      "key": "dell_server.processor_device_extended_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.30.1.22",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device extended settings"
+    },
+    {
+      "key": "dell_server.processor_device_status_chassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.32.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device status chassis index"
+    },
+    {
+      "key": "dell_server.processor_device_status_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.32.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device status index"
+    },
+    {
+      "key": "dell_server.processor_device_status_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.32.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device status state capabilities"
+    },
+    {
+      "key": "dell_server.processor_device_status_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.32.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device status state settings"
+    },
+    {
+      "key": "dell_server.processor_device_status_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.32.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device status status"
+    },
+    {
+      "key": "dell_server.processor_device_status_reading",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.32.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device status reading"
+    },
+    {
+      "key": "dell_server.processor_device_status_port_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.32.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "processor device status port index reference"
+    },
+    {
+      "key": "dell_server.cache_devicechassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache devicechassis index"
+    },
+    {
+      "key": "dell_server.cache_device_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache device index"
+    },
+    {
+      "key": "dell_server.cache_device_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache device state capabilities"
+    },
+    {
+      "key": "dell_server.cache_device_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache device state settings"
+    },
+    {
+      "key": "dell_server.cache_device_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache device status"
+    },
+    {
+      "key": "dell_server.cache_deviceprocessor_device_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache deviceprocessor device index reference"
+    },
+    {
+      "key": "dell_server.cache_device_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache device type"
+    },
+    {
+      "key": "dell_server.cache_device_location",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache device location"
+    },
+    {
+      "key": "dell_server.cache_device_status_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache device status state"
+    },
+    {
+      "key": "dell_server.cache_device_level",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache device level"
+    },
+    {
+      "key": "dell_server.cache_device_maximum_size",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache device maximum size"
+    },
+    {
+      "key": "dell_server.cache_device_current_size",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.13",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache device current size"
+    },
+    {
+      "key": "dell_server.cache_device_speed",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache device speed"
+    },
+    {
+      "key": "dell_server.cache_device_write_policy",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.15",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache device write policy"
+    },
+    {
+      "key": "dell_server.cache_device_is_socketed",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.16",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache device is socketed"
+    },
+    {
+      "key": "dell_server.cache_deviceecctype",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.17",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache deviceecctype"
+    },
+    {
+      "key": "dell_server.cache_device_associativity",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.18",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache device associativity"
+    },
+    {
+      "key": "dell_server.cache_device_supported_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.19",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache device supported type"
+    },
+    {
+      "key": "dell_server.cache_device_current_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.40.1.20",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cache device current type"
+    },
+    {
+      "key": "dell_server.memory_devicechassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory devicechassis index"
+    },
+    {
+      "key": "dell_server.memory_device_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device index"
+    },
+    {
+      "key": "dell_server.memory_device_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device state capabilities"
+    },
+    {
+      "key": "dell_server.memory_device_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device state settings"
+    },
+    {
+      "key": "dell_server.memory_device_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device status"
+    },
+    {
+      "key": "dell_server.memory_device_memory_port_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device memory port index reference"
+    },
+    {
+      "key": "dell_server.memory_device_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device type"
+    },
+    {
+      "key": "dell_server.memory_device_error_count",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device error count"
+    },
+    {
+      "key": "dell_server.memory_device_type_details",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device type details"
+    },
+    {
+      "key": "dell_server.memory_device_form_factor",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device form factor"
+    },
+    {
+      "key": "dell_server.memory_device_set",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.13",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device set"
+    },
+    {
+      "key": "dell_server.memory_device_size",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device size"
+    },
+    {
+      "key": "dell_server.memory_device_speed",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.15",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device speed"
+    },
+    {
+      "key": "dell_server.memory_device_total_bus_width",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.16",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device total bus width"
+    },
+    {
+      "key": "dell_server.memory_device_total_data_bus_width",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.17",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device total data bus width"
+    },
+    {
+      "key": "dell_server.memory_device_single_bit_error_count",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.18",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device single bit error count"
+    },
+    {
+      "key": "dell_server.memory_device_multi_bit_error_count",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.19",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device multi bit error count"
+    },
+    {
+      "key": "dell_server.memory_device_failure_modes",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.50.1.20",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device failure modes"
+    },
+    {
+      "key": "dell_server.memory_device_mapped_addresschassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.60.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device mapped addresschassis index"
+    },
+    {
+      "key": "dell_server.memory_device_mapped_address_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.60.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device mapped address index"
+    },
+    {
+      "key": "dell_server.memory_device_mapped_address_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.60.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device mapped address state capabilities"
+    },
+    {
+      "key": "dell_server.memory_device_mapped_address_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.60.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device mapped address state settings"
+    },
+    {
+      "key": "dell_server.memory_device_mapped_address_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.60.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device mapped address status"
+    },
+    {
+      "key": "dell_server.memory_device_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.60.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device index reference"
+    },
+    {
+      "key": "dell_server.memory_device_mapped_address_row_position",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.60.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device mapped address row position"
+    },
+    {
+      "key": "dell_server.memory_device_mapped_address_interleave_position",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.60.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device mapped address interleave position"
+    },
+    {
+      "key": "dell_server.memory_device_mapped_address_interleave_depth",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.60.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "memory device mapped address interleave depth"
+    },
+    {
+      "key": "dell_server.generic_devicechassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.70.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "generic devicechassis index"
+    },
+    {
+      "key": "dell_server.generic_device_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.70.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "generic device index"
+    },
+    {
+      "key": "dell_server.generic_device_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.70.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "generic device state capabilities"
+    },
+    {
+      "key": "dell_server.generic_device_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.70.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "generic device state settings"
+    },
+    {
+      "key": "dell_server.generic_device_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.70.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "generic device status"
+    },
+    {
+      "key": "dell_server.generic_device_system_slot_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.70.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "generic device system slot index reference"
+    },
+    {
+      "key": "dell_server.generic_device_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.70.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "generic device type"
+    },
+    {
+      "key": "dell_server.pcidevicechassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.80.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevicechassis index"
+    },
+    {
+      "key": "dell_server.pcidevice_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.80.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevice index"
+    },
+    {
+      "key": "dell_server.pcidevice_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.80.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevice state capabilities"
+    },
+    {
+      "key": "dell_server.pcidevice_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.80.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevice state settings"
+    },
+    {
+      "key": "dell_server.pcidevice_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.80.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevice status"
+    },
+    {
+      "key": "dell_server.pcidevice_system_slot_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.80.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevice system slot index reference"
+    },
+    {
+      "key": "dell_server.pcidevice_data_bus_width",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.80.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevice data bus width"
+    },
+    {
+      "key": "dell_server.pcidevice_speed",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.80.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevice speed"
+    },
+    {
+      "key": "dell_server.pcidevice_adapter_fault",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.80.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevice adapter fault"
+    },
+    {
+      "key": "dell_server.pcidevice_configuration_spacechassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.82.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevice configuration spacechassis index"
+    },
+    {
+      "key": "dell_server.pcidevice_configuration_space_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.82.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevice configuration space index"
+    },
+    {
+      "key": "dell_server.pcidevice_configuration_space_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.82.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevice configuration space state capabilities"
+    },
+    {
+      "key": "dell_server.pcidevice_configuration_space_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.82.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevice configuration space state settings"
+    },
+    {
+      "key": "dell_server.pcidevice_configuration_space_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.82.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevice configuration space status"
+    },
+    {
+      "key": "dell_server.pcidevice_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.82.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevice index reference"
+    },
+    {
+      "key": "dell_server.pcidevice_configuration_space_bus_number",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.82.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevice configuration space bus number"
+    },
+    {
+      "key": "dell_server.pcidevice_configuration_space_device_number",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.82.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevice configuration space device number"
+    },
+    {
+      "key": "dell_server.pcidevice_configuration_space_function_number",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.82.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "pcidevice configuration space function number"
+    },
+    {
+      "key": "dell_server.network_device_chassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.90.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network device chassis index"
+    },
+    {
+      "key": "dell_server.network_device_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.90.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network device index"
+    },
+    {
+      "key": "dell_server.network_device_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.90.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network device status"
+    },
+    {
+      "key": "dell_server.network_device_connection_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.90.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network device connection status"
+    },
+    {
+      "key": "dell_server.network_device_pci_bus_number",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.90.1.17",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network device pci bus number"
+    },
+    {
+      "key": "dell_server.network_device_pci_device_number",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.90.1.18",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network device pci device number"
+    },
+    {
+      "key": "dell_server.network_device_pci_function_number",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.90.1.19",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network device pci function number"
+    },
+    {
+      "key": "dell_server.network_deviceirq",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.90.1.20",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network deviceirq"
+    },
+    {
+      "key": "dell_server.network_device_baseioport_address",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.90.1.21",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network device baseioport address"
+    },
+    {
+      "key": "dell_server.network_device_teaming_flags",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.90.1.22",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network device teaming flags"
+    },
+    {
+      "key": "dell_server.network_device_toe_capability_flags",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.90.1.23",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network device toe capability flags"
+    },
+    {
+      "key": "dell_server.network_device_toe_enabled",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.90.1.24",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network device toe enabled"
+    },
+    {
+      "key": "dell_server.network_device_rdma_capability_flags",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.90.1.25",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network device rdma capability flags"
+    },
+    {
+      "key": "dell_server.network_device_rdma_enabled",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.90.1.26",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network device rdma enabled"
+    },
+    {
+      "key": "dell_server.network_device_iscsi_capability_flags",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.90.1.27",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network device iscsi capability flags"
+    },
+    {
+      "key": "dell_server.network_device_iscsi_enabled",
+      "oid": "1.3.6.1.4.1.674.10892.1.1100.90.1.28",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network device iscsi enabled"
+    },
+    {
+      "key": "dell_server.system_slotchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1200.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system slotchassis index"
+    },
+    {
+      "key": "dell_server.system_slot_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1200.10.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system slot index"
+    },
+    {
+      "key": "dell_server.system_slot_state_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1200.10.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system slot state capabilities unique"
+    },
+    {
+      "key": "dell_server.system_slot_state_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1200.10.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system slot state settings unique"
+    },
+    {
+      "key": "dell_server.system_slot_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1200.10.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system slot status"
+    },
+    {
+      "key": "dell_server.system_slot_current_usage",
+      "oid": "1.3.6.1.4.1.674.10892.1.1200.10.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system slot current usage"
+    },
+    {
+      "key": "dell_server.system_slot_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1200.10.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system slot type"
+    },
+    {
+      "key": "dell_server.system_slot",
+      "oid": "1.3.6.1.4.1.674.10892.1.1200.10.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "length",
+      "label": "system slot"
+    },
+    {
+      "key": "dell_server.system_slot_slotid",
+      "oid": "1.3.6.1.4.1.674.10892.1.1200.10.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system slot slotid"
+    },
+    {
+      "key": "dell_server.system_slot_category",
+      "oid": "1.3.6.1.4.1.674.10892.1.1200.10.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system slot category"
+    },
+    {
+      "key": "dell_server.system_slot_hot_plug_bus_width",
+      "oid": "1.3.6.1.4.1.674.10892.1.1200.10.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system slot hot plug bus width"
+    },
+    {
+      "key": "dell_server.system_slot_hot_plug_slot_speed",
+      "oid": "1.3.6.1.4.1.674.10892.1.1200.10.1.13",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system slot hot plug slot speed"
+    },
+    {
+      "key": "dell_server.system_slot_hot_plug_adapter_speed",
+      "oid": "1.3.6.1.4.1.674.10892.1.1200.10.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "system slot hot plug adapter speed"
+    },
+    {
+      "key": "dell_server.physical_memory_arraychassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory arraychassis index"
+    },
+    {
+      "key": "dell_server.physical_memory_array_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.10.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array index"
+    },
+    {
+      "key": "dell_server.physical_memory_array_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.10.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array state capabilities"
+    },
+    {
+      "key": "dell_server.physical_memory_array_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.10.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array state settings"
+    },
+    {
+      "key": "dell_server.physical_memory_array_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.10.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array status"
+    },
+    {
+      "key": "dell_server.physical_memory_array_use",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.10.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array use"
+    },
+    {
+      "key": "dell_server.physical_memory_arrayecctype",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.10.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory arrayecctype"
+    },
+    {
+      "key": "dell_server.physical_memory_array_location",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.10.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array location"
+    },
+    {
+      "key": "dell_server.physical_memory_array_maximum_size",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.10.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array maximum size"
+    },
+    {
+      "key": "dell_server.physical_memory_array_total_number_sockets",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.10.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array total number sockets"
+    },
+    {
+      "key": "dell_server.physical_memory_array_in_use_number_sockets",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.10.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array in use number sockets"
+    },
+    {
+      "key": "dell_server.physical_memory_array_ecc_error_non_recoverable_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.10.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array ecc error non recoverable threshold"
+    },
+    {
+      "key": "dell_server.physical_memory_array_ecc_error_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.10.1.13",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array ecc error critical threshold"
+    },
+    {
+      "key": "dell_server.physical_memory_array_ecc_error_non_critical_threshold",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.10.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array ecc error non critical threshold"
+    },
+    {
+      "key": "dell_server.physical_memory_array_redundant_memory_unit_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.10.1.15",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array redundant memory unit index reference"
+    },
+    {
+      "key": "dell_server.physical_memory_array_mappedchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.20.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array mappedchassis index"
+    },
+    {
+      "key": "dell_server.physical_memory_array_mapped_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.20.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array mapped index"
+    },
+    {
+      "key": "dell_server.physical_memory_array_mapped_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.20.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array mapped state capabilities"
+    },
+    {
+      "key": "dell_server.physical_memory_array_mapped_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.20.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array mapped state settings"
+    },
+    {
+      "key": "dell_server.physical_memory_array_mapped_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.20.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array mapped status"
+    },
+    {
+      "key": "dell_server.physical_memory_array_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.20.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array index reference"
+    },
+    {
+      "key": "dell_server.physical_memory_array_mapped_partition_width",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.20.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory array mapped partition width"
+    },
+    {
+      "key": "dell_server.physical_memory_config_chassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.30.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory config chassis index"
+    },
+    {
+      "key": "dell_server.physical_memory_config_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.30.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory config index"
+    },
+    {
+      "key": "dell_server.physical_memory_config_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.30.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory config state capabilities"
+    },
+    {
+      "key": "dell_server.physical_memory_config_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.30.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory config state settings"
+    },
+    {
+      "key": "dell_server.physical_memory_config_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.30.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory config status"
+    },
+    {
+      "key": "dell_server.physical_memory_config_redundant_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.30.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory config redundant capabilities"
+    },
+    {
+      "key": "dell_server.physical_memory_config_redundant_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.30.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory config redundant settings"
+    },
+    {
+      "key": "dell_server.physical_memory_logging_chassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.40.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory logging chassis index"
+    },
+    {
+      "key": "dell_server.physical_memory_logging_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.40.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory logging index"
+    },
+    {
+      "key": "dell_server.physical_memory_logging_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.40.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory logging capabilities"
+    },
+    {
+      "key": "dell_server.physical_memory_logging_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.40.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory logging settings"
+    },
+    {
+      "key": "dell_server.physical_memory_logging_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.40.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory logging status"
+    },
+    {
+      "key": "dell_server.redundant_memory_unit_chassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.50.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "redundant memory unit chassis index"
+    },
+    {
+      "key": "dell_server.redundant_memory_unit_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.50.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "redundant memory unit index"
+    },
+    {
+      "key": "dell_server.redundant_memory_unit_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.50.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "redundant memory unit state capabilities"
+    },
+    {
+      "key": "dell_server.redundant_memory_unit_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.50.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "redundant memory unit state settings"
+    },
+    {
+      "key": "dell_server.redundant_memory_unit_redundancy_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.50.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "redundant memory unit redundancy status"
+    },
+    {
+      "key": "dell_server.redundant_memory_unit_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.50.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "redundant memory unit status"
+    },
+    {
+      "key": "dell_server.physical_memory_card_chassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.60.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory card chassis index"
+    },
+    {
+      "key": "dell_server.physical_memory_card_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.60.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory card index"
+    },
+    {
+      "key": "dell_server.physical_memory_card_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.60.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory card state capabilities"
+    },
+    {
+      "key": "dell_server.physical_memory_card_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.60.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory card state settings"
+    },
+    {
+      "key": "dell_server.physical_memory_card_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.60.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory card status"
+    },
+    {
+      "key": "dell_server.physical_memory_card_total_number_sockets",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.60.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory card total number sockets"
+    },
+    {
+      "key": "dell_server.physical_memory_card_in_use_number_sockets",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.60.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory card in use number sockets"
+    },
+    {
+      "key": "dell_server.physical_memory_card_phy_mem_array_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1300.60.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "physical memory card phy mem array index reference"
+    },
+    {
+      "key": "dell_server.bios_set_up_controlchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bios set up controlchassis index"
+    },
+    {
+      "key": "dell_server.bsucpointing_device_control_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucpointing device control capabilities"
+    },
+    {
+      "key": "dell_server.bsucpointing_device_control_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucpointing device control settings"
+    },
+    {
+      "key": "dell_server.bsucpointing_device_control_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucpointing device control status"
+    },
+    {
+      "key": "dell_server.bsucnum_lock_control_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucnum lock control capabilities"
+    },
+    {
+      "key": "dell_server.bsucnum_lock_control_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucnum lock control settings"
+    },
+    {
+      "key": "dell_server.bsucnum_lock_control_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucnum lock control status"
+    },
+    {
+      "key": "dell_server.bsucprocessor_serial_number_control_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucprocessor serial number control capabilities"
+    },
+    {
+      "key": "dell_server.bsucprocessor_serial_number_control_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucprocessor serial number control settings"
+    },
+    {
+      "key": "dell_server.bsucprocessor_serial_number_control_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucprocessor serial number control status"
+    },
+    {
+      "key": "dell_server.bsucspeaker_control_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucspeaker control capabilities unique"
+    },
+    {
+      "key": "dell_server.bsucspeaker_control_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.15",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucspeaker control settings unique"
+    },
+    {
+      "key": "dell_server.bsucspeaker_control_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.16",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucspeaker control status"
+    },
+    {
+      "key": "dell_server.bsucnifwakeon_lan_control_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.18",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucnifwakeon lan control capabilities unique"
+    },
+    {
+      "key": "dell_server.bsucnifwakeon_lan_control_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.19",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucnifwakeon lan control settings unique"
+    },
+    {
+      "key": "dell_server.bsucnifwakeon_lan_control_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.20",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucnifwakeon lan control status"
+    },
+    {
+      "key": "dell_server.bsucboot_sequence_control_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.22",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucboot sequence control capabilities unique"
+    },
+    {
+      "key": "dell_server.bsucboot_sequence_control_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.23",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucboot sequence control settings unique"
+    },
+    {
+      "key": "dell_server.bsucboot_sequence_control_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.24",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucboot sequence control status"
+    },
+    {
+      "key": "dell_server.bsucadministrator_password_control_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.26",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucadministrator password control capabilities unique"
+    },
+    {
+      "key": "dell_server.bsucadministrator_password_control_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.27",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucadministrator password control settings unique"
+    },
+    {
+      "key": "dell_server.bsucadministrator_password_control_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.28",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucadministrator password control status"
+    },
+    {
+      "key": "dell_server.bsucuser_password_control_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.31",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucuser password control capabilities unique"
+    },
+    {
+      "key": "dell_server.bsucuser_password_control_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.32",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucuser password control settings unique"
+    },
+    {
+      "key": "dell_server.bsucuser_password_control_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.10.1.33",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bsucuser password control status"
+    },
+    {
+      "key": "dell_server.scsicontrolchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.20.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "scsicontrolchassis index"
+    },
+    {
+      "key": "dell_server.scsicontrol_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.20.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "scsicontrol index"
+    },
+    {
+      "key": "dell_server.scsicontrol_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.20.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "scsicontrol capabilities"
+    },
+    {
+      "key": "dell_server.scsicontrol_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.20.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "scsicontrol settings"
+    },
+    {
+      "key": "dell_server.scsicontrol_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.20.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "scsicontrol status"
+    },
+    {
+      "key": "dell_server.parallel_port_controlchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.30.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel port controlchassis index"
+    },
+    {
+      "key": "dell_server.parallel_port_control_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.30.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel port control index"
+    },
+    {
+      "key": "dell_server.parallel_port_control_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.30.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel port control capabilities unique"
+    },
+    {
+      "key": "dell_server.parallel_port_control_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.30.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel port control settings unique"
+    },
+    {
+      "key": "dell_server.parallel_port_control_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.30.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel port control status"
+    },
+    {
+      "key": "dell_server.parallel_port_control_mode_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.30.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel port control mode capabilities unique"
+    },
+    {
+      "key": "dell_server.parallel_port_control_mode_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.30.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "parallel port control mode settings unique"
+    },
+    {
+      "key": "dell_server.serial_port_controlchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.40.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "serial port controlchassis index"
+    },
+    {
+      "key": "dell_server.serial_port_control_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.40.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "serial port control index"
+    },
+    {
+      "key": "dell_server.serial_port_control_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.40.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "serial port control capabilities unique"
+    },
+    {
+      "key": "dell_server.serial_port_control_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.40.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "serial port control settings unique"
+    },
+    {
+      "key": "dell_server.serial_port_control_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.40.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "serial port control status"
+    },
+    {
+      "key": "dell_server.usb_controlchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.50.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "usb controlchassis index"
+    },
+    {
+      "key": "dell_server.usb_control_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.50.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "usb control index"
+    },
+    {
+      "key": "dell_server.usb_control_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.50.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "usb control capabilities"
+    },
+    {
+      "key": "dell_server.usb_control_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.50.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "usb control settings"
+    },
+    {
+      "key": "dell_server.usb_control_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.50.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "usb control status"
+    },
+    {
+      "key": "dell_server.ide_controlchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.60.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ide controlchassis index"
+    },
+    {
+      "key": "dell_server.ide_control_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.60.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ide control index"
+    },
+    {
+      "key": "dell_server.ide_control_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.60.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ide control capabilities unique"
+    },
+    {
+      "key": "dell_server.ide_control_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.60.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ide control settings unique"
+    },
+    {
+      "key": "dell_server.ide_control_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.60.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "ide control status"
+    },
+    {
+      "key": "dell_server.diskette_controlchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.70.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "diskette controlchassis index"
+    },
+    {
+      "key": "dell_server.diskette_control_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.70.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "diskette control index"
+    },
+    {
+      "key": "dell_server.diskette_control_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.70.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "diskette control capabilities unique"
+    },
+    {
+      "key": "dell_server.diskette_control_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.70.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "diskette control settings unique"
+    },
+    {
+      "key": "dell_server.diskette_control_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.70.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "diskette control status"
+    },
+    {
+      "key": "dell_server.network_interface_controlchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.80.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network interface controlchassis index"
+    },
+    {
+      "key": "dell_server.network_interface_control_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.80.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network interface control index"
+    },
+    {
+      "key": "dell_server.network_interface_control_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.80.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network interface control capabilities unique"
+    },
+    {
+      "key": "dell_server.network_interface_control_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.80.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network interface control settings unique"
+    },
+    {
+      "key": "dell_server.network_interface_control_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1400.80.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "network interface control status"
+    },
+    {
+      "key": "dell_server.lraglobalchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1500.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lraglobalchassis index"
+    },
+    {
+      "key": "dell_server.lraglobal_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1500.10.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lraglobal state"
+    },
+    {
+      "key": "dell_server.lraglobal_settings_disable_timeout_value",
+      "oid": "1.3.6.1.4.1.674.10892.1.1500.10.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lraglobal settings disable timeout value"
+    },
+    {
+      "key": "dell_server.lraglobal_settings_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1500.10.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lraglobal settings capabilities unique"
+    },
+    {
+      "key": "dell_server.lraglobal_thermal_shutdown_capabilities_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1500.10.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lraglobal thermal shutdown capabilities unique"
+    },
+    {
+      "key": "dell_server.lraglobal_thermal_shutdown_state_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1500.10.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lraglobal thermal shutdown state settings unique"
+    },
+    {
+      "key": "dell_server.lraaction_tablechassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1500.20.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lraaction tablechassis index"
+    },
+    {
+      "key": "dell_server.lraaction_table_action_number_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1500.20.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lraaction table action number index"
+    },
+    {
+      "key": "dell_server.lraaction_table_settings_unique",
+      "oid": "1.3.6.1.4.1.674.10892.1.1500.20.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "lraaction table settings unique"
+    },
+    {
+      "key": "dell_server.coochassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coochassis index"
+    },
+    {
+      "key": "dell_server.coo_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.10.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo state"
+    },
+    {
+      "key": "dell_server.coo_aquisition_purchase_cost",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.10.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo aquisition purchase cost"
+    },
+    {
+      "key": "dell_server.coo_aquisition_way_bill_number",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.10.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo aquisition way bill number"
+    },
+    {
+      "key": "dell_server.coo_aquisition_purchase_order",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.10.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo aquisition purchase order"
+    },
+    {
+      "key": "dell_server.coo_original_machine_configuration_expensed",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.10.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo original machine configuration expensed"
+    },
+    {
+      "key": "dell_server.coo_extended_warranty_cost",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.10.1.15",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo extended warranty cost"
+    },
+    {
+      "key": "dell_server.coo_ownership_code",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.10.1.17",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo ownership code"
+    },
+    {
+      "key": "dell_server.coo_deployment_date",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.10.1.20",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "length",
+      "label": "coo deployment date"
+    },
+    {
+      "key": "dell_server.coo_deployment_duration_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.10.1.21",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo deployment duration type"
+    },
+    {
+      "key": "dell_server.coo_depreciation_duration",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.10.1.35",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo depreciation duration"
+    },
+    {
+      "key": "dell_server.coo_depreciation_duration_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.10.1.36",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo depreciation duration type"
+    },
+    {
+      "key": "dell_server.coo_depreciationage",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.10.1.37",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "%",
+      "label": "coo depreciationage"
+    },
+    {
+      "key": "dell_server.coo_registration_is_registered",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.10.1.39",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo registration is registered"
+    },
+    {
+      "key": "dell_server.coo_service_contractchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.20.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo service contractchassis index"
+    },
+    {
+      "key": "dell_server.coo_service_contract_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.20.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo service contract index"
+    },
+    {
+      "key": "dell_server.coo_service_contract_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.20.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo service contract state"
+    },
+    {
+      "key": "dell_server.coo_service_contract_was_renewed",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.20.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo service contract was renewed"
+    },
+    {
+      "key": "dell_server.coo_cost_event_logchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.30.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo cost event logchassis index"
+    },
+    {
+      "key": "dell_server.coo_cost_event_log_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.30.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo cost event log index"
+    },
+    {
+      "key": "dell_server.coo_cost_event_log_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.30.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo cost event log state"
+    },
+    {
+      "key": "dell_server.coo_cost_event_log_duration",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.30.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo cost event log duration"
+    },
+    {
+      "key": "dell_server.coo_cost_event_log_duration_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.30.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo cost event log duration type"
+    },
+    {
+      "key": "dell_server.coo_warrantychassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.40.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo warrantychassis index"
+    },
+    {
+      "key": "dell_server.coo_warranty_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.40.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo warranty index"
+    },
+    {
+      "key": "dell_server.coo_warranty_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.40.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo warranty state"
+    },
+    {
+      "key": "dell_server.coo_warranty_duration",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.40.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo warranty duration"
+    },
+    {
+      "key": "dell_server.coo_warranty_duration_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.40.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo warranty duration type"
+    },
+    {
+      "key": "dell_server.coo_warranty_cost",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.40.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo warranty cost"
+    },
+    {
+      "key": "dell_server.coo_lease_informationchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.50.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo lease informationchassis index"
+    },
+    {
+      "key": "dell_server.coo_lease_information_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.50.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo lease information index"
+    },
+    {
+      "key": "dell_server.coo_lease_information_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.50.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo lease information state"
+    },
+    {
+      "key": "dell_server.coo_lease_information_multiple_schedules",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.50.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo lease information multiple schedules"
+    },
+    {
+      "key": "dell_server.coo_lease_information_buy_out_amount",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.50.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo lease information buy out amount"
+    },
+    {
+      "key": "dell_server.coo_lease_information_lease_rate_factor",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.50.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo lease information lease rate factor"
+    },
+    {
+      "key": "dell_server.coo_lease_information_fair_market_value",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.50.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo lease information fair market value"
+    },
+    {
+      "key": "dell_server.coo_schedule_numberchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.60.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo schedule numberchassis index"
+    },
+    {
+      "key": "dell_server.coo_schedule_number_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.60.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo schedule number index"
+    },
+    {
+      "key": "dell_server.coo_schedule_number_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.60.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo schedule number state"
+    },
+    {
+      "key": "dell_server.coo_schedule_number_lease_information_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.60.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo schedule number lease information index reference"
+    },
+    {
+      "key": "dell_server.coo_optionschassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.70.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo optionschassis index"
+    },
+    {
+      "key": "dell_server.coo_options_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.70.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo options index"
+    },
+    {
+      "key": "dell_server.coo_options_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.70.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo options state"
+    },
+    {
+      "key": "dell_server.coo_options_lease_information_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.70.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo options lease information index reference"
+    },
+    {
+      "key": "dell_server.coo_maintenancechassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.80.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo maintenancechassis index"
+    },
+    {
+      "key": "dell_server.coo_maintenance_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.80.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo maintenance index"
+    },
+    {
+      "key": "dell_server.coo_maintenance_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.80.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo maintenance state"
+    },
+    {
+      "key": "dell_server.coo_repairchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.90.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo repairchassis index"
+    },
+    {
+      "key": "dell_server.coo_repair_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.90.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo repair index"
+    },
+    {
+      "key": "dell_server.coo_repair_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.90.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo repair state"
+    },
+    {
+      "key": "dell_server.coo_repair_counter",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.90.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo repair counter"
+    },
+    {
+      "key": "dell_server.coo_support_informationchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.100.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo support informationchassis index"
+    },
+    {
+      "key": "dell_server.coo_support_information_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.100.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo support information index"
+    },
+    {
+      "key": "dell_server.coo_support_information_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.100.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo support information state"
+    },
+    {
+      "key": "dell_server.coo_support_information_is_outsourced",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.100.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo support information is outsourced"
+    },
+    {
+      "key": "dell_server.coo_support_information_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.100.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo support information type"
+    },
+    {
+      "key": "dell_server.coo_trouble_ticketchassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.110.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo trouble ticketchassis index"
+    },
+    {
+      "key": "dell_server.coo_trouble_ticket_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.110.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo trouble ticket index"
+    },
+    {
+      "key": "dell_server.coo_trouble_ticket_state",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.110.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo trouble ticket state"
+    },
+    {
+      "key": "dell_server.coo_trouble_ticket_support_information_index_reference",
+      "oid": "1.3.6.1.4.1.674.10892.1.1600.110.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "coo trouble ticket support information index reference"
+    },
+    {
+      "key": "dell_server.cluster_chassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1800.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cluster chassis index"
+    },
+    {
+      "key": "dell_server.cluster_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1800.10.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cluster index"
+    },
+    {
+      "key": "dell_server.cluster_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1800.10.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cluster state capabilities"
+    },
+    {
+      "key": "dell_server.cluster_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1800.10.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cluster state settings"
+    },
+    {
+      "key": "dell_server.cluster_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1800.10.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cluster status"
+    },
+    {
+      "key": "dell_server.cluster_type",
+      "oid": "1.3.6.1.4.1.674.10892.1.1800.10.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "cluster type"
+    },
+    {
+      "key": "dell_server.bmc_chassis_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1900.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bmc chassis index"
+    },
+    {
+      "key": "dell_server.bmc_index",
+      "oid": "1.3.6.1.4.1.674.10892.1.1900.10.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bmc index"
+    },
+    {
+      "key": "dell_server.bmc_state_capabilities",
+      "oid": "1.3.6.1.4.1.674.10892.1.1900.10.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bmc state capabilities"
+    },
+    {
+      "key": "dell_server.bmc_state_settings",
+      "oid": "1.3.6.1.4.1.674.10892.1.1900.10.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bmc state settings"
+    },
+    {
+      "key": "dell_server.bmc_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.1900.10.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "bmc status"
+    },
+    {
+      "key": "dell_server.alert_current_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.5000.10.4.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "alert current status"
+    },
+    {
+      "key": "dell_server.alert_previous_status",
+      "oid": "1.3.6.1.4.1.674.10892.1.5000.10.5.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "alert previous status"
+    }
+  ]
+}

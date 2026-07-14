@@ -1,0 +1,44 @@
+{
+  "id": "hp_procurve",
+  "title": "HP Procurve switch CPU/memory",
+  "enterprises": [
+    "11"
+  ],
+  "vendorAliases": [
+    "hp-procurve",
+    "hp",
+    "aruba"
+  ],
+  "sysObjectPrefixes": [
+    "1.3.6.1.4.1.11.2.14"
+  ],
+  "metrics": [
+    {
+      "key": "hp_procurve.cpu_load",
+      "oid": "1.3.6.1.4.1.11.2.14.11.5.1.9.6.1.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "%",
+      "label": "CPU Load"
+    },
+    {
+      "key": "hp_procurve.free_memory",
+      "oid": "1.3.6.1.4.1.11.2.14.11.5.1.1.2.1.1.1.6.1",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "Bytes",
+      "label": "Free Memory"
+    },
+    {
+      "key": "hp_procurve.allocated_memory",
+      "oid": "1.3.6.1.4.1.11.2.14.11.5.1.1.2.1.1.1.7.1",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "Bytes",
+      "label": "Allocated Memory"
+    }
+  ]
+}

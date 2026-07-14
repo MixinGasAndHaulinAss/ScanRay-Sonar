@@ -1,0 +1,7 @@
+{
+  "id": "printer_jam_status",
+  "values": {
+    "0": "No Jam Detected",
+    "1": "Paper Jam Detected"
+  }
+}

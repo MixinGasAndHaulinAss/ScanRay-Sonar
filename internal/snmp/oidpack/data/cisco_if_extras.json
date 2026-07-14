@@ -1,0 +1,87 @@
+{
+  "id": "cisco_if_extras",
+  "title": "Cisco interface extras",
+  "enterprises": [
+    "9"
+  ],
+  "vendorAliases": [
+    "cisco"
+  ],
+  "sysObjectPrefixes": [
+    "1.3.6.1.4.1.9"
+  ],
+  "metrics": [
+    {
+      "key": "cisco_if_extras.if_stack_higher_layer",
+      "oid": "1.3.6.1.2.1.31.1.2.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "if stack higher layer"
+    },
+    {
+      "key": "cisco_if_extras.if_stack_lower_layer",
+      "oid": "1.3.6.1.2.1.31.1.2.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "if stack lower layer"
+    },
+    {
+      "key": "cisco_if_extras.if_stack_status",
+      "oid": "1.3.6.1.2.1.31.1.2.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "if stack status"
+    },
+    {
+      "key": "cisco_if_extras.if_test_id",
+      "oid": "1.3.6.1.2.1.31.1.3.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "if test id"
+    },
+    {
+      "key": "cisco_if_extras.if_test_status",
+      "oid": "1.3.6.1.2.1.31.1.3.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "if test status"
+    },
+    {
+      "key": "cisco_if_extras.if_test_result",
+      "oid": "1.3.6.1.2.1.31.1.3.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "if test result"
+    },
+    {
+      "key": "cisco_if_extras.if_rcv_address_status",
+      "oid": "1.3.6.1.2.1.31.1.4.1.2",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "if rcv address status"
+    },
+    {
+      "key": "cisco_if_extras.if_rcv_address_type",
+      "oid": "1.3.6.1.2.1.31.1.4.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "if rcv address type"
+    }
+  ]
+}

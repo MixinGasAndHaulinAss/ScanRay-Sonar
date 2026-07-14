@@ -1,0 +1,53 @@
+{
+  "alarms": [
+    {
+      "name": "APC env probe alarm",
+      "severity": "warning",
+      "expression": "device.apc_env_alarm_status != 1",
+      "flatField": "apc_env_alarm_status",
+      "metricKey": "apc_env.alarm_status.11"
+    },
+    {
+      "name": "Disk free space low",
+      "severity": "warning",
+      "expression": "device.disk_free_pct < 10",
+      "flatField": "disk_free_pct",
+      "metricKey": "windows_informant.ldisk_idle_time"
+    },
+    {
+      "name": "Host load average high",
+      "severity": "warning",
+      "expression": "device.linux_load_1min > 5",
+      "flatField": "linux_load_1min",
+      "metricKey": "linux_host.cpu_load_15_min_avg"
+    },
+    {
+      "name": "Dell server health not OK",
+      "severity": "warning",
+      "expression": "device.dell_server_overall_status != 3",
+      "flatField": "dell_server_overall_status",
+      "metricKey": "dell_server.operating_system_status"
+    },
+    {
+      "name": "Printer toner not OK",
+      "severity": "warning",
+      "expression": "device.printer_toner_status > 0",
+      "flatField": "printer_toner_status",
+      "metricKey": "printer_hp.toner"
+    },
+    {
+      "name": "Printer paper not OK",
+      "severity": "warning",
+      "expression": "device.printer_paper_status > 0",
+      "flatField": "printer_paper_status",
+      "metricKey": "printer_hp.paper"
+    },
+    {
+      "name": "Printer jam",
+      "severity": "critical",
+      "expression": "device.printer_jam_status > 0",
+      "flatField": "printer_jam_status",
+      "metricKey": "printer_hp.jam"
+    }
+  ]
+}

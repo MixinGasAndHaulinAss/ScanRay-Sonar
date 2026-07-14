@@ -1,0 +1,95 @@
+{
+  "packs": [
+    {
+      "id": "apc_env",
+      "title": "APC environmental probes",
+      "file": "apc_env.json",
+      "metricCount": 8
+    },
+    {
+      "id": "apc_ups",
+      "title": "APC UPS PowerNet supplements",
+      "file": "apc_ups.json",
+      "metricCount": 9
+    },
+    {
+      "id": "cisco_env",
+      "title": "Cisco environment and memory extras",
+      "file": "cisco_env.json",
+      "metricCount": 11
+    },
+    {
+      "id": "cisco_if_extras",
+      "title": "Cisco interface extras",
+      "file": "cisco_if_extras.json",
+      "metricCount": 8
+    },
+    {
+      "id": "cisco_queue",
+      "title": "Cisco interface queues",
+      "file": "cisco_queue.json",
+      "metricCount": 8
+    },
+    {
+      "id": "dell_server",
+      "title": "Dell server management",
+      "file": "dell_server.json",
+      "metricCount": 698
+    },
+    {
+      "id": "dell_storage",
+      "title": "Dell storage management",
+      "file": "dell_storage.json",
+      "metricCount": 173
+    },
+    {
+      "id": "host_resources",
+      "title": "HOST-RESOURCES-MIB",
+      "file": "host_resources.json",
+      "metricCount": 10
+    },
+    {
+      "id": "hp_procurve",
+      "title": "HP Procurve switch CPU/memory",
+      "file": "hp_procurve.json",
+      "metricCount": 3
+    },
+    {
+      "id": "linux_host",
+      "title": "Linux/Unix host (UCD-SNMP)",
+      "file": "linux_host.json",
+      "metricCount": 184
+    },
+    {
+      "id": "linux_net",
+      "title": "Linux/Unix network MIB supplements",
+      "file": "linux_net.json",
+      "metricCount": 1073
+    },
+    {
+      "id": "printer_generic",
+      "title": "Generic network printer (Printer-MIB)",
+      "file": "printer_generic.json",
+      "metricCount": 2
+    },
+    {
+      "id": "printer_hp",
+      "title": "HP LaserJet status",
+      "file": "printer_hp.json",
+      "metricCount": 3
+    },
+    {
+      "id": "windows_iis",
+      "title": "Windows IIS / SMTP via SNMP",
+      "file": "windows_iis.json",
+      "metricCount": 17
+    },
+    {
+      "id": "windows_informant",
+      "title": "Windows host (SNMP Informant)",
+      "file": "windows_informant.json",
+      "metricCount": 87
+    }
+  ],
+  "generatedFrom": "oid_bundle/analysis/all_oid_entries.csv"
+}

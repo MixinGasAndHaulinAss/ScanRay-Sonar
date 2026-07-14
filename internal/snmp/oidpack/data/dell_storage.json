@@ -1,0 +1,1573 @@
+{
+  "id": "dell_storage",
+  "title": "Dell storage management",
+  "enterprises": [
+    "674"
+  ],
+  "vendorAliases": [
+    "dell-storage",
+    "dell"
+  ],
+  "sysObjectPrefixes": [
+    "1.3.6.1.4.1.674.10893"
+  ],
+  "metrics": [
+    {
+      "key": "dell_storage.global_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.2.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "global status"
+    },
+    {
+      "key": "dell_storage.agent_system_global_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.110.1.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "agent system global status"
+    },
+    {
+      "key": "dell_storage.agent_last_global_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.110.2.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "agent last global status"
+    },
+    {
+      "key": "dell_storage.agent_time_stamp",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.110.3.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "agent time stamp"
+    },
+    {
+      "key": "dell_storage.agent_get_timeout",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.110.4.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "agent get timeout"
+    },
+    {
+      "key": "dell_storage.agent_modifiers",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.110.5.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "agent modifiers"
+    },
+    {
+      "key": "dell_storage.agent_refresh_rate",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.110.6.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "agent refresh rate"
+    },
+    {
+      "key": "dell_storage.agent_software_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.110.9.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "agent software status"
+    },
+    {
+      "key": "dell_storage.agent_global_system_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.110.13.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "agent global system status"
+    },
+    {
+      "key": "dell_storage.agent_last_global_system_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.110.14.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "agent last global system status"
+    },
+    {
+      "key": "dell_storage.agent_smart_thermal_shutdown",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.110.15.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "agent smart thermal shutdown"
+    },
+    {
+      "key": "dell_storage.controller_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller number"
+    },
+    {
+      "key": "dell_storage.controller_type",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller type"
+    },
+    {
+      "key": "dell_storage.controller_state",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller state"
+    },
+    {
+      "key": "dell_storage.controller_severity",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller severity"
+    },
+    {
+      "key": "dell_storage.controller_rebuild_rate_in",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "%",
+      "label": "controller rebuild rate in"
+    },
+    {
+      "key": "dell_storage.controller_cache_size_inmb",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller cache size inmb"
+    },
+    {
+      "key": "dell_storage.controller_cache_size_in",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "bytes",
+      "label": "controller cache size in"
+    },
+    {
+      "key": "dell_storage.controller_physical_device_count",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller physical device count"
+    },
+    {
+      "key": "dell_storage.controller_logical_device_count",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller logical device count"
+    },
+    {
+      "key": "dell_storage.controller_host_port_count",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller host port count"
+    },
+    {
+      "key": "dell_storage.controller_memory_size_inmb",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.15",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller memory size inmb"
+    },
+    {
+      "key": "dell_storage.controller_memory_size_in",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.16",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "bytes",
+      "label": "controller memory size in"
+    },
+    {
+      "key": "dell_storage.controller_drive_channel_count",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.17",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller drive channel count"
+    },
+    {
+      "key": "dell_storage.controller_fault_tolerant",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.18",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller fault tolerant"
+    },
+    {
+      "key": "dell_storage.controllerc0port0id",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.21",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controllerc0port0id"
+    },
+    {
+      "key": "dell_storage.controllerc0target",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.22",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controllerc0target"
+    },
+    {
+      "key": "dell_storage.controllerc0channel",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.23",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controllerc0channel"
+    },
+    {
+      "key": "dell_storage.controllerc0battery_state",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.25",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controllerc0battery state"
+    },
+    {
+      "key": "dell_storage.controllerc1port0id",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.28",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controllerc1port0id"
+    },
+    {
+      "key": "dell_storage.controllerc1target",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.29",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controllerc1target"
+    },
+    {
+      "key": "dell_storage.controllerc1channel",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.30",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controllerc1channel"
+    },
+    {
+      "key": "dell_storage.controllerc1oscontroller",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.31",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controllerc1oscontroller"
+    },
+    {
+      "key": "dell_storage.controllerc1battery_state",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.32",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controllerc1battery state"
+    },
+    {
+      "key": "dell_storage.controller_battery_charge_count",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.36",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller battery charge count"
+    },
+    {
+      "key": "dell_storage.controller_roll_up_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.37",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller roll up status"
+    },
+    {
+      "key": "dell_storage.controller_component_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.38",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller component status"
+    },
+    {
+      "key": "dell_storage.controller_alarm_state",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.40",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller alarm state"
+    },
+    {
+      "key": "dell_storage.controller_cluster_mode",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.43",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller cluster mode"
+    },
+    {
+      "key": "dell_storage.controllerscsiinitiator_id",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.46",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controllerscsiinitiator id"
+    },
+    {
+      "key": "dell_storage.controller_channel_count",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.47",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller channel count"
+    },
+    {
+      "key": "dell_storage.controller_reconstruct_rate",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.48",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller reconstruct rate"
+    },
+    {
+      "key": "dell_storage.controller_patrol_read_rate",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.49",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller patrol read rate"
+    },
+    {
+      "key": "dell_storage.controllerbgirate",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.50",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controllerbgirate"
+    },
+    {
+      "key": "dell_storage.controller_check_consistency_rate",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.51",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller check consistency rate"
+    },
+    {
+      "key": "dell_storage.controller_patrol_read_mode",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.52",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller patrol read mode"
+    },
+    {
+      "key": "dell_storage.controller_patrol_read_state",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.53",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller patrol read state"
+    },
+    {
+      "key": "dell_storage.controller_patrol_read_iterations",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.1.1.54",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "controller patrol read iterations"
+    },
+    {
+      "key": "dell_storage.channel_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.2.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "channel number"
+    },
+    {
+      "key": "dell_storage.channel_state",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.2.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "channel state"
+    },
+    {
+      "key": "dell_storage.channel_severity",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.2.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "channel severity"
+    },
+    {
+      "key": "dell_storage.channel_termination",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.2.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "channel termination"
+    },
+    {
+      "key": "dell_storage.channelscsi_id",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.2.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "channelscsi id"
+    },
+    {
+      "key": "dell_storage.channel_roll_up_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.2.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "channel roll up status"
+    },
+    {
+      "key": "dell_storage.channel_component_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.2.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "channel component status"
+    },
+    {
+      "key": "dell_storage.channel_bus_type",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.2.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "channel bus type"
+    },
+    {
+      "key": "dell_storage.enclosure_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.3.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure number"
+    },
+    {
+      "key": "dell_storage.enclosure_state",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.3.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure state"
+    },
+    {
+      "key": "dell_storage.enclosure_severity",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.3.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure severity"
+    },
+    {
+      "key": "dell_storage.enclosureid",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.3.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosureid"
+    },
+    {
+      "key": "dell_storage.enclosure_type",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.3.1.16",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure type"
+    },
+    {
+      "key": "dell_storage.enclosure_config",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.3.1.18",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure config"
+    },
+    {
+      "key": "dell_storage.enclosure_channel_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.3.1.19",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure channel number"
+    },
+    {
+      "key": "dell_storage.enclosure_alarm",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.3.1.20",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure alarm"
+    },
+    {
+      "key": "dell_storage.enclosurescsi_id",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.3.1.22",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosurescsi id"
+    },
+    {
+      "key": "dell_storage.enclosure_roll_up_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.3.1.23",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure roll up status"
+    },
+    {
+      "key": "dell_storage.enclosure_component_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.3.1.24",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure component status"
+    },
+    {
+      "key": "dell_storage.array_disk_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk number"
+    },
+    {
+      "key": "dell_storage.array_disk_state",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk state"
+    },
+    {
+      "key": "dell_storage.array_disk_severity",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk severity"
+    },
+    {
+      "key": "dell_storage.array_disk_channel",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk channel"
+    },
+    {
+      "key": "dell_storage.array_disk_inmb",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "length",
+      "label": "array disk inmb"
+    },
+    {
+      "key": "dell_storage.array_disk_length_in",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "bytes",
+      "label": "array disk length in"
+    },
+    {
+      "key": "dell_storage.array_disk_largest_contiguous_free_space_inmb",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.13",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk largest contiguous free space inmb"
+    },
+    {
+      "key": "dell_storage.array_disk_largest_contiguous_free_space_in",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "bytes",
+      "label": "array disk largest contiguous free space in"
+    },
+    {
+      "key": "dell_storage.array_disk_target_id",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.15",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk target id"
+    },
+    {
+      "key": "dell_storage.array_disk_lunid",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.16",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk lunid"
+    },
+    {
+      "key": "dell_storage.array_disk_used_space_inmb",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.17",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk used space inmb"
+    },
+    {
+      "key": "dell_storage.array_disk_used_space_in",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.18",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "bytes",
+      "label": "array disk used space in"
+    },
+    {
+      "key": "dell_storage.array_disk_free_space_inmb",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.19",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk free space inmb"
+    },
+    {
+      "key": "dell_storage.array_disk_free_space_in",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.20",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "bytes",
+      "label": "array disk free space in"
+    },
+    {
+      "key": "dell_storage.array_disk_bus_type",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.21",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk bus type"
+    },
+    {
+      "key": "dell_storage.array_disk_spare_state",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.22",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk spare state"
+    },
+    {
+      "key": "dell_storage.array_disk_roll_up_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.23",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk roll up status"
+    },
+    {
+      "key": "dell_storage.array_disk_component_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.24",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk component status"
+    },
+    {
+      "key": "dell_storage.array_disk_negotiated_speed",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.29",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk negotiated speed"
+    },
+    {
+      "key": "dell_storage.array_disk_capable_speed",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.30",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk capable speed"
+    },
+    {
+      "key": "dell_storage.array_disk_smart_alert_indication",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.4.1.31",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk smart alert indication"
+    },
+    {
+      "key": "dell_storage.array_disk_enclosure_connection_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.5.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk enclosure connection number"
+    },
+    {
+      "key": "dell_storage.array_disk_enclosure_connection_array_disk_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.5.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk enclosure connection array disk number"
+    },
+    {
+      "key": "dell_storage.array_disk_enclosure_connection_enclosure_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.5.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk enclosure connection enclosure number"
+    },
+    {
+      "key": "dell_storage.array_disk_enclosure_connection_controller_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.5.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk enclosure connection controller number"
+    },
+    {
+      "key": "dell_storage.array_disk_channel_connection_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.6.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk channel connection number"
+    },
+    {
+      "key": "dell_storage.array_disk_channel_connection_array_disk_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.6.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk channel connection array disk number"
+    },
+    {
+      "key": "dell_storage.array_disk_channel_connection_channel_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.6.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk channel connection channel number"
+    },
+    {
+      "key": "dell_storage.array_disk_channel_connection_controller_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.6.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk channel connection controller number"
+    },
+    {
+      "key": "dell_storage.fan_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.7.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "fan number"
+    },
+    {
+      "key": "dell_storage.fan_state",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.7.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "fan state"
+    },
+    {
+      "key": "dell_storage.fan_severity",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.7.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "fan severity"
+    },
+    {
+      "key": "dell_storage.fan_roll_up_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.7.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "fan roll up status"
+    },
+    {
+      "key": "dell_storage.fan_component_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.7.1.15",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "fan component status"
+    },
+    {
+      "key": "dell_storage.fan_connection_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.8.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "fan connection number"
+    },
+    {
+      "key": "dell_storage.fan_connection_fan_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.8.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "fan connection fan number"
+    },
+    {
+      "key": "dell_storage.fan_connection_enclosure_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.8.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "fan connection enclosure number"
+    },
+    {
+      "key": "dell_storage.power_supply_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.9.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply number"
+    },
+    {
+      "key": "dell_storage.power_supply_state",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.9.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply state"
+    },
+    {
+      "key": "dell_storage.power_supply_severity",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.9.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply severity"
+    },
+    {
+      "key": "dell_storage.power_supply_roll_up_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.9.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply roll up status"
+    },
+    {
+      "key": "dell_storage.power_supply_component_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.9.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply component status"
+    },
+    {
+      "key": "dell_storage.power_supply_connection_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.10.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply connection number"
+    },
+    {
+      "key": "dell_storage.power_supply_connection_powersupply_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.10.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply connection powersupply number"
+    },
+    {
+      "key": "dell_storage.power_supply_connection_enclosure_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.10.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "power supply connection enclosure number"
+    },
+    {
+      "key": "dell_storage.temperature_probe_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.11.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe number"
+    },
+    {
+      "key": "dell_storage.temperature_probe_state",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.11.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe state"
+    },
+    {
+      "key": "dell_storage.temperature_probe_severity",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.11.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe severity"
+    },
+    {
+      "key": "dell_storage.temperature_probe_min_warning",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.11.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe min warning"
+    },
+    {
+      "key": "dell_storage.temperature_probe_min_critical",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.11.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe min critical"
+    },
+    {
+      "key": "dell_storage.temperature_probe_max_warning",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.11.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe max warning"
+    },
+    {
+      "key": "dell_storage.temperature_probe_max_critical",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.11.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe max critical"
+    },
+    {
+      "key": "dell_storage.temperature_probe_cur_value",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.11.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe cur value"
+    },
+    {
+      "key": "dell_storage.temperature_probe_roll_up_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.11.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe roll up status"
+    },
+    {
+      "key": "dell_storage.temperature_probe_component_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.11.1.13",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature probe component status"
+    },
+    {
+      "key": "dell_storage.temperature_connection_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.12.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature connection number"
+    },
+    {
+      "key": "dell_storage.temperature_connection_temperature_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.12.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature connection temperature number"
+    },
+    {
+      "key": "dell_storage.temperature_connection_enclosure_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.12.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "temperature connection enclosure number"
+    },
+    {
+      "key": "dell_storage.enclosure_management_module_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.13.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure management module number"
+    },
+    {
+      "key": "dell_storage.enclosure_management_module_state",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.13.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure management module state"
+    },
+    {
+      "key": "dell_storage.enclosure_management_module_severity",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.13.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure management module severity"
+    },
+    {
+      "key": "dell_storage.enclosure_management_module_type",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.13.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure management module type"
+    },
+    {
+      "key": "dell_storage.enclosure_management_module_roll_up_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.13.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure management module roll up status"
+    },
+    {
+      "key": "dell_storage.enclosure_management_module_component_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.13.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure management module component status"
+    },
+    {
+      "key": "dell_storage.enclosure_management_module_connection_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.14.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure management module connection number"
+    },
+    {
+      "key": "dell_storage.enclosure_management_module_connectionemmnumber",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.14.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure management module connectionemmnumber"
+    },
+    {
+      "key": "dell_storage.enclosure_management_module_connection_enclosure_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.14.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "enclosure management module connection enclosure number"
+    },
+    {
+      "key": "dell_storage.battery_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.15.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery number"
+    },
+    {
+      "key": "dell_storage.battery_state",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.15.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery state"
+    },
+    {
+      "key": "dell_storage.battery_roll_up_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.15.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery roll up status"
+    },
+    {
+      "key": "dell_storage.battery_component_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.15.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery component status"
+    },
+    {
+      "key": "dell_storage.battery_charge_count",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.15.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery charge count"
+    },
+    {
+      "key": "dell_storage.battery_max_charge_count",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.15.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery max charge count"
+    },
+    {
+      "key": "dell_storage.battery_predicted_capacity",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.15.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery predicted capacity"
+    },
+    {
+      "key": "dell_storage.battery_next_learn_time",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.15.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery next learn time"
+    },
+    {
+      "key": "dell_storage.battery_learn_state",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.15.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery learn state"
+    },
+    {
+      "key": "dell_storage.battery_max_learn_delay",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.15.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery max learn delay"
+    },
+    {
+      "key": "dell_storage.battery_connection_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.16.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery connection number"
+    },
+    {
+      "key": "dell_storage.battery_connection_battery_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.16.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery connection battery number"
+    },
+    {
+      "key": "dell_storage.battery_connection_controller_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.130.16.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "battery connection controller number"
+    },
+    {
+      "key": "dell_storage.virtual_disk_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "virtual disk number"
+    },
+    {
+      "key": "dell_storage.virtual_disk_state",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.4",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "virtual disk state"
+    },
+    {
+      "key": "dell_storage.virtual_disk_severity",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "virtual disk severity"
+    },
+    {
+      "key": "dell_storage.virtual_disk_inmb",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.6",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "length",
+      "label": "virtual disk inmb"
+    },
+    {
+      "key": "dell_storage.virtual_disk_length_in",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "bytes",
+      "label": "virtual disk length in"
+    },
+    {
+      "key": "dell_storage.virtual_disk_free_space_inmb",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.8",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "virtual disk free space inmb"
+    },
+    {
+      "key": "dell_storage.virtual_disk_free_space_in",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.9",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "bytes",
+      "label": "virtual disk free space in"
+    },
+    {
+      "key": "dell_storage.virtual_disk_write_policy",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.10",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "virtual disk write policy"
+    },
+    {
+      "key": "dell_storage.virtual_disk_read_policy",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.11",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "virtual disk read policy"
+    },
+    {
+      "key": "dell_storage.virtual_disk_cache_policy",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.12",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "virtual disk cache policy"
+    },
+    {
+      "key": "dell_storage.virtual_disk_layout",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.13",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "virtual disk layout"
+    },
+    {
+      "key": "dell_storage.virtual_disk_cur_stripe_size_inmb",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.14",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "virtual disk cur stripe size inmb"
+    },
+    {
+      "key": "dell_storage.virtual_disk_cur_stripe_size_in",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.15",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "bytes",
+      "label": "virtual disk cur stripe size in"
+    },
+    {
+      "key": "dell_storage.virtual_disk_channel",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.16",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "virtual disk channel"
+    },
+    {
+      "key": "dell_storage.virtual_disk_target_id",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.17",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "virtual disk target id"
+    },
+    {
+      "key": "dell_storage.virtual_disk_lunid",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.18",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "virtual disk lunid"
+    },
+    {
+      "key": "dell_storage.virtual_disk_roll_up_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.19",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "virtual disk roll up status"
+    },
+    {
+      "key": "dell_storage.virtual_disk_component_status",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.20",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "virtual disk component status"
+    },
+    {
+      "key": "dell_storage.virtual_disk_array_disk_type",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.1.1.22",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "virtual disk array disk type"
+    },
+    {
+      "key": "dell_storage.array_disk_logical_connection_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.3.1.1",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk logical connection number"
+    },
+    {
+      "key": "dell_storage.array_disk_logical_connection_array_disk_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.3.1.3",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk logical connection array disk number"
+    },
+    {
+      "key": "dell_storage.array_disk_logical_connection_virtual_disk_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.3.1.5",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk logical connection virtual disk number"
+    },
+    {
+      "key": "dell_storage.array_disk_logical_connection_disk_number",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.140.3.1.7",
+      "mode": "walk",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "array disk logical connection disk number"
+    },
+    {
+      "key": "dell_storage.messageidevent",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.200.1.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "messageidevent"
+    },
+    {
+      "key": "dell_storage.current_status_event",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.200.7.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "current status event"
+    },
+    {
+      "key": "dell_storage.previous_status_event",
+      "oid": "1.3.6.1.4.1.674.10893.1.20.200.8.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "previous status event"
+    }
+  ]
+}

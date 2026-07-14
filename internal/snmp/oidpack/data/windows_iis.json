@@ -1,0 +1,169 @@
+{
+  "id": "windows_iis",
+  "title": "Windows IIS / SMTP via SNMP",
+  "enterprises": [
+    "311"
+  ],
+  "vendorAliases": [
+    "windows",
+    "windows-iis"
+  ],
+  "sysObjectPrefixes": [
+    "1.3.6.1.4.1.311"
+  ],
+  "metrics": [
+    {
+      "key": "windows_iis.cpu_load",
+      "oid": "1.3.6.1.4.1.311.1.1.3.1.1.2.1.3.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "%",
+      "label": "CPU Load"
+    },
+    {
+      "key": "windows_iis.sent_files",
+      "oid": "1.3.6.1.4.1.311.1.7.3.1.5.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Sent Files"
+    },
+    {
+      "key": "windows_iis.received_files",
+      "oid": "1.3.6.1.4.1.311.1.7.3.1.6.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Received Files"
+    },
+    {
+      "key": "windows_iis.current_users",
+      "oid": "1.3.6.1.4.1.311.1.7.3.1.7.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Current Users"
+    },
+    {
+      "key": "windows_iis.current_auth_users",
+      "oid": "1.3.6.1.4.1.311.1.7.3.1.8.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Current Auth. Users"
+    },
+    {
+      "key": "windows_iis.total_users",
+      "oid": "1.3.6.1.4.1.311.1.7.3.1.9.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Total Users"
+    },
+    {
+      "key": "windows_iis.total_auth_users",
+      "oid": "1.3.6.1.4.1.311.1.7.3.1.10.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Total Auth. Users"
+    },
+    {
+      "key": "windows_iis.peak_users",
+      "oid": "1.3.6.1.4.1.311.1.7.3.1.11.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Peak Users"
+    },
+    {
+      "key": "windows_iis.peak_auth_users",
+      "oid": "1.3.6.1.4.1.311.1.7.3.1.12.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Peak Auth. Users"
+    },
+    {
+      "key": "windows_iis.current_connections",
+      "oid": "1.3.6.1.4.1.311.1.7.3.1.13.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Current Connections"
+    },
+    {
+      "key": "windows_iis.peak_connections",
+      "oid": "1.3.6.1.4.1.311.1.7.3.1.14.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Peak Connections"
+    },
+    {
+      "key": "windows_iis.message_bytes_sent",
+      "oid": "1.3.6.1.4.1.311.1.7.7.1.6.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "Bytes",
+      "label": "Message Bytes Sent"
+    },
+    {
+      "key": "windows_iis.message_bytes_received",
+      "oid": "1.3.6.1.4.1.311.1.7.7.1.8.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "Bytes",
+      "label": "Message Bytes Received"
+    },
+    {
+      "key": "windows_iis.number_of_messages_received",
+      "oid": "1.3.6.1.4.1.311.1.7.7.1.9.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Number of Messages Received"
+    },
+    {
+      "key": "windows_iis.number_of_messages_delivered",
+      "oid": "1.3.6.1.4.1.311.1.7.7.1.16.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Number of Messages Delivered"
+    },
+    {
+      "key": "windows_iis.number_of_messages_sent",
+      "oid": "1.3.6.1.4.1.311.1.7.7.1.24.0",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Number of Messages Sent"
+    },
+    {
+      "key": "windows_iis.queue_length",
+      "oid": "1.3.6.1.4.1.311.1.7.7.1.20.0",
+      "mode": "get",
+      "valueKind": "gauge",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Queue Length"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "id": "printer_generic",
+  "title": "Generic network printer (Printer-MIB)",
+  "enterprises": [],
+  "vendorAliases": [
+    "printer",
+    "printer-hp",
+    "hp"
+  ],
+  "sysObjectPrefixes": [
+    "1.3.6.1.2.1.43"
+  ],
+  "metrics": [
+    {
+      "key": "printer_generic.pagecount_today",
+      "oid": "1.3.6.1.2.1.43.10.2.1.5.1.1",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Pagecount Today"
+    },
+    {
+      "key": "printer_generic.pagecount_total",
+      "oid": "1.3.6.1.2.1.43.10.2.1.4.1.1",
+      "mode": "get",
+      "valueKind": "counter",
+      "scale": 1.0,
+      "unit": "#",
+      "label": "Pagecount Total"
+    }
+  ]
+}

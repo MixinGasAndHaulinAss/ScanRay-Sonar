@@ -1,0 +1,8 @@
+{
+  "id": "printer_paper_status",
+  "values": {
+    "0": "Paper Okay",
+    "1": "Out Of Paper or No Cassette Loaded",
+    "2": "Manual Paper Feed Required"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "printer_cover_state",
+  "values": {
+    "1": "Other",
+    "2": "Unknown",
+    "3": "Cover Open",
+    "4": "Cover Closed",
+    "5": "Interlock Open",
+    "6": "Interlock Closed"
+  }
+}
