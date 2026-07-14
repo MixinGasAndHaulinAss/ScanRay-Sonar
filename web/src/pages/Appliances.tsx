@@ -241,20 +241,34 @@ export default function Appliances() {
               return (
                 <tr key={a.id} className="border-t border-ink-800 hover:bg-ink-800/30">
                   <td className="px-4 py-2">
-                    <Link
-                      to={`/appliances/${a.id}`}
-                      className="text-emerald-300 hover:underline"
-                    >
-                      {a.name}
-                    </Link>
-                    {a.lastError && (
-                      <span
-                        className="ml-2 rounded bg-red-900/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-red-200"
-                        title={a.lastError}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Link
+                        to={`/appliances/${a.id}`}
+                        className="text-emerald-300 hover:underline"
                       >
-                        error
-                      </span>
-                    )}
+                        {a.name}
+                      </Link>
+                      {a.lastError && (
+                        <span
+                          className="rounded bg-red-900/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-red-200"
+                          title={a.lastError}
+                        >
+                          error
+                        </span>
+                      )}
+                    </div>
+                    {a.tags?.length ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {a.tags.map((t) => (
+                          <span
+                            key={t}
+                            className="rounded bg-ink-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-400"
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-4 py-2 text-slate-400">{siteName(a.siteId)}</td>
                   <td className="px-4 py-2 text-slate-400">{a.vendor}</td>

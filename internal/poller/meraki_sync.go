@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -48,6 +49,16 @@ func SyncSiteMeraki(ctx context.Context, pool *pgxpool.Pool, apiKey string, site
 		if err != nil {
 			return out, fmt.Errorf("list devices for org %s: %w", org.Name, err)
 		}
+		uplinkIP := map[string]string{}
+		if statuses, uerr := cli.ListApplianceUplinkStatuses(ctx, org.ID); uerr == nil {
+			for _, st := range statuses {
+				if ip := pickUplinkMgmtIP(st); ip != "" {
+					uplinkIP[st.Serial] = ip
+				}
+			}
+		} else {
+			slog.Debug("meraki uplink statuses unavailable", "org", org.Name, "err", uerr)
+		}
 		for _, d := range devs {
 			out.Devices++
 			name := d.Name
@@ -57,14 +68,8 @@ func SyncSiteMeraki(ctx context.Context, pool *pgxpool.Pool, apiKey string, site
 			if name == "" {
 				continue
 			}
-			ip := d.LANIP
-			if ip == "" {
-				ip = "0.0.0.0"
-			}
-			tags := []string{"meraki", org.Name}
-			if d.ProductType != "" {
-				tags = append(tags, d.ProductType)
-			}
+			ip := pickMerakiMgmtIP(d, uplinkIP[d.Serial])
+			tags := merakiRoleTags(org.Name, d.ProductType, d.Model)
 			_, err := pool.Exec(ctx, `
 				INSERT INTO appliances (site_id, name, vendor, model, serial, mgmt_ip, snmp_version, is_active, tags)
 				VALUES ($1, $2, 'meraki', $3, $4, $5::inet, 'v2c', TRUE, $6)
@@ -84,6 +89,109 @@ func SyncSiteMeraki(ctx context.Context, pool *pgxpool.Pool, apiKey string, site
 		}
 	}
 	return out, nil
+}
+
+// merakiRoleTags builds auto-detected inventory tags for a Meraki device.
+func merakiRoleTags(orgName, productType, model string) []string {
+	tags := []string{"meraki"}
+	if orgName != "" {
+		tags = append(tags, orgName)
+	}
+	role := merakiRoleFromProduct(productType, model)
+	if role != "" {
+		tags = append(tags, role)
+	}
+	return tags
+}
+
+func merakiRoleFromProduct(productType, model string) string {
+	switch strings.ToLower(strings.TrimSpace(productType)) {
+	case "appliance":
+		return "firewall"
+	case "wireless":
+		return "wap"
+	case "switch":
+		return "switch"
+	case "sensor":
+		return "sensor"
+	case "camera":
+		return "camera"
+	case "cellulargateway":
+		return "cellular"
+	case "wirelesscontroller":
+		return "wlc"
+	}
+	m := strings.ToUpper(strings.TrimSpace(model))
+	switch {
+	case strings.HasPrefix(m, "MX"), strings.HasPrefix(m, "Z"):
+		return "firewall"
+	case strings.HasPrefix(m, "MR"), strings.HasPrefix(m, "CW"):
+		return "wap"
+	case strings.HasPrefix(m, "MS"), strings.HasPrefix(m, "C9"):
+		return "switch"
+	case strings.HasPrefix(m, "MT"):
+		return "sensor"
+	case strings.HasPrefix(m, "MV"):
+		return "camera"
+	case strings.HasPrefix(m, "MG"):
+		return "cellular"
+	}
+	return ""
+}
+
+func pickMerakiMgmtIP(d meraki.Device, uplinkFallback string) string {
+	for _, cand := range []string{d.LANIP, d.Wan1IP, d.Wan2IP, uplinkFallback} {
+		if usableMerakiIP(cand) {
+			return cand
+		}
+	}
+	return "0.0.0.0"
+}
+
+func pickUplinkMgmtIP(st meraki.ApplianceUplinkStatus) string {
+	var privateActive, privateAny, publicActive, publicAny string
+	for _, u := range st.Uplinks {
+		active := strings.EqualFold(u.Status, "active")
+		for _, cand := range []string{u.IP, u.PublicIP} {
+			if !usableMerakiIP(cand) {
+				continue
+			}
+			priv := isPrivateIP(cand)
+			switch {
+			case priv && active && privateActive == "":
+				privateActive = cand
+			case priv && privateAny == "":
+				privateAny = cand
+			case !priv && active && publicActive == "":
+				publicActive = cand
+			case !priv && publicAny == "":
+				publicAny = cand
+			}
+		}
+	}
+	for _, cand := range []string{privateActive, privateAny, publicActive, publicAny} {
+		if cand != "" {
+			return cand
+		}
+	}
+	return ""
+}
+
+func usableMerakiIP(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "0.0.0.0" || s == "::" {
+		return false
+	}
+	ip := net.ParseIP(s)
+	return ip != nil && !ip.IsUnspecified() && !ip.IsLoopback()
+}
+
+func isPrivateIP(s string) bool {
+	ip := net.ParseIP(strings.TrimSpace(s))
+	if ip == nil {
+		return false
+	}
+	return ip.IsPrivate()
 }
 
 // RecordMerakiSyncStatus writes last-sync metadata on site_discovery_settings.

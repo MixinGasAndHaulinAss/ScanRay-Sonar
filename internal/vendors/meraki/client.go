@@ -46,8 +46,23 @@ type Device struct {
 	Serial      string `json:"serial"`
 	MAC         string `json:"mac"`
 	LANIP       string `json:"lanIp"`
+	Wan1IP      string `json:"wan1Ip"`
+	Wan2IP      string `json:"wan2Ip"`
 	NetworkID   string `json:"networkId"`
 	ProductType string `json:"productType"`
+}
+
+// ApplianceUplinkStatus is one MX/Z appliance's uplink snapshot.
+type ApplianceUplinkStatus struct {
+	NetworkID string `json:"networkId"`
+	Serial    string `json:"serial"`
+	Model     string `json:"model"`
+	Uplinks   []struct {
+		Interface string `json:"interface"`
+		Status    string `json:"status"`
+		IP        string `json:"ip"`
+		PublicIP  string `json:"publicIp"`
+	} `json:"uplinks"`
 }
 
 func (c *Client) get(ctx context.Context, path string, out any) error {
@@ -91,6 +106,15 @@ func (c *Client) ListNetworks(ctx context.Context, orgID string) ([]Network, err
 func (c *Client) ListDevices(ctx context.Context, orgID string) ([]Device, error) {
 	var out []Device
 	if err := c.get(ctx, "/organizations/"+orgID+"/devices", &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ListApplianceUplinkStatuses returns MX/Z uplink IPs for an org.
+func (c *Client) ListApplianceUplinkStatuses(ctx context.Context, orgID string) ([]ApplianceUplinkStatus, error) {
+	var out []ApplianceUplinkStatus
+	if err := c.get(ctx, "/organizations/"+orgID+"/appliance/uplink/statuses?perPage=1000", &out); err != nil {
 		return nil, err
 	}
 	return out, nil
