@@ -29,7 +29,7 @@ type topologyNode struct {
 	// "foreign:<sysname>" for unmanaged neighbors. The UI uses it as
 	// a stable key for layout caching across renders.
 	ID       string `json:"id"`
-	Kind     string `json:"kind"`  // "appliance" | "foreign"
+	Kind     string `json:"kind"`  // "appliance" | "foreign" | "cloud"
 	Name     string `json:"name"`  // sys_name (or fallback)
 	Label    string `json:"label"` // user-friendly name (appliance.name for managed)
 	Vendor   string `json:"vendor,omitempty"`
@@ -58,7 +58,7 @@ type topologyEdge struct {
 	To       string         `json:"to"`   // node ID
 	FromPort string         `json:"fromPort,omitempty"`
 	ToPort   string         `json:"toPort,omitempty"`
-	Protocol string         `json:"protocol"` // "lldp" | "cdp" | "both"
+	Protocol string         `json:"protocol"` // "lldp" | "cdp" | "both" | "uplink" | "meraki-autovpn" | "third-party-vpn"
 	OperUp   bool           `json:"operUp"`   // local interface oper state
 	LinkKind map[string]any `json:"linkKind,omitempty"`
 	// IF-MIB utilization from the local appliance snapshot (bps).
@@ -96,8 +96,7 @@ func topologyLayer2Kind(protocol, localPortName string) map[string]any {
 }
 
 // topologyLayer3Kind is reserved for OSPF/BGP/static-route adjacencies once
-// the routing collector lands. Exposed here so the UI legend can be wired
-// before the data path catches up.
+// the routing collector lands. WAN/VPN use topologyWANKind / topologyVPNKind.
 func topologyLayer3Kind(routingProto string) map[string]any { //nolint:unused // future-use, keeps legend stable
 	return map[string]any{
 		"layer":    float64(3),
@@ -105,6 +104,10 @@ func topologyLayer3Kind(routingProto string) map[string]any { //nolint:unused //
 		"medium":   "routing",
 	}
 }
+
+// edgeKey dedupes links. Family separates L2 fabric from WAN/VPN so an MX
+// that is both L2-adjacent and Auto-VPN-peered can show both edges.
+type edgeKey struct{ a, b, family string }
 
 // isWirelessIfName matches the most common interface naming patterns for
 // wireless trunks (Cisco "Dot11Radio", Aruba "wlan", Mikrotik "wlan").
@@ -162,9 +165,9 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type appRow struct {
-		node     topologyNode
-		sysName  string
-		snapshot *snmp.Snapshot
+		node      topologyNode
+		sysName   string
+		snapBytes []byte
 	}
 	var apps []appRow
 	// Index managed appliances by their sys_name (the value other
@@ -223,14 +226,7 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 			n.Model = *model
 		}
 
-		var snap *snmp.Snapshot
-		if len(snapBytes) > 0 {
-			snap = &snmp.Snapshot{}
-			if err := json.Unmarshal(snapBytes, snap); err != nil {
-				snap = nil
-			}
-		}
-		apps = append(apps, appRow{node: n, sysName: deref(sysName, ""), snapshot: snap})
+		apps = append(apps, appRow{node: n, sysName: deref(sysName, ""), snapBytes: snapBytes})
 		if sysName != nil && *sysName != "" {
 			sysIndex[strings.ToLower(*sysName)] = id
 		}
@@ -241,10 +237,9 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 		sysIndex[strings.ToLower(name)] = id
 	}
 
-	// Build edges. The dedupe key is an unordered pair of node IDs so
-	// a link reported from both sides folds into one edge — see
-	// the package comment.
-	type edgeKey struct{ a, b string }
+	// Build edges. The dedupe key is an unordered pair of node IDs plus
+	// a family (l2 / wan / vpn) so L2 and VPN between the same pair
+	// can both appear — see the package comment.
 	edges := map[edgeKey]*topologyEdge{}
 	// foreignNodes is request-scoped because handlers run concurrently
 	// — using a package-level map here would race under load.
@@ -270,19 +265,20 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 			// neighbor.
 			key := clean
 			if key == "" {
-				key = remoteAddr
+				key = strings.ToLower(remoteAddr)
 			}
 			remoteID = "foreign:" + key
 		}
 
-		k := edgeKey{a: localID, b: remoteID}
-		if remoteID < localID {
-			k = edgeKey{a: remoteID, b: localID}
+		a, b := localID, remoteID
+		if b < a {
+			a, b = b, a
 		}
+		k := edgeKey{a: a, b: b, family: "l2"}
 		if existing := edges[k]; existing != nil {
 			// Same link reported by both sides or both protocols —
 			// upgrade the protocol marker to "both" when applicable.
-			if existing.Protocol != proto {
+			if existing.Protocol != proto && (existing.Protocol == "lldp" || existing.Protocol == "cdp" || existing.Protocol == "both") {
 				existing.Protocol = "both"
 				existing.LinkKind = topologyLayer2Kind("both", localPort)
 			}
@@ -313,20 +309,32 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 		// them here and merge after the loop so multiple appliances
 		// reporting the same neighbor share one node.
 		if strings.HasPrefix(remoteID, "foreign:") {
-			foreignNodes[remoteID] = topologyNode{
-				ID:       remoteID,
-				Kind:     "foreign",
-				Name:     remoteSys,
-				Label:    remoteSys,
-				Platform: remotePlatform,
-				MgmtIP:   remoteAddr,
-				Status:   "unknown",
+			if _, ok := foreignNodes[remoteID]; !ok {
+				foreignNodes[remoteID] = topologyNode{
+					ID:       remoteID,
+					Kind:     "foreign",
+					Name:     remoteSys,
+					Label:    remoteSys,
+					Platform: remotePlatform,
+					MgmtIP:   remoteAddr,
+					Status:   "unknown",
+				}
 			}
 		}
 	}
 
 	for _, a := range apps {
-		if a.snapshot == nil {
+		if len(a.snapBytes) == 0 {
+			continue
+		}
+		if isMerakiSnapshot(a.snapBytes) {
+			ms := parseMerakiSnapshot(a.snapBytes)
+			addMerakiL2Neighbors(a.node.ID, ms, includePhones, addEdge)
+			addMerakiWANAndVPN(a.node.ID, ms, sysIndex, edges, foreignNodes)
+			continue
+		}
+		snap := &snmp.Snapshot{}
+		if err := json.Unmarshal(a.snapBytes, snap); err != nil {
 			continue
 		}
 		// Build local-port-name lookup: ifIndex -> (name, operUp, bps, speed).
@@ -337,15 +345,15 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 			outBps   *uint64
 			speedBps uint64
 		}
-		ports := make(map[int32]portInfo, len(a.snapshot.Interfaces))
-		for _, ifc := range a.snapshot.Interfaces {
+		ports := make(map[int32]portInfo, len(snap.Interfaces))
+		for _, ifc := range snap.Interfaces {
 			ports[ifc.Index] = portInfo{
 				name: ifc.Name, operUp: ifc.OperUp,
 				inBps: ifc.InBps, outBps: ifc.OutBps, speedBps: ifc.SpeedBps,
 			}
 		}
 
-		for _, n := range a.snapshot.LLDP {
+		for _, n := range snap.LLDP {
 			if !includePhones && isLLDPPhone(n) {
 				continue
 			}
@@ -353,7 +361,7 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 			addEdge(a.node.ID, fallback(n.LocalPort, p.name), p.operUp, p.inBps, p.outBps, p.speedBps,
 				n.RemoteSysName, fallback(n.RemotePortDescr, n.RemotePortID), "", "", "lldp")
 		}
-		for _, n := range a.snapshot.CDP {
+		for _, n := range snap.CDP {
 			if !includePhones && isCDPPhone(n) {
 				continue
 			}
@@ -361,6 +369,7 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 			addEdge(a.node.ID, p.name, p.operUp, p.inBps, p.outBps, p.speedBps,
 				n.RemoteSysName, n.RemotePortID, n.RemotePlatform, n.RemoteAddress, "cdp")
 		}
+		addSNMPTunnelStubs(a.node.ID, snap, edges, foreignNodes)
 	}
 
 	resp := topologyResp{

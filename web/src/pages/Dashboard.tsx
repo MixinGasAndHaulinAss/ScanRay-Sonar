@@ -423,7 +423,7 @@ function TopologySummary({
     let edges = topology.edges.length;
     for (const n of topology.nodes) {
       if (n.kind === "appliance") managed++;
-      else foreign++;
+      else if (n.kind === "foreign") foreign++;
     }
     return { managed, foreign, edges };
   }, [topology]);

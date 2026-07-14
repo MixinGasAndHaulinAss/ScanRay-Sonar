@@ -958,8 +958,8 @@ export interface VersionInfo {
 
 export interface TopologyNode {
   id: string;
-  /** "appliance" = managed by us; "foreign" = only learned via a neighbor's CDP/LLDP. */
-  kind: "appliance" | "foreign";
+  /** "appliance" = managed; "foreign" = CDP/LLDP/VPN peer; "cloud" = Internet. */
+  kind: "appliance" | "foreign" | "cloud";
   name: string;
   label: string;
   vendor?: string;
@@ -981,14 +981,14 @@ export interface TopologyEdge {
   to: string;
   fromPort?: string;
   toPort?: string;
-  /** "both" means the same link was reported by both LLDP and CDP (or by both ends). */
-  protocol: "lldp" | "cdp" | "both";
+  /** lldp/cdp/both for L2; uplink for WAN; meraki-autovpn / third-party-vpn for tunnels. */
+  protocol: string;
   operUp: boolean;
   /** IF-MIB bps utilization when the poller has rate data. */
   inBps?: number;
   outBps?: number;
   utilizationPct?: number;
-  /** Layered link metadata when provided by the API (site network map). */
+  /** Layered link metadata (layer/medium/protocol). */
   linkKind?: Record<string, unknown>;
 }
 

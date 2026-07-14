@@ -120,7 +120,7 @@ interface Props<N extends ForceNodeInput, E extends ForceEdgeInput> {
 const REPULSE = 22000;
 const SPRING = 0.04;
 const RESTPX = 140;
-const CENTER = 0.012;
+const CENTER = 0.006;
 const DAMP = 0.82;
 const PRELAYOUT_TICKS = 280;
 const LIVE_TICKS_PER_FRAME = 6;
@@ -158,13 +158,16 @@ function tick<N extends ForceNodeInput, E extends ForceEdgeInput>(
   w: number,
   h: number,
   pad: number,
+  radiusOf?: (node: N) => number,
 ) {
   const idx = new Map<string, SimNode<N>>();
   sims.forEach((s) => idx.set(s.id, s));
   for (let i = 0; i < sims.length; i++) {
     const a = sims[i];
+    const ra = radiusOf?.(a.data) ?? 22;
     for (let j = i + 1; j < sims.length; j++) {
       const b = sims[j];
+      const rb = radiusOf?.(b.data) ?? 22;
       let dx = a.x - b.x;
       let dy = a.y - b.y;
       let d2 = dx * dx + dy * dy;
@@ -173,7 +176,10 @@ function tick<N extends ForceNodeInput, E extends ForceEdgeInput>(
         dy = (Math.random() - 0.5) * 0.1;
         d2 = dx * dx + dy * dy + 0.01;
       }
-      const f = REPULSE / d2;
+      // Scale repulsion by combined visual radii so large nodes (and
+      // labels) don't sit on top of each other.
+      const scale = ((ra + rb) / 44) ** 2;
+      const f = (REPULSE * scale) / d2;
       const inv = 1 / Math.sqrt(d2);
       const fx = dx * inv * f;
       const fy = dy * inv * f;
@@ -217,6 +223,50 @@ function tick<N extends ForceNodeInput, E extends ForceEdgeInput>(
   }
 }
 
+/** One-pass hard separation so residual corner clumps don't overlap. */
+function separateNodes<N extends ForceNodeInput>(
+  sims: SimNode<N>[],
+  w: number,
+  h: number,
+  pad: number,
+  radiusOf?: (node: N) => number,
+) {
+  const gap = 8;
+  for (let pass = 0; pass < 3; pass++) {
+    for (let i = 0; i < sims.length; i++) {
+      const a = sims[i];
+      if (a.fx != null && a.fy != null) continue;
+      const ra = radiusOf?.(a.data) ?? 22;
+      for (let j = i + 1; j < sims.length; j++) {
+        const b = sims[j];
+        if (b.fx != null && b.fy != null) continue;
+        const rb = radiusOf?.(b.data) ?? 22;
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let d = Math.sqrt(dx * dx + dy * dy);
+        const min = ra + rb + gap;
+        if (d < 0.01) {
+          dx = (Math.random() - 0.5) || 0.1;
+          dy = (Math.random() - 0.5) || 0.1;
+          d = Math.sqrt(dx * dx + dy * dy);
+        }
+        if (d >= min) continue;
+        const push = (min - d) / 2;
+        const ux = dx / d;
+        const uy = dy / d;
+        a.x -= ux * push;
+        a.y -= uy * push;
+        b.x += ux * push;
+        b.y += uy * push;
+        a.x = Math.max(pad, Math.min(w - pad, a.x));
+        a.y = Math.max(pad, Math.min(h - pad, a.y));
+        b.x = Math.max(pad, Math.min(w - pad, b.x));
+        b.y = Math.max(pad, Math.min(h - pad, b.y));
+      }
+    }
+  }
+}
+
 function ForceGraphInner<
   N extends ForceNodeInput,
   E extends ForceEdgeInput,
@@ -234,6 +284,7 @@ function ForceGraphInner<
     enableZoomPan = false,
     worldPadding = 40,
     staticLayout = false,
+    nodeRadius,
   }: Props<N, E>,
   ref: React.Ref<ForceGraphHandle>,
 ) {
@@ -277,7 +328,8 @@ function ForceGraphInner<
     const fresh = nodes.map((n) => seededInit(n, width, height));
     if (!staticLayout) {
       for (let i = 0; i < PRELAYOUT_TICKS; i++)
-        tick(fresh, edges, width, height, worldPadding);
+        tick(fresh, edges, width, height, worldPadding, nodeRadius);
+      separateNodes(fresh, width, height, worldPadding, nodeRadius);
     }
     setSims(fresh);
     setTickN((n) => n + 1);
@@ -313,7 +365,7 @@ function ForceGraphInner<
           return;
         }
         for (let i = 0; i < LIVE_TICKS_PER_FRAME; i++) {
-          tick(sims, edges, width, height, worldPadding);
+          tick(sims, edges, width, height, worldPadding, nodeRadius);
         }
         remaining -= LIVE_TICKS_PER_FRAME;
         setTickN((n) => n + 1);
@@ -322,7 +374,7 @@ function ForceGraphInner<
       stopRAF();
       rafRef.current = requestAnimationFrame(step);
     },
-    [sims, edges, width, height, worldPadding, stopRAF],
+    [sims, edges, width, height, worldPadding, stopRAF, nodeRadius],
   );
 
   useEffect(() => {
@@ -394,7 +446,7 @@ function ForceGraphInner<
         return;
       }
       for (let i = 0; i < LIVE_TICKS_PER_FRAME; i++) {
-        tick(sims, edges, width, height, worldPadding);
+        tick(sims, edges, width, height, worldPadding, nodeRadius);
       }
       setTickN((n) => n + 1);
       rafRef.current = requestAnimationFrame(loop);

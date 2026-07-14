@@ -1,17 +1,73 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { Topology } from "../api/types";
-import { TopologyGraph } from "./Topology";
+import TopologyFilterBar, {
+  filterTopologyByTags,
+  type TagMatchMode,
+} from "../components/TopologyFilterBar";
+import { TopologyGraph, TopologyLinkLegend } from "./Topology";
+
+const TAG_FILTER_KEY = "sonar.topology.site.tags";
+const TAG_MODE_KEY = "sonar.topology.site.tagMode";
+const PHONES_KEY = "sonar.topology.site.includePhones";
+
+function loadTags(): string[] {
+  try {
+    const raw = localStorage.getItem(TAG_FILTER_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((t) => typeof t === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 export default function SiteNetworkMap() {
   const { siteId } = useParams<{ siteId: string }>();
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["site-network-map", siteId],
-    queryFn: () => api.get<Topology>(`/sites/${siteId}/network-map`),
+
+  const [includePhones, setIncludePhones] = useState(
+    () => localStorage.getItem(PHONES_KEY) === "1",
+  );
+  useEffect(() => {
+    localStorage.setItem(PHONES_KEY, includePhones ? "1" : "0");
+  }, [includePhones]);
+
+  const [tagFilter, setTagFilter] = useState<string[]>(loadTags);
+  useEffect(() => {
+    localStorage.setItem(TAG_FILTER_KEY, JSON.stringify(tagFilter));
+  }, [tagFilter]);
+
+  const [tagMode, setTagMode] = useState<TagMatchMode>(() =>
+    localStorage.getItem(TAG_MODE_KEY) === "or" ? "or" : "and",
+  );
+  useEffect(() => {
+    localStorage.setItem(TAG_MODE_KEY, tagMode);
+  }, [tagMode]);
+
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
+    queryKey: ["site-network-map", siteId, includePhones],
+    queryFn: () =>
+      api.get<Topology>(
+        `/sites/${siteId}/network-map${includePhones ? "?includePhones=1" : ""}`,
+      ),
     enabled: !!siteId,
     refetchInterval: 30_000,
   });
+
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    for (const n of data?.nodes ?? []) {
+      for (const t of n.tags ?? []) set.add(t);
+    }
+    return Array.from(set).sort();
+  }, [data]);
+
+  const filtered = useMemo(() => {
+    if (!data) return data;
+    return filterTopologyByTags(data, tagFilter, tagMode);
+  }, [data, tagFilter, tagMode]);
 
   return (
     <div className="space-y-4">
@@ -22,12 +78,25 @@ export default function SiteNetworkMap() {
             Topology limited to appliances in this site (same graph engine as the global view).
           </p>
         </div>
-        <Link
-          to="/sites"
-          className="rounded-full border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs text-slate-300 hover:bg-ink-800"
-        >
-          ← Sites
-        </Link>
+        <div className="flex flex-wrap items-end gap-2">
+          <TopologyFilterBar
+            availableTags={allTags}
+            selectedTags={tagFilter}
+            onTagsChange={setTagFilter}
+            matchMode={tagMode}
+            onMatchModeChange={setTagMode}
+            includePhones={includePhones}
+            onIncludePhonesChange={setIncludePhones}
+            onRefresh={() => refetch()}
+            refreshing={isFetching}
+          />
+          <Link
+            to="/sites"
+            className="rounded-full border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs text-slate-300 hover:bg-ink-800"
+          >
+            ← Sites
+          </Link>
+        </div>
       </div>
 
       {isLoading && <p className="text-sm text-slate-500">Loading map…</p>}
@@ -36,36 +105,8 @@ export default function SiteNetworkMap() {
           Could not load network map for this site.
         </div>
       )}
-      {data && <TopologyGraph data={data} />}
-      {data && <LinkKindLegend />}
+      {filtered && <TopologyGraph data={filtered} />}
+      {filtered && <TopologyLinkLegend />}
     </div>
-  );
-}
-
-function LinkKindLegend() {
-  return (
-    <div className="flex flex-wrap gap-3 rounded-md border border-ink-800 bg-ink-900/60 p-3 text-xs text-slate-300">
-      <span className="font-semibold text-slate-200">Link kinds:</span>
-      <Swatch color="bg-emerald-500" label="L1 wired" />
-      <Swatch color="bg-cyan-400" label="L1 wireless" />
-      <Swatch color="bg-sonar-400" label="L2 LLDP" />
-      <Swatch color="bg-amber-400" label="L2 CDP" />
-      <Swatch color="bg-violet-400" label="L2 LLDP+CDP (both)" />
-      <Swatch color="bg-rose-500" label="L3 OSPF" />
-      <Swatch color="bg-pink-500" label="L3 BGP" />
-      <Swatch color="bg-orange-500" label="L3 static" />
-      <span className="ml-auto text-[11px] text-slate-500">
-        Layer 3 entries appear once routing-adjacency collection lands in Phase 2.
-      </span>
-    </div>
-  );
-}
-
-function Swatch({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className={`inline-block h-2.5 w-5 rounded ${color}`} />
-      <span>{label}</span>
-    </span>
   );
 }

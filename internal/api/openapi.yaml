@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.7.14.4"
+  version: "2026.7.14.5"
   license:
     name: MIT
 servers:
@@ -562,18 +562,23 @@ paths:
 
   /topology:
     get:
-      summary: Network topology graph (managed appliances + LLDP/CDP neighbors)
+      summary: Network topology graph (appliances, neighbors, WAN/VPN)
       description: |
         Builds a deduped node/edge graph from every appliance's
-        last_snapshot. Managed nodes are real Appliance rows; foreign
-        nodes are devices we only learned about via a neighbor's CDP
-        or LLDP advertisement (id is `foreign:<sysname>`). Edges are
-        keyed by an unordered node-pair so a link reported by both
-        ends collapses into one edge with `protocol: "both"`.
+        last_snapshot. Managed nodes are Appliance rows; foreign
+        nodes are CDP/LLDP or VPN peers (`foreign:…`); Internet is
+        `cloud:internet`. SNMP snapshots contribute LLDP/CDP (+ tunnel
+        stubs to Internet). Meraki `meraki-2` snapshots contribute
+        Dashboard neighbors, WAN uplinks, and Auto/third-party VPN.
+        Edges are keyed by unordered node-pair + family (l2/wan/vpn).
       parameters:
         - in: query
           name: siteId
           schema: { type: string, format: uuid }
+        - in: query
+          name: includePhones
+          schema: { type: string, enum: ["1"] }
+          description: Include IP phone neighbors (default suppressed)
       responses:
         "200":
           description: Topology
@@ -589,7 +594,7 @@ paths:
                       type: object
                       properties:
                         id:        { type: string }
-                        kind:      { type: string, enum: [appliance, foreign] }
+                        kind:      { type: string, enum: [appliance, foreign, cloud] }
                         name:      { type: string }
                         label:     { type: string }
                         vendor:    { type: string }
@@ -602,6 +607,9 @@ paths:
                         portsTotal:  { type: integer }
                         portsUp:     { type: integer }
                         uplinkCount: { type: integer }
+                        tags:
+                          type: array
+                          items: { type: string }
                   edges:
                     type: array
                     items:
@@ -611,8 +619,14 @@ paths:
                         to:        { type: string }
                         fromPort:  { type: string }
                         toPort:    { type: string }
-                        protocol:  { type: string, enum: [lldp, cdp, both] }
+                        protocol:  { type: string }
                         operUp:    { type: boolean }
+                        linkKind:
+                          type: object
+                          additionalProperties: true
+                        inBps: { type: integer }
+                        outBps: { type: integer }
+                        utilizationPct: { type: number }
 
   /appliances:
     get:
