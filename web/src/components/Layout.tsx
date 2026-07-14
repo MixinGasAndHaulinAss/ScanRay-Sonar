@@ -12,6 +12,7 @@ import {
   DocumentTextIcon,
   BellAlertIcon,
   ChartBarIcon,
+  ArrowsRightLeftIcon,
   MagnifyingGlassCircleIcon,
   KeyIcon,
   Cog6ToothIcon,
@@ -31,7 +32,7 @@ import ThemeToggle from "./ThemeToggle";
 // APP_VERSION is just the static fallback shown if /version hasn't
 // returned yet (or fails). The real source of truth is the Go binary's
 // embedded VERSION, fetched below via useQuery.
-const APP_VERSION = "2026.7.13.5";
+const APP_VERSION = "2026.7.13.6";
 
 type HeroIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -49,6 +50,7 @@ const primaryNav: NavItem[] = [
   { to: "/appliances", label: "Appliances", icon: ServerStackIcon },
   { to: "/collectors", label: "Collectors", icon: SignalIcon },
   { to: "/topology", label: "Topology", icon: ShareIcon },
+  { to: "/traffic", label: "Traffic", icon: ArrowsRightLeftIcon },
   { to: "/world", label: "World", icon: MapIcon },
   { to: "/documents", label: "Documents", icon: DocumentTextIcon },
   { to: "/alarms", label: "Alarms", icon: BellAlertIcon },

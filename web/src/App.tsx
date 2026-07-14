@@ -21,6 +21,7 @@ import World from "./pages/World";
 import Users from "./pages/Users";
 import Reports from "./pages/Reports";
 import PassiveSnmp from "./pages/PassiveSnmp";
+import Traffic from "./pages/Traffic";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 
@@ -200,6 +201,14 @@ export default function App() {
         element={
           <RequireAuth>
             <PassiveSnmp />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/traffic"
+        element={
+          <RequireAuth>
+            <Traffic />
           </RequireAuth>
         }
       />

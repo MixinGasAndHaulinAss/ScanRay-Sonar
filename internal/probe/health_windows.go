@@ -24,5 +24,12 @@ func CollectHealthSignals(ctx context.Context) *HealthSignals {
 	h := &HealthSignals{}
 	winRunPSBatch(ctx, h)
 	winRunTypeperf(ctx, h)
+	products, sysmon := CollectEDR(ctx)
+	if len(products) > 0 {
+		h.EDRProducts = products
+	}
+	if sysmon != nil {
+		h.SysmonRunning = sysmon
+	}
 	return h
 }

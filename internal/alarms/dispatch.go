@@ -76,6 +76,10 @@ func dispatchAlarmChannels(ctx context.Context, store AuditSink, log *slog.Logge
 			sendEmailNotify(ctx, store, log, smtpCfg, ch, evt)
 		case "webhook":
 			sendWebhookNotify(ctx, store, httpCli, log, ch, evt)
+		case "slack":
+			sendSlackNotify(ctx, store, httpCli, log, ch, evt)
+		case "teams":
+			sendTeamsNotify(ctx, store, httpCli, log, ch, evt)
 		default:
 			store.Audit(ctx, "system", "alarm.notify_failed", nil, "",
 				map[string]any{"alarmId": evt.AlarmID, "channelId": ch.ID.String(), "kind": ch.Kind, "error": "unknown channel kind"})
@@ -163,6 +167,63 @@ func sendWebhookNotify(ctx context.Context, store AuditSink, httpCli *http.Clien
 	}
 	store.Audit(ctx, "system", "alarm.notified", nil, "",
 		map[string]any{"alarmId": evt.AlarmID, "channelId": ch.ID.String(), "kind": "webhook", "channelName": ch.Name})
+}
+
+func sendSlackNotify(ctx context.Context, store AuditSink, httpCli *http.Client, log *slog.Logger, ch notify.Channel, evt AlarmNotifyEvent) {
+	rawURL, _ := ch.Config["url"].(string)
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		store.Audit(ctx, "system", "alarm.notify_failed", nil, "",
+			map[string]any{"alarmId": evt.AlarmID, "channelId": ch.ID.String(), "kind": "slack", "error": "missing config.url"})
+		return
+	}
+	text := fmt.Sprintf("[%s] %s — %s", evt.Severity, evt.Title, evt.RuleName)
+	if evt.Event == "alarm.cleared" {
+		text = "[RESOLVED] " + text
+	}
+	payload, _ := json.Marshal(map[string]any{"text": text})
+	sendCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if err := notify.PostSignedJSON(sendCtx, httpCli, rawURL, ch.SigningSecret, payload); err != nil {
+		log.Warn("alarm notify: slack failed", "channel", ch.ID, "err", err)
+		store.Audit(ctx, "system", "alarm.notify_failed", nil, "",
+			map[string]any{"alarmId": evt.AlarmID, "channelId": ch.ID.String(), "kind": "slack", "error": err.Error()})
+		return
+	}
+	store.Audit(ctx, "system", "alarm.notified", nil, "",
+		map[string]any{"alarmId": evt.AlarmID, "channelId": ch.ID.String(), "kind": "slack", "channelName": ch.Name})
+}
+
+func sendTeamsNotify(ctx context.Context, store AuditSink, httpCli *http.Client, log *slog.Logger, ch notify.Channel, evt AlarmNotifyEvent) {
+	rawURL, _ := ch.Config["url"].(string)
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		store.Audit(ctx, "system", "alarm.notify_failed", nil, "",
+			map[string]any{"alarmId": evt.AlarmID, "channelId": ch.ID.String(), "kind": "teams", "error": "missing config.url"})
+		return
+	}
+	title := evt.Title
+	if evt.Event == "alarm.cleared" {
+		title = "RESOLVED: " + title
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"@type":    "MessageCard",
+		"@context": "http://schema.org/extensions",
+		"summary":  title,
+		"themeColor": "FF0000",
+		"title":    title,
+		"text":     fmt.Sprintf("Rule **%s** (%s)\nTarget: %s %s", evt.RuleName, evt.Severity, evt.TargetKind, evt.TargetID),
+	})
+	sendCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if err := notify.PostSignedJSON(sendCtx, httpCli, rawURL, ch.SigningSecret, payload); err != nil {
+		log.Warn("alarm notify: teams failed", "channel", ch.ID, "err", err)
+		store.Audit(ctx, "system", "alarm.notify_failed", nil, "",
+			map[string]any{"alarmId": evt.AlarmID, "channelId": ch.ID.String(), "kind": "teams", "error": err.Error()})
+		return
+	}
+	store.Audit(ctx, "system", "alarm.notified", nil, "",
+		map[string]any{"alarmId": evt.AlarmID, "channelId": ch.ID.String(), "kind": "teams", "channelName": ch.Name})
 }
 
 func extractEmailRecipients(cfg map[string]any) []string {

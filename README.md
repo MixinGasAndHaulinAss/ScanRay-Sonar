@@ -29,10 +29,10 @@ Sonar is the third member of the **ScanRay** product line (alongside ScanRay Con
 ### Planned (see [Roadmap](#roadmap))
 
 - IPMI / Redfish, RAID + SMART deep dives, EDR/Sysmon event ingest, certificate inventory, synthetic reachability, time drift, backup last-success, reboot / crash history.
-- Vendor integrations: Meraki Dashboard API + webhook, Cisco / Aruba / Ubiquiti / MikroTik plugin interface, SNMP trap receiver on UDP 162.
-- Traffic visualization: live per-host ribbon flow, site sankey/chord with LLDP-overlay link utilization, NetFlow / sFlow / IPFIX collector on UDP 2055/6343, optional eBPF (Linux) and ETW (Windows) byte-accurate flow capture.
+- Vendor integrations: Meraki Dashboard API (sync shipped), Cisco / Aruba / Ubiquiti / MikroTik plugin interface, SNMP trap receiver on UDP 162 (shipped).
+- Traffic visualization: live per-host ribbon flow, site sankey/chord with LLDP-overlay link utilization (topology overlay shipped), NetFlow / IPFIX collector on UDP 2055 (shipped), optional eBPF (Linux) and ETW (Windows) byte-accurate flow capture.
 - Universal Ctrl/Cmd-K search across hosts/IPs/CIDRs/ports/processes/DNS/ASNs.
-- Alert rule editor, email + Slack/Teams channels, OIDC / Azure AD, signed agent self-update channel.
+- Alert rule editor (shipped), email + Slack/Teams channels (shipped), OIDC / Azure AD (stubs shipped), signed agent self-update channel (partial).
 
 ---
 
@@ -531,16 +531,18 @@ Refresh the databases with `make refresh-geoip` and restart `sonar-api` to pick 
 
   Linux Windows-only patch counts and Linux package-manager scraping are gated behind `SONAR_PROBE_HEALTH_PKG=true` because they shell out to `apt`/`dnf`. Windows uses an embedded PowerShell batch + `typeperf.exe` for queue length to avoid pulling in `go-ole`.
 
-  *Still TODO for Phase 2:* IPMI / Redfish, RAID + SMART, failed services, pending reboots, backup-last-success, time drift, cert inventory, security posture, EDR/Sysmon presence + events, GPU/UPS, containers/VMs, synthetic checks, traceroute hops, ETW UserInputDelay (high user-input delay).
+  *Still TODO for Phase 2:* IPMI / Redfish, RAID + SMART, failed services, pending reboots, backup-last-success, time drift, cert inventory, security posture, EDR event ingest (presence detection shipped), GPU/UPS, containers/VMs, synthetic checks, traceroute hops, ETW UserInputDelay (high user-input delay).
 - **Phase 3 — Network module** ✅ (core shipped)
-  SNMP v1/v2c/v3 poller, IF-MIB (port stats), ENTITY-MIB / ENTITY-SENSOR-MIB (chassis + transceiver DDM), LLDP + CDP auto-topology with Cisco IP-phone suppression, **physical-vs-virtual port** distinction, **uplink highlighting**, last-seen tracking, full appliance + site CRUD, encrypted SNMP credentials.
-  *Still TODO for Phase 3:* live SNMP link-utilization overlay on the topology, SNMP trap receiver on UDP 162.
-- **Phase 4 — Vendor + EDR**
-  Meraki Dashboard API + webhook receiver, Cisco / Aruba / Ubiquiti / MikroTik plugin interface, EDR/Sysmon presence + event ingest, alert rule editor UI, email + webhook (Slack / Teams) channels.
-- **Phase 5 — Traffic visualization**
-  Universal Ctrl/Cmd-K Traffic search (hosts / IPs / CIDRs / ports / processes / DNS / ASNs), per-host live ribbon flow, site sankey / chord with link-utilization overlay, NetFlow / sFlow / IPFIX collector on UDP 2055/6343, optional eBPF (Linux) and ETW (Windows) byte-accurate flow collection, saved searches.
-- **Phase 6 — Polish**
-  Signed agent self-update channel, OIDC / Azure AD, full OpenAPI docs polish, hardening + load test.
+  SNMP v1/v2c/v3 poller, IF-MIB (port stats), ENTITY-MIB / ENTITY-SENSOR-MIB (chassis + transceiver DDM), LLDP + CDP auto-topology with Cisco IP-phone suppression, **physical-vs-virtual port** distinction, **uplink highlighting**, last-seen tracking, full appliance + site CRUD, encrypted SNMP credentials, **link-utilization overlay on topology** (IF-MIB bps), **SNMP trap receiver** (UDP 162 via `SONAR_SNMP_TRAP_LISTEN`), **vCenter REST inventory** during discovery.
+- **Phase 4 — Vendor + EDR** (partial)
+  **Meraki Dashboard API sync** (`SONAR_MERAKI_API_KEY`), **EDR/Sysmon presence** on Windows probes, **alarm rule editor** (channel multi-select, PATCH, forSeconds/clearForSeconds), **Slack/Teams webhook channels**.
+  *Still TODO:* full EDR event ingest, Cisco / Aruba / Ubiquiti / MikroTik plugin interface.
+- **Phase 5 — Traffic visualization** (partial)
+  **NetFlow v5 / IPFIX stub parser**, **flow_summaries hypertable**, **sonar-flowd** / poller `SONAR_FLOW_LISTEN`, **Traffic UI** with IP search.
+  *Still TODO:* universal Ctrl/Cmd-K search, per-host ribbon flow, site sankey/chord, sFlow, eBPF/ETW byte-accurate capture.
+- **Phase 6 — Polish** (partial)
+  **OIDC login stubs** (`SONAR_OIDC_*`), **load-test script** (`scripts/loadtest-ingest.sh`), **MinIO document offload** (`SONAR_MINIO_*`), **signed probe self-update** channel.
+  *Still TODO:* full OIDC user provisioning, OpenAPI polish, production hardening pass.
 
 ---
 

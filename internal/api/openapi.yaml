@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.7.13.5"
+  version: "2026.7.13.6"
   license:
     name: MIT
 servers:
@@ -1011,6 +1011,36 @@ paths:
           content:
             application/octet-stream:
               schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /probe/latest:
+    get:
+      summary: Latest signed probe manifest for self-update (unauthenticated)
+      security: []
+      parameters:
+        - in: query
+          name: os
+          required: true
+          schema: { type: string, enum: [linux, windows] }
+        - in: query
+          name: arch
+          required: true
+          schema: { type: string, enum: [amd64, arm64] }
+      responses:
+        "200":
+          description: signed manifest
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version, os, arch, sha256, sig, url]
+                properties:
+                  version: { type: string }
+                  os: { type: string }
+                  arch: { type: string }
+                  sha256: { type: string }
+                  sig: { type: string, description: "ed25519 signature (base64url) over sha256 hex" }
+                  url: { type: string }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /query/devices:

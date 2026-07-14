@@ -6,6 +6,18 @@ import { formatRelative } from "../lib/format";
 
 type Tab = "alarms" | "rules" | "channels";
 
+type AlarmRule = {
+  id: string;
+  name?: string;
+  severity?: string;
+  expression?: string;
+  siteId?: string | null;
+  channelIds?: string[];
+  forSeconds?: number;
+  clearForSeconds?: number;
+  enabled?: boolean;
+};
+
 export default function Alarms() {
   const qc = useQueryClient();
   const me = useQuery({ queryKey: ["me"], queryFn: () => api.get<User>("/auth/me") });
@@ -21,7 +33,7 @@ export default function Alarms() {
 
   const rules = useQuery({
     queryKey: ["alarm-rules"],
-    queryFn: () => api.get<Record<string, unknown>[]>("/alarm-rules"),
+    queryFn: () => api.get<AlarmRule[]>("/alarm-rules"),
   });
 
   const channels = useQuery({
@@ -33,7 +45,23 @@ export default function Alarms() {
   const [ruleExpr, setRuleExpr] = useState("");
   const [ruleSev, setRuleSev] = useState("warning");
   const [ruleSite, setRuleSite] = useState("");
+  const [ruleChannels, setRuleChannels] = useState<string[]>([]);
+  const [ruleForSec, setRuleForSec] = useState("0");
+  const [ruleClearSec, setRuleClearSec] = useState("0");
   const [ruleErr, setRuleErr] = useState<string | null>(null);
+  const [editingRule, setEditingRule] = useState<AlarmRule | null>(null);
+
+  const resetRuleForm = () => {
+    setRuleName("");
+    setRuleExpr("");
+    setRuleSev("warning");
+    setRuleSite("");
+    setRuleChannels([]);
+    setRuleForSec("0");
+    setRuleClearSec("0");
+    setEditingRule(null);
+    setRuleErr(null);
+  };
 
   const createRule = useMutation({
     mutationFn: () =>
@@ -42,16 +70,35 @@ export default function Alarms() {
         expression: ruleExpr,
         severity: ruleSev,
         siteId: ruleSite || null,
-        channelIds: [],
+        channelIds: ruleChannels,
+        forSeconds: parseInt(ruleForSec, 10) || 0,
+        clearForSeconds: parseInt(ruleClearSec, 10) || 0,
       }),
     onSuccess: async () => {
-      setRuleName("");
-      setRuleExpr("");
-      setRuleErr(null);
+      resetRuleForm();
       await qc.invalidateQueries({ queryKey: ["alarm-rules"] });
     },
     onError: (e: unknown) =>
       setRuleErr(e instanceof ApiError ? e.message : "Create failed"),
+  });
+
+  const patchRule = useMutation({
+    mutationFn: (id: string) =>
+      api.patch(`/alarm-rules/${id}`, {
+        name: ruleName,
+        expression: ruleExpr,
+        severity: ruleSev,
+        siteId: ruleSite || null,
+        channelIds: ruleChannels,
+        forSeconds: parseInt(ruleForSec, 10) || 0,
+        clearForSeconds: parseInt(ruleClearSec, 10) || 0,
+      }),
+    onSuccess: async () => {
+      resetRuleForm();
+      await qc.invalidateQueries({ queryKey: ["alarm-rules"] });
+    },
+    onError: (e: unknown) =>
+      setRuleErr(e instanceof ApiError ? e.message : "Update failed"),
   });
 
   const delRule = useMutation({
@@ -97,6 +144,20 @@ export default function Alarms() {
     mutationFn: (id: string | number) => api.post(`/alarms/${id}/clear`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["alarms"] }),
   });
+
+  const channelOptions = channels.data ?? [];
+
+  function startEditRule(r: AlarmRule) {
+    setEditingRule(r);
+    setRuleName(String(r.name ?? ""));
+    setRuleExpr(String(r.expression ?? ""));
+    setRuleSev(String(r.severity ?? "warning"));
+    setRuleSite(String(r.siteId ?? ""));
+    setRuleChannels(r.channelIds ?? []);
+    setRuleForSec(String(r.forSeconds ?? 0));
+    setRuleClearSec(String(r.clearForSeconds ?? 0));
+    setRuleErr(null);
+  }
 
   if (!me.data) return <p className="text-sm text-slate-500">Loading…</p>;
 
@@ -199,10 +260,13 @@ export default function Alarms() {
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!ruleName.trim() || !ruleExpr.trim()) return;
-                createRule.mutate();
+                if (editingRule) patchRule.mutate(editingRule.id);
+                else createRule.mutate();
               }}
             >
-              <h3 className="text-sm font-semibold text-slate-200">New rule</h3>
+              <h3 className="text-sm font-semibold text-slate-200">
+                {editingRule ? "Edit rule" : "New rule"}
+              </h3>
               {ruleErr && <p className="text-xs text-red-400">{ruleErr}</p>}
               <div className="flex flex-wrap gap-2">
                 <input
@@ -232,6 +296,41 @@ export default function Alarms() {
                     </option>
                   ))}
                 </select>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="forSeconds"
+                  title="Predicate must hold for N seconds before opening"
+                  className="w-28 rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm"
+                  value={ruleForSec}
+                  onChange={(e) => setRuleForSec(e.target.value)}
+                />
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="clearForSeconds"
+                  title="Predicate must be false for N seconds before auto-clear"
+                  className="w-36 rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm"
+                  value={ruleClearSec}
+                  onChange={(e) => setRuleClearSec(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">Notification channels</label>
+                <select
+                  multiple
+                  className="min-h-[72px] w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm"
+                  value={ruleChannels}
+                  onChange={(e) =>
+                    setRuleChannels(Array.from(e.target.selectedOptions, (o) => o.value))
+                  }
+                >
+                  {channelOptions.map((c) => (
+                    <option key={String(c.id)} value={String(c.id)}>
+                      {String(c.kind)} — {String(c.name)}
+                    </option>
+                  ))}
+                </select>
               </div>
               <textarea
                 placeholder={'Expression e.g. device.cpuPct > 85 && device.memUsedRatio > 0.9'}
@@ -239,13 +338,24 @@ export default function Alarms() {
                 value={ruleExpr}
                 onChange={(e) => setRuleExpr(e.target.value)}
               />
-              <button
-                type="submit"
-                disabled={createRule.isPending}
-                className="rounded-full border border-sonar-700 bg-sonar-950/40 px-4 py-1.5 text-xs text-sonar-200 hover:bg-sonar-900/40 disabled:opacity-40"
-              >
-                Create rule
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={createRule.isPending || patchRule.isPending}
+                  className="rounded-full border border-sonar-700 bg-sonar-950/40 px-4 py-1.5 text-xs text-sonar-200 hover:bg-sonar-900/40 disabled:opacity-40"
+                >
+                  {editingRule ? "Save rule" : "Create rule"}
+                </button>
+                {editingRule && (
+                  <button
+                    type="button"
+                    onClick={resetRuleForm}
+                    className="rounded-full border border-ink-700 px-4 py-1.5 text-xs text-slate-400"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
             </form>
           )}
           {!canEdit && (
@@ -257,6 +367,7 @@ export default function Alarms() {
                 <tr>
                   <th className="px-3 py-2">Name</th>
                   <th className="px-3 py-2">Severity</th>
+                  <th className="px-3 py-2">For / Clear</th>
                   <th className="px-3 py-2">Expression</th>
                   <th className="px-3 py-2 text-right">Actions</th>
                 </tr>
@@ -266,20 +377,32 @@ export default function Alarms() {
                   <tr key={String(r.id)} className="border-t border-ink-800 align-top">
                     <td className="px-3 py-2">{String(r.name ?? "")}</td>
                     <td className="px-3 py-2">{String(r.severity ?? "")}</td>
+                    <td className="px-3 py-2 font-mono text-[11px] text-slate-400">
+                      {r.forSeconds ?? 0}s / {r.clearForSeconds ?? 0}s
+                    </td>
                     <td className="max-w-xl px-3 py-2 font-mono text-[11px] text-slate-400">
                       {String(r.expression ?? "")}
                     </td>
                     <td className="px-3 py-2 text-right">
                       {canEdit && (
-                        <button
-                          type="button"
-                          className="text-xs text-red-400 hover:underline"
-                          onClick={() => {
-                            if (confirm("Delete this alarm rule?")) delRule.mutate(String(r.id));
-                          }}
-                        >
-                          Delete
-                        </button>
+                        <div className="flex justify-end gap-2 text-xs">
+                          <button
+                            type="button"
+                            className="text-sonar-300 hover:underline"
+                            onClick={() => startEditRule(r)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="text-red-400 hover:underline"
+                            onClick={() => {
+                              if (confirm("Delete this alarm rule?")) delRule.mutate(String(r.id));
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -310,6 +433,8 @@ export default function Alarms() {
                   onChange={(e) => setChKind(e.target.value)}
                 >
                   <option value="webhook">webhook</option>
+                  <option value="slack">slack</option>
+                  <option value="teams">teams</option>
                   <option value="email">email</option>
                 </select>
                 <input
@@ -319,7 +444,7 @@ export default function Alarms() {
                   onChange={(e) => setChName(e.target.value)}
                 />
                 <input
-                  placeholder="Webhook URL (stored in config)"
+                  placeholder="Webhook URL (config.url)"
                   className="min-w-[240px] flex-1 rounded-md border border-ink-700 bg-ink-950 px-3 py-2 font-mono text-xs"
                   value={chUrl}
                   onChange={(e) => setChUrl(e.target.value)}
@@ -332,6 +457,10 @@ export default function Alarms() {
                   onChange={(e) => setChSecret(e.target.value)}
                 />
               </div>
+              <p className="text-[11px] text-slate-500">
+                Slack and Teams channels post JSON to <code className="font-mono">config.url</code>{" "}
+                (incoming webhook adapters).
+              </p>
               <button
                 type="submit"
                 disabled={createChannel.isPending}

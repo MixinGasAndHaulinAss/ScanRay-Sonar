@@ -57,12 +57,14 @@ export default function ApplicationsPerformance() {
           <li>
             <strong className="text-slate-200">Per-app breakdown:</strong>{" "}
             {coverage.perAppBreakdown
-              ? "available."
+              ? "available from Windows Application Error / WerFault tallies on updated probes."
               : "deferred — WerFault report parsing is not implemented in this release."}
           </li>
           <li>
             <strong className="text-slate-200">App launches:</strong>{" "}
-            {coverage.appLaunches ? "available." : "deferred — requires ETW StartProcess events."}
+            {coverage.appLaunches
+              ? "available (Shell-Core launch timings on Windows)."
+              : "waiting for probes reporting appLaunchMaxMs."}
           </li>
         </ul>
       </Card>

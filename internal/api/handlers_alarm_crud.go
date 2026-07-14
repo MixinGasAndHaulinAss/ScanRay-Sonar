@@ -74,12 +74,14 @@ func (s *Server) handlePatchAlarmRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Name            *string `json:"name,omitempty"`
-		Severity        *string `json:"severity,omitempty"`
-		Expression      *string `json:"expression,omitempty"`
-		Enabled         *bool   `json:"enabled,omitempty"`
-		ForSeconds      *int    `json:"forSeconds,omitempty"`
-		ClearForSeconds *int    `json:"clearForSeconds,omitempty"`
+		Name            *string  `json:"name,omitempty"`
+		Severity        *string  `json:"severity,omitempty"`
+		Expression      *string  `json:"expression,omitempty"`
+		Enabled         *bool    `json:"enabled,omitempty"`
+		ForSeconds      *int     `json:"forSeconds,omitempty"`
+		ClearForSeconds *int     `json:"clearForSeconds,omitempty"`
+		ChannelIDs      []string `json:"channelIds,omitempty"`
+		SiteID          *string  `json:"siteId,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", "invalid JSON")
@@ -108,6 +110,30 @@ func (s *Server) handlePatchAlarmRule(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ClearForSeconds != nil && *req.ClearForSeconds >= 0 {
 		add("clear_for_seconds", *req.ClearForSeconds)
+	}
+	if req.ChannelIDs != nil {
+		chIDs := []uuid.UUID{}
+		for _, x := range req.ChannelIDs {
+			cid, err := uuid.Parse(x)
+			if err != nil {
+				writeErr(w, http.StatusBadRequest, "bad_request", "invalid channel id")
+				return
+			}
+			chIDs = append(chIDs, cid)
+		}
+		add("channel_ids", chIDs)
+	}
+	if req.SiteID != nil {
+		if *req.SiteID == "" {
+			add("site_id", nil)
+		} else {
+			sid, err := uuid.Parse(*req.SiteID)
+			if err != nil {
+				writeErr(w, http.StatusBadRequest, "bad_request", "invalid siteId")
+				return
+			}
+			add("site_id", sid)
+		}
 	}
 	if len(sets) == 0 {
 		writeErr(w, http.StatusBadRequest, "bad_request", "no fields")

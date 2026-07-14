@@ -7,11 +7,12 @@ import { Link } from "react-router-dom";
 import Devices from "./agents/Devices";
 import DevicesReports from "./agents/DevicesReports";
 import Enrollment from "./agents/Enrollment";
-import Overview from "./agents/Overview";
+import Overview, { type OverviewPanel } from "./agents/Overview";
 
 type DevicesTab = "overview" | "details" | "reports" | "enrollment";
 
 const TAB_KEY = "sonar.devices.tab";
+const PANEL_KEY = "sonar.devices.overview.panel";
 
 function loadTab(): DevicesTab {
   try {
@@ -23,6 +24,25 @@ function loadTab(): DevicesTab {
   return "overview";
 }
 
+function loadPanel(): OverviewPanel {
+  try {
+    const v = localStorage.getItem(PANEL_KEY);
+    const ok: OverviewPanel[] = [
+      "home",
+      "user-experience",
+      "applications",
+      "network-latency",
+      "network-performance",
+      "devices-performance",
+      "devices-averages",
+    ];
+    if (ok.includes(v as OverviewPanel)) return v as OverviewPanel;
+  } catch {
+    /* ignore */
+  }
+  return "home";
+}
+
 const TABS: { id: DevicesTab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "details", label: "Details" },
@@ -31,6 +51,7 @@ const TABS: { id: DevicesTab; label: string }[] = [
 
 export default function Agents() {
   const [tab, setTab] = useState<DevicesTab>(loadTab);
+  const [panel, setPanel] = useState<OverviewPanel>(loadPanel);
   useEffect(() => {
     try {
       localStorage.setItem(TAB_KEY, tab);
@@ -38,6 +59,13 @@ export default function Agents() {
       /* ignore */
     }
   }, [tab]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(PANEL_KEY, panel);
+    } catch {
+      /* ignore */
+    }
+  }, [panel]);
 
   return (
     <div className="space-y-4">
@@ -80,7 +108,7 @@ export default function Agents() {
         )}
       </div>
 
-      {tab === "overview" && <Overview />}
+      {tab === "overview" && <Overview panel={panel} onPanel={setPanel} />}
       {tab === "details" && <Devices />}
       {tab === "reports" && <DevicesReports />}
       {tab === "enrollment" && (

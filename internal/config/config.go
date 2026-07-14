@@ -66,6 +66,13 @@ type Config struct {
 	// pin set.
 	GeoIPCityPath string
 	GeoIPASNPath  string
+
+	OIDC struct {
+		Issuer       string
+		ClientID     string
+		ClientSecret string
+		RedirectURL  string
+	}
 }
 
 // Load reads the environment, applies defaults, and validates required keys.
@@ -89,6 +96,11 @@ func Load() (*Config, error) {
 		GeoIPCityPath: env("SONAR_GEOIP_CITY_DB", "/var/lib/sonar/geoip/GeoLite2-City.mmdb"),
 		GeoIPASNPath:  env("SONAR_GEOIP_ASN_DB", "/var/lib/sonar/geoip/GeoLite2-ASN.mmdb"),
 	}
+
+	c.OIDC.Issuer = env("SONAR_OIDC_ISSUER", "")
+	c.OIDC.ClientID = env("SONAR_OIDC_CLIENT_ID", "")
+	c.OIDC.ClientSecret = env("SONAR_OIDC_CLIENT_SECRET", "")
+	c.OIDC.RedirectURL = env("SONAR_OIDC_REDIRECT", "")
 
 	var errs []string
 

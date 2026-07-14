@@ -398,6 +398,8 @@ export interface SnapshotHealth {
   wifiRssiDbm?: number;
   wifiSignalPct?: number;
   ispName?: string;
+  edrProducts?: string[];
+  sysmonRunning?: boolean;
 }
 export interface SnapshotService {
   name: string;
@@ -833,6 +835,10 @@ export interface TopologyEdge {
   /** "both" means the same link was reported by both LLDP and CDP (or by both ends). */
   protocol: "lldp" | "cdp" | "both";
   operUp: boolean;
+  /** IF-MIB bps utilization when the poller has rate data. */
+  inBps?: number;
+  outBps?: number;
+  utilizationPct?: number;
   /** Layered link metadata when provided by the API (site network map). */
   linkKind?: Record<string, unknown>;
 }

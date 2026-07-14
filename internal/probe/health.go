@@ -37,11 +37,12 @@ type HealthSignals struct {
 	// over the past 7 days. Linux/macOS leave these nil.
 	LogonAvgMs *float64 `json:"logonAvgMs,omitempty"`
 	LogonMaxMs *float64 `json:"logonMaxMs,omitempty"`
-	// AppLaunchMaxMs / InputDelayAvgMs are reserved for future
-	// collectors. Currently always nil; the dashboards render a
-	// "data not yet collected" placeholder.
+	// AppLaunchMaxMs / InputDelayAvgMs — Windows Diagnostics-Performance /
+	// Shell-Core where available; nil on other platforms.
 	AppLaunchMaxMs  *float64 `json:"appLaunchMaxMs,omitempty"`
 	InputDelayAvgMs *float64 `json:"inputDelayAvgMs,omitempty"`
+	// AppCrashesByName is top faulting application names (24h).
+	AppCrashesByName []AppCrashNameCount `json:"appCrashesByName,omitempty"`
 	// TracerouteHops is the count of distinct hops on a TTL-ramp
 	// traceroute to the primary latency target (8.8.8.8 by default).
 	// Set by latency.go after the periodic ICMP run.
@@ -49,4 +50,14 @@ type HealthSignals struct {
 	// ISPName mirrors agents.geo_org so client-side filters can group
 	// without consulting a separate endpoint.
 	ISPName string `json:"ispName,omitempty"`
+	// EDRProducts lists detected endpoint protection agents (Windows).
+	EDRProducts []string `json:"edrProducts,omitempty"`
+	// SysmonRunning is true when Sysmon service/process is present.
+	SysmonRunning *bool `json:"sysmonRunning,omitempty"`
+}
+
+// AppCrashNameCount is one row of per-app crash tallies.
+type AppCrashNameCount struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
 }

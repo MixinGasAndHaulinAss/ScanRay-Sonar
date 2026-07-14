@@ -59,13 +59,62 @@ export default function DevicesReports() {
 
   const pendingReboot = list.filter((a) => a.pendingReboot).slice(0, 25);
 
+  const currentVersion = list
+    .map((a) => a.agentVersion)
+    .filter((v): v is string => !!v && v !== "unknown")
+    .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))[0];
+
+  const outdated = currentVersion
+    ? list.filter((a) => a.agentVersion && a.agentVersion !== currentVersion && a.agentVersion < currentVersion)
+    : [];
+  // Prefer CalVer-aware sort: treat highest lexical CalVer among fleet as "current"
+  // when API version is unavailable client-side.
+  const maxVer = versionRows[0]?.[0];
+  const behind =
+    maxVer && maxVer !== "unknown"
+      ? list.filter((a) => {
+          const v = a.agentVersion || "unknown";
+          return v !== "unknown" && v !== maxVer;
+        })
+      : outdated;
+
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <ReportCard title="Probe versions">
+        <div className="mb-3 flex flex-wrap gap-3 text-sm">
+          <span className="rounded bg-ink-800 px-2 py-1 text-slate-300">
+            Fleet versions: <strong className="text-slate-100">{byVersion.size}</strong>
+          </span>
+          <span className="rounded bg-ink-800 px-2 py-1 text-slate-300">
+            Behind latest in fleet:{" "}
+            <strong className={behind.length ? "text-amber-300" : "text-emerald-300"}>
+              {behind.length}
+            </strong>
+          </span>
+          {maxVer ? (
+            <span className="rounded bg-ink-800 px-2 py-1 text-slate-300">
+              Top version: <strong className="font-mono text-slate-100">{maxVer}</strong>
+            </span>
+          ) : null}
+        </div>
         <SimpleTable
           headers={["Version", "Devices"]}
           rows={versionRows.map(([v, n]) => [v, String(n)])}
         />
+        {behind.length > 0 ? (
+          <div className="mt-3">
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+              Devices behind top fleet version
+            </p>
+            <HostTable
+              rows={behind.slice(0, 25).map((a) => ({
+                id: a.id,
+                hostname: a.hostname,
+                detail: a.agentVersion || "unknown",
+              }))}
+            />
+          </div>
+        ) : null}
       </ReportCard>
 
       <ReportCard title="Offline / stale devices">

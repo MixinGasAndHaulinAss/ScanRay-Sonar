@@ -162,7 +162,7 @@ const KINDS: KindMeta[] = [
     id: "vmware",
     label: "VMware",
     protocol: "vSphere SOAP",
-    desc: "vCenter / ESXi credentials. govmomi backend not yet wired — credentials are stored.",
+    desc: "vCenter / ESXi credentials. Inventory is collected via the vCenter HTTPS REST API during discovery scans.",
   },
   {
     id: "generic",
@@ -563,7 +563,8 @@ function CredentialFields({
         />
         <Field label="Password" k="password" fields={fields} set={set} type="password" />
         <p className="text-[11px] text-amber-400">
-          govmomi backend is not yet wired in this build — credentials will be stored and surfaced
+          Credentials are used during discovery scans. vCenter REST inventory lists VMs and hosts
+          when the collector can reach the management URL.
           to the collector but discovery via vCenter is queued behind Phase 2.
         </p>
       </>

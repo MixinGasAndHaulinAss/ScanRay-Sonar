@@ -425,7 +425,8 @@ func (s *Server) handleDeleteWebhook(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListAlarmRules(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.pool.Query(r.Context(), `
-		SELECT id, COALESCE(site_id::text,''), name, severity, expression, enabled, created_at
+		SELECT id, COALESCE(site_id::text,''), name, severity, expression, enabled,
+		       channel_ids, for_seconds, clear_for_seconds, created_at
 		  FROM alarm_rules ORDER BY created_at DESC`)
 	if err != nil {
 		writeJSON(w, http.StatusOK, []any{})
@@ -437,13 +438,21 @@ func (s *Server) handleListAlarmRules(w http.ResponseWriter, r *http.Request) {
 		var id uuid.UUID
 		var siteID, name, sev, expr string
 		var enabled bool
+		var channelIDs []uuid.UUID
+		var forSec, clearSec int
 		var created time.Time
-		if err := rows.Scan(&id, &siteID, &name, &sev, &expr, &enabled, &created); err != nil {
+		if err := rows.Scan(&id, &siteID, &name, &sev, &expr, &enabled, &channelIDs, &forSec, &clearSec, &created); err != nil {
 			continue
+		}
+		chStr := make([]string, 0, len(channelIDs))
+		for _, c := range channelIDs {
+			chStr = append(chStr, c.String())
 		}
 		out = append(out, map[string]any{
 			"id": id.String(), "siteId": nullIfEmpty(siteID), "name": name,
-			"severity": sev, "expression": expr, "enabled": enabled, "createdAt": created,
+			"severity": sev, "expression": expr, "enabled": enabled,
+			"channelIds": chStr, "forSeconds": forSec, "clearForSeconds": clearSec,
+			"createdAt": created,
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -569,24 +578,40 @@ func (s *Server) handleUploadDocument(w http.ResponseWriter, r *http.Request) {
 		req.MimeType = "application/octet-stream"
 	}
 	docID := uuid.New()
-	sealed, err := s.sealer.Seal(raw, []byte("document:"+docID.String()))
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "server_error", "seal failed")
-		return
-	}
 	uid := userIDFromCtx(r.Context())
 	sum := sha256.Sum256(raw)
 	sha := hex.EncodeToString(sum[:])
+	var objectKey, bucket any
+	var sealed []byte
+	if s.objectStore != nil && len(raw) >= 65536 {
+		key := docID.String() + "/" + sha
+		bkt, objKey, err := s.objectStore.Put(r.Context(), key, raw, req.MimeType)
+		if err != nil {
+			s.log.Warn("document objectstore put failed; falling back to enc_body", "err", err)
+		} else {
+			bucket, objectKey = bkt, objKey
+		}
+	}
+	if objectKey == nil {
+		var err error
+		sealed, err = s.sealer.Seal(raw, []byte("document:"+docID.String()))
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "server_error", "seal failed")
+			return
+		}
+	}
 	_, err = s.pool.Exec(r.Context(), `
-		INSERT INTO documents (id, site_id, title, mime_type, enc_body, sha256, size_bytes, uploaded_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO documents (id, site_id, title, mime_type, enc_body, sha256, size_bytes, uploaded_by, object_key, bucket)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (id) DO UPDATE SET
 		  enc_body = EXCLUDED.enc_body,
+		  object_key = EXCLUDED.object_key,
+		  bucket = EXCLUDED.bucket,
 		  sha256 = EXCLUDED.sha256,
 		  size_bytes = EXCLUDED.size_bytes,
 		  mime_type = EXCLUDED.mime_type,
 		  title = EXCLUDED.title`,
-		docID, siteID, req.Title, req.MimeType, sealed, sha, len(raw), nullableUID(uid))
+		docID, siteID, req.Title, req.MimeType, sealed, sha, len(raw), nullableUID(uid), objectKey, bucket)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", "insert failed")
 		return
@@ -664,9 +689,10 @@ func (s *Server) handleDownloadDocument(w http.ResponseWriter, r *http.Request) 
 	var title, mime string
 	var sealed []byte
 	var docSite uuid.UUID
+	var objectKey, bucket *string
 	err = s.pool.QueryRow(r.Context(), `
-		SELECT title, mime_type, enc_body, site_id FROM documents WHERE id = $1`, id).
-		Scan(&title, &mime, &sealed, &docSite)
+		SELECT title, mime_type, enc_body, site_id, object_key, bucket FROM documents WHERE id = $1`, id).
+		Scan(&title, &mime, &sealed, &docSite, &objectKey, &bucket)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeErr(w, http.StatusNotFound, "not_found", "not found")
 		return
@@ -679,10 +705,23 @@ func (s *Server) handleDownloadDocument(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, http.StatusForbidden, "forbidden", "API key not scoped to this site")
 		return
 	}
-	plain, err := s.sealer.Open(sealed, []byte("document:"+id.String()))
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "server_error", "decrypt failed")
-		return
+	var plain []byte
+	if s.objectStore != nil && objectKey != nil && *objectKey != "" {
+		bkt := ""
+		if bucket != nil {
+			bkt = *bucket
+		}
+		plain, err = s.objectStore.Get(r.Context(), bkt, *objectKey)
+		if err != nil {
+			s.log.Warn("document objectstore get failed; trying enc_body", "err", err)
+		}
+	}
+	if plain == nil {
+		plain, err = s.sealer.Open(sealed, []byte("document:"+id.String()))
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "server_error", "decrypt failed")
+			return
+		}
 	}
 	uid := userIDFromCtx(r.Context())
 	s.store.Audit(r.Context(), "user", "document.download", &uid, clientIP(r),

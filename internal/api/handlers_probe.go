@@ -3,12 +3,17 @@ package api
 import (
 	"bytes"
 	"io"
+	"io/fs"
 	"net/http"
 	"path"
 	"strings"
+	"sync"
 	"text/template"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/NCLGISA/ScanRay-Sonar/internal/probesign"
+	"github.com/NCLGISA/ScanRay-Sonar/internal/version"
 )
 
 // allowedProbePlatforms restricts the probe download endpoint to the
@@ -30,6 +35,74 @@ func probeArtifact(osName string) string {
 		return "sonar-probe.exe"
 	}
 	return "sonar-probe"
+}
+
+var (
+	probeManifestOnce sync.Once
+	probeManifests    map[string]probesign.Manifest // key: os/arch
+	probeManifestErr  error
+)
+
+func (s *Server) ensureProbeManifests() {
+	probeManifestOnce.Do(func() {
+		probeManifests = map[string]probesign.Manifest{}
+		if s.probeFS == nil {
+			probeManifestErr = fs.ErrNotExist
+			return
+		}
+		priv, err := probesign.PrivateKeyFromEnv()
+		if err != nil {
+			probeManifestErr = err
+			return
+		}
+		ver := version.Get().Version
+		for osName, arches := range allowedProbePlatforms {
+			for arch := range arches {
+				fname := probeArtifact(osName)
+				name := path.Join(osName, arch, fname)
+				f, err := s.probeFS.Open(name)
+				if err != nil {
+					continue
+				}
+				data, err := io.ReadAll(f)
+				f.Close()
+				if err != nil || len(data) == 0 {
+					continue
+				}
+				h := probesign.HashSHA256Hex(data)
+				sig := probesign.SignHash(priv, h)
+				key := osName + "/" + arch
+				probeManifests[key] = probesign.Manifest{
+					Version: ver,
+					OS:      osName,
+					Arch:    arch,
+					SHA256:  h,
+					Sig:     sig,
+					URL:     "/api/v1/probe/download/" + osName + "/" + arch,
+				}
+			}
+		}
+	})
+}
+
+func (s *Server) handleProbeLatest(w http.ResponseWriter, r *http.Request) {
+	osName := r.URL.Query().Get("os")
+	arch := r.URL.Query().Get("arch")
+	if !allowedProbePlatforms[osName][arch] {
+		writeErr(w, http.StatusNotFound, "not_found", "no probe build for that os/arch")
+		return
+	}
+	s.ensureProbeManifests()
+	if probeManifestErr != nil && len(probeManifests) == 0 {
+		writeErr(w, http.StatusNotFound, "not_found", "probe binaries not bundled with this build")
+		return
+	}
+	m, ok := probeManifests[osName+"/"+arch]
+	if !ok {
+		writeErr(w, http.StatusNotFound, "not_found", "probe binary missing from image")
+		return
+	}
+	writeJSON(w, http.StatusOK, m)
 }
 
 func (s *Server) handleProbeDownload(w http.ResponseWriter, r *http.Request) {

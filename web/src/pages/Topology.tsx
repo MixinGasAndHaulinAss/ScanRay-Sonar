@@ -222,18 +222,44 @@ export function TopologyGraph({ data }: { data: Topology }) {
         renderEdge={(e, a, b) => {
           const layer = Number((e.ref.linkKind as { layer?: unknown } | undefined)?.layer);
           const sw = layer === 2 ? 2 : 1.4;
+          const util = e.ref.utilizationPct;
+          let stroke = e.ref.operUp ? "#475569" : "#1e293b";
+          if (util != null) {
+            if (util >= 80) stroke = "#ef4444";
+            else if (util >= 50) stroke = "#f59e0b";
+            else stroke = "#22c55e";
+          }
+          const midX = (a.x + b.x) / 2;
+          const midY = (a.y + b.y) / 2;
+          const label =
+            util != null
+              ? `${util.toFixed(0)}%`
+              : e.ref.inBps != null || e.ref.outBps != null
+                ? formatEdgeBps(e.ref.inBps, e.ref.outBps)
+                : null;
           return (
-            <line
-              key={`${e.from}->${e.to}`}
-              x1={a.x}
-              y1={a.y}
-              x2={b.x}
-              y2={b.y}
-              stroke={e.ref.operUp ? "#475569" : "#1e293b"}
-              strokeWidth={sw}
-              strokeDasharray={e.ref.operUp ? undefined : "4 4"}
-              opacity={0.75}
-            />
+            <g key={`${e.from}->${e.to}`}>
+              <line
+                x1={a.x}
+                y1={a.y}
+                x2={b.x}
+                y2={b.y}
+                stroke={stroke}
+                strokeWidth={sw}
+                strokeDasharray={e.ref.operUp ? undefined : "4 4"}
+                opacity={0.85}
+              />
+              {label && (
+                <text
+                  x={midX}
+                  y={midY - 4}
+                  textAnchor="middle"
+                  className="pointer-events-none select-none fill-slate-300 font-mono text-[9px]"
+                >
+                  {label}
+                </text>
+              )}
+            </g>
           );
         }}
         renderNode={(s) => <NodeBubble sim={s} />}
@@ -311,9 +337,20 @@ function Legend() {
       <div className="flex flex-wrap items-center gap-3 border-t border-ink-800 pt-2 normal-case tracking-normal text-slate-500">
         <span className="text-[9px] uppercase tracking-wide text-slate-400">Edges</span>
         <span>Thicker stroke = layer-2 (LLDP/CDP).</span>
+        <span className="text-green-400">Green</span> &lt;50% util
+        <span className="text-amber-400">Amber</span> 50–80%
+        <span className="text-red-400">Red</span> &gt;80%
       </div>
     </div>
   );
+}
+
+function formatEdgeBps(inBps?: number, outBps?: number): string {
+  const max = Math.max(inBps ?? 0, outBps ?? 0);
+  if (max >= 1_000_000_000) return `${(max / 1_000_000_000).toFixed(1)}G`;
+  if (max >= 1_000_000) return `${(max / 1_000_000).toFixed(1)}M`;
+  if (max >= 1_000) return `${(max / 1_000).toFixed(0)}K`;
+  return `${max}b`;
 }
 
 function Dot({ color, ring }: { color: string; ring?: string }) {

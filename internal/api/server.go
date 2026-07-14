@@ -30,6 +30,7 @@ import (
 	"github.com/NCLGISA/ScanRay-Sonar/internal/db"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/geoip"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/notify"
+	"github.com/NCLGISA/ScanRay-Sonar/internal/objectstore"
 )
 
 // Server is the long-lived HTTP/WS service. Construct once via New and
@@ -50,6 +51,9 @@ type Server struct {
 	openAPISpec []byte
 	webFS       fs.FS
 	probeFS     fs.FS
+
+	oidc      *auth.OIDCProvider
+	objectStore *objectstore.Client
 }
 
 // Deps bundles the dependencies a Server needs. Tests wire these up
@@ -76,6 +80,16 @@ type Deps struct {
 }
 
 func New(d Deps) *Server {
+	oidcCfg := auth.OIDCConfig{
+		Issuer:       d.Config.OIDC.Issuer,
+		ClientID:     d.Config.OIDC.ClientID,
+		ClientSecret: d.Config.OIDC.ClientSecret,
+		RedirectURL:  d.Config.OIDC.RedirectURL,
+	}
+	var objCli *objectstore.Client
+	if oc, ok := objectstore.LoadConfigFromEnv(); ok {
+		objCli = objectstore.New(oc)
+	}
 	return &Server{
 		cfg:         d.Config,
 		log:         d.Logger,
@@ -90,6 +104,8 @@ func New(d Deps) *Server {
 		openAPISpec: d.OpenAPISpec,
 		webFS:       d.WebFS,
 		probeFS:     d.ProbeFS,
+		oidc:        auth.NewOIDCProvider(oidcCfg),
+		objectStore: objCli,
 	}
 }
 
@@ -122,6 +138,8 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/openapi.yaml", s.handleOpenAPI)
 		r.Post("/auth/login", s.handleLogin)
 		r.Post("/auth/refresh", s.handleRefresh)
+		r.Get("/auth/oidc/login", s.handleOIDCLogin)
+		r.Get("/auth/oidc/callback", s.handleOIDCCallback)
 
 		// Probe enrollment is unauthenticated at the bearer-token layer —
 		// the request body carries the single-use enrollment token issued
@@ -141,6 +159,7 @@ func (s *Server) Routes() http.Handler {
 		r.With(s.collectorAuthRequired).Post("/collectors/me/passive-snmp", s.handleCollectorPassiveSNMP)
 
 		r.Get("/probe/download/{os}/{arch}", s.handleProbeDownload)
+		r.Get("/probe/latest", s.handleProbeLatest)
 		r.Get("/probe/install.sh", s.handleProbeInstallScript)
 		r.Get("/probe/install.ps1", s.handleProbeInstallScriptPS1)
 
@@ -254,6 +273,7 @@ func (s *Server) Routes() http.Handler {
 			r.With(requireRole(auth.RoleSuperAdmin)).Get("/admin/api-keys", s.handleSuperListAPIKeys)
 
 			r.Get("/topology", s.handleTopology)
+			r.Get("/traffic/flows", s.handleTrafficFlows)
 
 			r.Get("/report-templates", s.handleListReportTemplates)
 			r.With(requireRole(auth.RoleSiteAdmin)).Post("/reports", s.handleGenerateReport)

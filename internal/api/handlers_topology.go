@@ -61,6 +61,10 @@ type topologyEdge struct {
 	Protocol string         `json:"protocol"` // "lldp" | "cdp" | "both"
 	OperUp   bool           `json:"operUp"`   // local interface oper state
 	LinkKind map[string]any `json:"linkKind,omitempty"`
+	// IF-MIB utilization from the local appliance snapshot (bps).
+	InBps          *uint64  `json:"inBps,omitempty"`
+	OutBps         *uint64  `json:"outBps,omitempty"`
+	UtilizationPct *float64 `json:"utilizationPct,omitempty"`
 }
 
 type topologyResp struct {
@@ -245,7 +249,7 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 	// foreignNodes is request-scoped because handlers run concurrently
 	// — using a package-level map here would race under load.
 	foreignNodes := map[string]topologyNode{}
-	addEdge := func(localID, localPort string, operUp bool, remoteSys, remotePortID, remotePlatform, remoteAddr, proto string) {
+	addEdge := func(localID, localPort string, operUp bool, inBps, outBps *uint64, speedBps uint64, remoteSys, remotePortID, remotePlatform, remoteAddr, proto string) {
 		remoteSys = strings.TrimSpace(remoteSys)
 		if remoteSys == "" && remoteAddr == "" {
 			return
@@ -291,6 +295,7 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 			if operUp {
 				existing.OperUp = true
 			}
+			mergeEdgeUtil(existing, inBps, outBps, speedBps)
 			return
 		}
 		edges[k] = &topologyEdge{
@@ -302,6 +307,7 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 			OperUp:   operUp,
 			LinkKind: topologyLayer2Kind(proto, localPort),
 		}
+		mergeEdgeUtil(edges[k], inBps, outBps, speedBps)
 
 		// Make sure foreign nodes exist in the response. We collect
 		// them here and merge after the loop so multiple appliances
@@ -323,14 +329,20 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 		if a.snapshot == nil {
 			continue
 		}
-		// Build local-port-name lookup: ifIndex -> (name, operUp).
+		// Build local-port-name lookup: ifIndex -> (name, operUp, bps, speed).
 		type portInfo struct {
-			name   string
-			operUp bool
+			name     string
+			operUp   bool
+			inBps    *uint64
+			outBps   *uint64
+			speedBps uint64
 		}
 		ports := make(map[int32]portInfo, len(a.snapshot.Interfaces))
 		for _, ifc := range a.snapshot.Interfaces {
-			ports[ifc.Index] = portInfo{name: ifc.Name, operUp: ifc.OperUp}
+			ports[ifc.Index] = portInfo{
+				name: ifc.Name, operUp: ifc.OperUp,
+				inBps: ifc.InBps, outBps: ifc.OutBps, speedBps: ifc.SpeedBps,
+			}
 		}
 
 		for _, n := range a.snapshot.LLDP {
@@ -338,7 +350,7 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			p := ports[n.LocalIfIndex]
-			addEdge(a.node.ID, fallback(n.LocalPort, p.name), p.operUp,
+			addEdge(a.node.ID, fallback(n.LocalPort, p.name), p.operUp, p.inBps, p.outBps, p.speedBps,
 				n.RemoteSysName, fallback(n.RemotePortDescr, n.RemotePortID), "", "", "lldp")
 		}
 		for _, n := range a.snapshot.CDP {
@@ -346,7 +358,7 @@ func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			p := ports[n.LocalIfIndex]
-			addEdge(a.node.ID, p.name, p.operUp,
+			addEdge(a.node.ID, p.name, p.operUp, p.inBps, p.outBps, p.speedBps,
 				n.RemoteSysName, n.RemotePortID, n.RemotePlatform, n.RemoteAddress, "cdp")
 		}
 	}
@@ -388,6 +400,35 @@ func fallback(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// mergeEdgeUtil attaches IF-MIB bps rates and a utilization percentage when
+// the local interface speed is known.
+func mergeEdgeUtil(e *topologyEdge, inBps, outBps *uint64, speedBps uint64) {
+	if inBps != nil {
+		e.InBps = inBps
+	}
+	if outBps != nil {
+		e.OutBps = outBps
+	}
+	if speedBps == 0 {
+		return
+	}
+	var maxBps uint64
+	if inBps != nil && *inBps > maxBps {
+		maxBps = *inBps
+	}
+	if outBps != nil && *outBps > maxBps {
+		maxBps = *outBps
+	}
+	if maxBps == 0 {
+		return
+	}
+	pct := float64(maxBps) / float64(speedBps) * 100
+	if pct > 100 {
+		pct = 100
+	}
+	e.UtilizationPct = &pct
 }
 
 // isLLDPPhone returns true when an LLDP neighbor row looks like an IP

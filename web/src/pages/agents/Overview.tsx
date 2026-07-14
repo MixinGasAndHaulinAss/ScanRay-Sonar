@@ -12,9 +12,70 @@ import type {
   OverviewUserExperienceResponse,
 } from "../../api/types";
 import { formatRelative } from "../../lib/format";
+import ApplicationsPerformance from "./ApplicationsPerformance";
 import { Card, EmptyHint, ErrorHint, KPITile } from "./common";
+import DevicesAverages from "./DevicesAverages";
+import DevicesPerformance from "./DevicesPerformance";
+import NetworkLatency from "./NetworkLatency";
+import NetworkPerformance from "./NetworkPerformance";
+import UserExperience from "./UserExperience";
 
-export default function Overview() {
+export type OverviewPanel =
+  | "home"
+  | "user-experience"
+  | "applications"
+  | "network-latency"
+  | "network-performance"
+  | "devices-performance"
+  | "devices-averages";
+
+const PANELS: { id: OverviewPanel; label: string }[] = [
+  { id: "home", label: "Summary" },
+  { id: "user-experience", label: "User experience" },
+  { id: "applications", label: "Applications" },
+  { id: "network-latency", label: "Latency" },
+  { id: "network-performance", label: "Network" },
+  { id: "devices-performance", label: "Device performance" },
+  { id: "devices-averages", label: "Averages" },
+];
+
+interface OverviewProps {
+  panel: OverviewPanel;
+  onPanel: (p: OverviewPanel) => void;
+}
+
+export default function Overview({ panel, onPanel }: OverviewProps) {
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-1">
+        {PANELS.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => onPanel(p.id)}
+            className={
+              "rounded-md px-2.5 py-1 text-xs font-medium transition " +
+              (panel === p.id
+                ? "bg-sonar-600/30 text-sonar-200 ring-1 ring-sonar-500/40"
+                : "text-slate-400 hover:bg-ink-800 hover:text-slate-200")
+            }
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      {panel === "home" && <OverviewHome />}
+      {panel === "user-experience" && <UserExperience />}
+      {panel === "applications" && <ApplicationsPerformance />}
+      {panel === "network-latency" && <NetworkLatency />}
+      {panel === "network-performance" && <NetworkPerformance />}
+      {panel === "devices-performance" && <DevicesPerformance />}
+      {panel === "devices-averages" && <DevicesAverages />}
+    </div>
+  );
+}
+
+function OverviewHome() {
   const agents = useQuery({
     queryKey: ["agents"],
     queryFn: () => api.get<Agent[]>("/agents"),

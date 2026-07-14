@@ -140,19 +140,10 @@ export default function UserExperience() {
         />
         <RankCard
           title="Avg user input delay"
-          subtitle="ms · not yet collected"
+          subtitle="ms · Diagnostics-Performance when available"
           rows={top.avgInputDelay}
           unit=" ms"
-          tone="slate"
-          placeholder={
-            <>
-              The probe does not yet sample the
-              <code className="mx-1 rounded bg-ink-950 px-1 py-0.5 text-[10px]">
-                Microsoft-Windows-DesktopWindowManager
-              </code>
-              input-latency counter. Coming in a follow-up.
-            </>
-          }
+          tone="amber"
         />
         <RankCard
           title="Avg logon time"
@@ -170,17 +161,10 @@ export default function UserExperience() {
         />
         <RankCard
           title="Longest app launch"
-          subtitle="ms · not yet collected"
+          subtitle="ms · Shell-Core when available"
           rows={top.longestAppLaunch}
           unit=" ms"
-          tone="slate"
-          placeholder={
-            <>
-              Per-app launch latency requires an ETW collector. Reserved
-              for a follow-up; the field is plumbed end-to-end so the card
-              starts populating as soon as the probe ships data.
-            </>
-          }
+          tone="amber"
         />
         <RankCard
           title="Highest CPU load"

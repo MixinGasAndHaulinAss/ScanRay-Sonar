@@ -104,6 +104,75 @@ try {
   }
 } catch {}
 
+# Input delay approx — Diagnostics-Performance Operational event 100
+# (boot/performance) DurationMS when present; else leave absent.
+try {
+  $perfSince = (Get-Date).AddDays(-1)
+  $pevs = Get-WinEvent -FilterHashtable @{
+    LogName='Microsoft-Windows-Diagnostics-Performance/Operational';
+    Id=100;
+    StartTime=$perfSince
+  } -MaxEvents 40 -ErrorAction Stop
+  $delays = @()
+  foreach ($e in @($pevs)) {
+    try {
+      $xml = [xml]$e.ToXml()
+      $dur = ($xml.Event.EventData.Data | Where-Object { $_.Name -eq 'DurationMS' -or $_.Name -eq 'BootTime' }).'#text' | Select-Object -First 1
+      if ($dur) { $delays += [double]$dur }
+    } catch {}
+  }
+  if ($delays.Count -gt 0) {
+    $out.inputDelayAvgMs = [math]::Round(($delays | Measure-Object -Average).Average, 0)
+  }
+} catch {}
+
+# App launch max — Shell-Core Operational 9705/9706 timing fields when present.
+try {
+  $launchSince = (Get-Date).AddDays(-1)
+  $levs = Get-WinEvent -FilterHashtable @{
+    LogName='Microsoft-Windows-Shell-Core/Operational';
+    Id=9705,9706;
+    StartTime=$launchSince
+  } -MaxEvents 50 -ErrorAction SilentlyContinue
+  $launches = @()
+  foreach ($e in @($levs)) {
+    try {
+      $xml = [xml]$e.ToXml()
+      $ms = ($xml.Event.EventData.Data | Where-Object { $_.Name -match 'Time|Duration|Elapsed' }).'#text' | Select-Object -First 1
+      if ($ms) { $launches += [double]$ms }
+    } catch {}
+  }
+  if ($launches.Count -gt 0) {
+    $out.appLaunchMaxMs = [math]::Round(($launches | Measure-Object -Maximum).Maximum, 0)
+  }
+} catch {}
+
+# Per-app crash tallies from Application Error (Event ID 1000) — top 10.
+try {
+  $crashSince = (Get-Date).AddDays(-1)
+  $cevs = Get-WinEvent -FilterHashtable @{
+    LogName='Application';
+    ProviderName='Application Error';
+    Id=1000;
+    StartTime=$crashSince
+  } -MaxEvents 200 -ErrorAction SilentlyContinue
+  $counts = @{}
+  foreach ($e in @($cevs)) {
+    try {
+      $xml = [xml]$e.ToXml()
+      $app = ($xml.Event.EventData.Data | Select-Object -First 1).'#text'
+      if (-not $app) { $app = 'unknown' }
+      $app = [string]$app
+      if ($counts.ContainsKey($app)) { $counts[$app]++ } else { $counts[$app] = 1 }
+    } catch {}
+  }
+  $rows = @()
+  foreach ($k in ($counts.Keys | Sort-Object { -$counts[$_] } | Select-Object -First 10)) {
+    $rows += [ordered]@{ name = $k; count = [int]$counts[$k] }
+  }
+  if ($rows.Count -gt 0) { $out.appCrashesByName = $rows }
+} catch {}
+
 # WiFi via netsh wlan show interfaces. Empty on hosts without a wireless adapter.
 try {
   $w = (& netsh.exe wlan show interfaces 2>$null | Out-String) -split "` + "`" + `r?` + "`" + `n"
@@ -132,8 +201,11 @@ type winPSResult struct {
 	HighloadCPUIncidents24h *int     `json:"highloadCpuIncidents24h,omitempty"`
 	WiFiSSID                string   `json:"wifiSsid,omitempty"`
 	WiFiSignalPct           *int     `json:"wifiSignalPct,omitempty"`
-	LogonAvgMs              *float64 `json:"logonAvgMs,omitempty"`
-	LogonMaxMs              *float64 `json:"logonMaxMs,omitempty"`
+	LogonAvgMs              *float64             `json:"logonAvgMs,omitempty"`
+	LogonMaxMs              *float64             `json:"logonMaxMs,omitempty"`
+	AppLaunchMaxMs          *float64             `json:"appLaunchMaxMs,omitempty"`
+	InputDelayAvgMs         *float64             `json:"inputDelayAvgMs,omitempty"`
+	AppCrashesByName        []AppCrashNameCount  `json:"appCrashesByName,omitempty"`
 }
 
 // winRunPSBatch runs winPSScript once and copies the parsed result
@@ -182,6 +254,15 @@ func winRunPSBatch(ctx context.Context, h *HealthSignals) {
 	}
 	if r.LogonMaxMs != nil {
 		h.LogonMaxMs = r.LogonMaxMs
+	}
+	if r.AppLaunchMaxMs != nil {
+		h.AppLaunchMaxMs = r.AppLaunchMaxMs
+	}
+	if r.InputDelayAvgMs != nil {
+		h.InputDelayAvgMs = r.InputDelayAvgMs
+	}
+	if len(r.AppCrashesByName) > 0 {
+		h.AppCrashesByName = r.AppCrashesByName
 	}
 	h.WiFiSSID = r.WiFiSSID
 	if r.WiFiSignalPct != nil {

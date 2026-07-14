@@ -89,6 +89,7 @@ func dialAndPump(ctx context.Context, log *slog.Logger, cfg *Config) error {
 	go runLatencyLoop(loopCtx, log, cfg.LatencyTarget)
 	go runHealthLoop(loopCtx, log)
 	go runFocusLoop(loopCtx)
+	go runUpdateLoop(loopCtx, log, cfg)
 
 	for {
 		_, _, err := c.Read(ctx)

@@ -414,6 +414,24 @@ function PerformanceTab({
                 : "—"
             }
           />
+          <KV
+            label="EDR"
+            value={
+              snap.health?.edrProducts?.length
+                ? snap.health.edrProducts.join(", ")
+                : "—"
+            }
+          />
+          <KV
+            label="Sysmon"
+            value={
+              snap.health?.sysmonRunning == null
+                ? "—"
+                : snap.health.sysmonRunning
+                  ? "running"
+                  : "not detected"
+            }
+          />
         </MetaCard>
         <MetaCard title="Network">
           {snap.nics

@@ -154,9 +154,33 @@ func buildDevice(ctx context.Context, log *slog.Logger, ip string, rtt float64, 
 				return dev
 			}
 		case "vmware":
-			// govmomi not yet wired in. The vmware.go module returns ErrVMwareNotImplemented;
-			// we log once per device so an operator knows credentials are present but unused.
-			log.Debug("vmware credential present but govmomi not yet wired", "ip", ip)
+			user, pass, _ := parseCredSecret(c.Secret)
+			url := ip
+			if strings.HasPrefix(strings.TrimSpace(c.Secret), "{") {
+				var m map[string]string
+				if json.Unmarshal([]byte(c.Secret), &m) == nil && m["url"] != "" {
+					url = m["url"]
+				}
+			}
+			vctx, cancel := context.WithTimeout(ctx, perStep*3)
+			inv, err := discovery.VMwareCollect(vctx, discovery.VMwareCred{
+				URL: url, Username: user, Password: pass, Insecure: true,
+			})
+			cancel()
+			if err != nil {
+				log.Debug("vmware collect failed", "ip", ip, "err", err)
+				continue
+			}
+			if inv == nil || (len(inv.VMs) == 0 && len(inv.Hosts) == 0) {
+				continue
+			}
+			meta["identifiedBy"] = "vmware"
+			meta["vmware"] = inv
+			dev["identified"] = true
+			dev["vendor"] = "vmware"
+			protocols = appendUniq(protocols, "vmware")
+			dev["protocols"] = protocols
+			return dev
 		case "winagent":
 			_, pass, _ := parseCredSecret(c.Secret)
 			cli := winagent.NewInsecureClient(ip, pass, perStep)

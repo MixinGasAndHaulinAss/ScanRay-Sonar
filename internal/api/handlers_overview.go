@@ -957,17 +957,26 @@ func (s *Server) handleOverviewApplicationsPerformance(w http.ResponseWriter, r 
 		v := float64(*a.AppCrashCount24h)
 		return &v
 	})
+	hasLaunch := false
+	hasInput := false
 	for _, a := range agents {
 		if a.AppCrashCount24h != nil {
 			totalCrashes += *a.AppCrashCount24h
+		}
+		if a.AppLaunchMaxMs != nil {
+			hasLaunch = true
+		}
+		if a.InputDelayAvgMs != nil {
+			hasInput = true
 		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"coverage": map[string]any{
 			"appCrashes":      true,
-			"perAppBreakdown": false,
-			"appLaunches":     false,
+			"perAppBreakdown": true, // probe ships appCrashesByName on Windows DEX health
+			"appLaunches":     hasLaunch,
+			"inputDelay":      hasInput,
 		},
 		"summary": map[string]any{
 			"totalCrashes24h": totalCrashes,
