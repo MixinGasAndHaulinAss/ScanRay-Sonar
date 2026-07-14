@@ -1,6 +1,7 @@
 site_name: ScanRay Sonar
 site_description: Operator guide for ScanRay Sonar
-site_url: /docs/
+# Omit site_url so MkDocs emits relative links (required for embed at /docs/).
+# A path-only value like /docs/ is rejected (scheme required).
 docs_dir: docs/src
 site_dir: docs/site
 use_directory_urls: true
