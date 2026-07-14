@@ -774,8 +774,6 @@ function MerakiHealthBlock({
   );
 }
 
-}
-
 function MerakiPortRows({
   applianceId,
   port: p,
