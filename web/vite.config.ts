@@ -23,6 +23,10 @@ export default defineConfig(({ mode }) => {
           target: apiURL,
           changeOrigin: false,
         },
+        "/docs": {
+          target: apiURL,
+          changeOrigin: false,
+        },
         "/ws": {
           target: wsURL,
           ws: true,

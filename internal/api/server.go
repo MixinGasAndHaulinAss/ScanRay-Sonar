@@ -51,6 +51,7 @@ type Server struct {
 
 	openAPISpec []byte
 	webFS       fs.FS
+	docsFS      fs.FS
 	probeFS     fs.FS
 
 	oidc        *auth.OIDCProvider
@@ -69,6 +70,9 @@ type Deps struct {
 	NATS        *nats.Conn
 	OpenAPISpec []byte
 	WebFS       fs.FS
+	// DocsFS holds the MkDocs site (docs/site). May be nil in incomplete
+	// local builds; /docs then returns 404 until mkdocs build is embedded.
+	DocsFS fs.FS
 	// ProbeFS holds cross-compiled probe binaries laid out as
 	// "linux/amd64/sonar-probe", "linux/arm64/sonar-probe", etc. May be nil
 	// in dev builds; the /probe/download endpoint returns 404 when so.
@@ -104,6 +108,7 @@ func New(d Deps) *Server {
 		uiHub:       NewHub(d.Logger.With(slog.String("hub", "ui"))),
 		openAPISpec: d.OpenAPISpec,
 		webFS:       d.WebFS,
+		docsFS:      d.DocsFS,
 		probeFS:     d.ProbeFS,
 		oidc:        auth.NewOIDCProvider(oidcCfg),
 		objectStore: objCli,
@@ -168,6 +173,7 @@ func (s *Server) Routes() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(s.authRequired)
 			r.Get("/auth/me", s.handleMe)
+			r.Post("/docs/session", s.handleDocsSession)
 
 			r.Get("/sites", s.handleListSites)
 			r.With(requireRole(auth.RoleSuperAdmin)).Post("/sites", s.handleCreateSite)
@@ -298,12 +304,16 @@ func (s *Server) Routes() http.Handler {
 	r.HandleFunc("/agent/ws", s.handleAgentWS)
 	r.HandleFunc("/collector/ws", s.handleCollectorWS)
 
+	// Authenticated MkDocs operator guide (cookie or Bearer).
+	r.With(s.docsAuthRequired).Get("/docs", s.serveDocs)
+	r.With(s.docsAuthRequired).Get("/docs/*", s.serveDocs)
+
 	// UI live-updates websocket (authenticated).
 	r.With(s.authRequired).HandleFunc("/ws", func(w http.ResponseWriter, req *http.Request) {
 		s.uiHub.Serve(w, req, "ui")
 	})
 
-	// Static SPA fallback. Anything not under /api/, /agent/, or /ws
+	// Static SPA fallback. Anything not under /api/, /agent/, /docs, or /ws
 	// returns the embedded React build (with index.html for unknown paths).
 	r.NotFound(s.serveSPA)
 

@@ -21,6 +21,14 @@ RUN npm ci --no-audit --no-fund \
 COPY web/ ./
 RUN npm run build
 
+# ---- Stage 1b: build operator MkDocs site ----------------------------------
+FROM python:3.12-slim AS docs
+WORKDIR /src
+COPY mkdocs.yml ./
+COPY docs/src ./docs/src
+RUN pip install --no-cache-dir 'mkdocs-material>=9.5,<10' \
+ && mkdocs build --strict
+
 # ---- Stage 2: cross-compile the Sonar Probe for every endpoint OS/arch ----
 # These binaries get embedded into the API binary in the next stage so
 # /api/v1/probe/download/{os}/{arch} can serve them without a separate
@@ -54,7 +62,7 @@ RUN set -eux; \
     GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" \
       -o /probe/windows/amd64/sonar-probe.exe ./cmd/sonar-probe
 
-# ---- Stage 3: build the Go binary with the UI + probes baked in -----------
+# ---- Stage 3: build the Go binary with the UI + probes + docs baked in ----
 FROM golang:1.25-alpine AS gobuild
 COPY docker/local-ca.crt /tmp/local-ca.crt
 RUN if grep -q "BEGIN CERTIFICATE" /tmp/local-ca.crt 2>/dev/null; then \
@@ -66,6 +74,8 @@ COPY . .
 RUN go mod tidy
 # Copy the freshly-built UI in so go:embed picks it up.
 COPY --from=web /src/web/dist ./web/dist
+# Operator guide (MkDocs) embedded at /docs.
+COPY --from=docs /src/docs/site ./docs/site
 # Drop the cross-compiled probe binaries into the embed directory so the
 # API binary serves them via /api/v1/probe/download/{os}/{arch}.
 COPY --from=probebuild /probe ./internal/probebins/bin

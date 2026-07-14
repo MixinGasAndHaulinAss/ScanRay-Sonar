@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.7.14.1"
+  version: "2026.7.14.2"
   license:
     name: MIT
 servers:
@@ -434,6 +434,18 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /docs/session:
+    post:
+      summary: Mint an HttpOnly cookie session for the /docs operator guide
+      description: |
+        Issues a short-lived docs JWT as the `sonar_docs_session` cookie
+        (Path=/docs). Call this from the signed-in SPA before navigating
+        to `/docs/`. Any authenticated role may call this endpoint.
+      responses:
+        "204":
+          description: Cookie set
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /sites:

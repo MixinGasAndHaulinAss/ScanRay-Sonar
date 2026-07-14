@@ -22,6 +22,7 @@ import Users from "./pages/Users";
 import Reports from "./pages/Reports";
 import PassiveSnmp from "./pages/PassiveSnmp";
 import Traffic from "./pages/Traffic";
+import DocsRedirect from "./pages/DocsRedirect";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 
@@ -209,6 +210,14 @@ export default function App() {
         element={
           <RequireAuth>
             <Traffic />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/documentation"
+        element={
+          <RequireAuth>
+            <DocsRedirect />
           </RequireAuth>
         }
       />

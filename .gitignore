@@ -16,6 +16,10 @@ node_modules/
 .pnpm-debug.log*
 .npm/
 
+# MkDocs build output — keep placeholder docs/site/index.html for go:embed
+docs/site/**
+!docs/site/index.html
+
 # IDE / editor
 .idea/
 .vscode/

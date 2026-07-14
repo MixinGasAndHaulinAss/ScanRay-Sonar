@@ -1,0 +1,17 @@
+---
+description: Auto commit, push GitLab, and deploy ScanRay-Sonar to dev after changes
+alwaysApply: true
+---
+
+# ScanRay-Sonar: auto ship
+
+After finishing substantive code changes in this repo (unless the user explicitly says not to):
+
+1. Bump CalVer in lockstep (`VERSION`, `web/package.json` + lockfile, `Layout.tsx` `APP_VERSION`, `openapi.yaml` `info.version`) when the change should show in UI/API version.
+2. Commit with a concise message (feat/fix/chore) — do not ask first.
+3. Push to GitLab: `git push gitlab main`.
+4. Watch the pipeline via bridge-gitlab (`gitlab_api.py`). If api/poller/collector builds were path-skipped, trigger `FORCE_REBUILD=true` and `FORCE_RUN_ALL=true`.
+5. On green: on Currituck Tendril host `dev`, `cd /opt/scanraysonar && git pull && ./scripts/deploy-registry.sh`.
+6. Verify `curl -fsS http://127.0.0.1:6969/api/v1/version` matches the new CalVer.
+
+Do not push to GitHub manually (mirror job handles it). Do not skip gofmt/vet fixes if CI fails — fix and ship a follow-up commit the same way.

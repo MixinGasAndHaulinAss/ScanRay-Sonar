@@ -1,0 +1,66 @@
+site_name: ScanRay Sonar
+site_description: Operator guide for ScanRay Sonar
+site_url: /docs/
+docs_dir: docs/src
+site_dir: docs/site
+use_directory_urls: true
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: blue grey
+      accent: light blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: blue grey
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+  favicon: null
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Roles and permissions: rbac.md
+  - Dashboard: dashboard.md
+  - Sites: sites.md
+  - Devices: devices.md
+  - Appliances: appliances.md
+  - Collectors: collectors.md
+  - Topology: topology.md
+  - Traffic: traffic.md
+  - World map: world.md
+  - Site documents: documents.md
+  - Alarms: alarms.md
+  - Reports: reports.md
+  - Discovered SNMP: passive-snmp.md
+  - API keys: api-keys.md
+  - Site discovery: site-discovery.md
+  - Settings: settings.md
+  - Admin:
+      - Users: users.md
+      - Discovery admin: discovery-admin.md
+      - Audit log: audit-log.md

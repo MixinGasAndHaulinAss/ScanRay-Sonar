@@ -14,6 +14,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 
+	"github.com/NCLGISA/ScanRay-Sonar/docs"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/api"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/auth"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/config"
@@ -87,6 +88,11 @@ func run() error {
 		webRoot = nil
 	}
 
+	docsRoot, err := fs.Sub(docs.SiteFS, "site")
+	if err != nil {
+		docsRoot = nil
+	}
+
 	probeRoot, err := fs.Sub(probebins.FS, "bin")
 	if err != nil {
 		probeRoot = nil
@@ -118,6 +124,7 @@ func run() error {
 		NATS:        nc,
 		OpenAPISpec: api.Spec(),
 		WebFS:       webRoot,
+		DocsFS:      docsRoot,
 		ProbeFS:     probeRoot,
 		Geo:         geo,
 	})

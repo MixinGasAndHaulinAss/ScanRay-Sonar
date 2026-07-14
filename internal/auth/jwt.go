@@ -25,6 +25,9 @@ const (
 	// KindCollector identifies a long-lived JWT held by sonar-collector.
 	// Subject = collector UUID.
 	KindCollector TokenKind = "collector"
+	// KindDocs is a short-lived JWT stored in an HttpOnly cookie so the
+	// browser can load /docs/* without an Authorization header.
+	KindDocs TokenKind = "docs"
 )
 
 // AgentTTL is the lifetime of an agent JWT. Probes refresh it

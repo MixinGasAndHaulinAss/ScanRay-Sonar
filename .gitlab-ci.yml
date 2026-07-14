@@ -106,6 +106,8 @@ variables:
         - internal/probe/**/*
         - internal/probebins/**/*
         - internal/version/**/*
+        - docs/**/*
+        - mkdocs.yml
         - web/**/*
         - docker/api.Dockerfile
         - go.mod
@@ -125,6 +127,8 @@ variables:
         - internal/probe/**/*
         - internal/probebins/**/*
         - internal/version/**/*
+        - docs/**/*
+        - mkdocs.yml
         - web/**/*
         - docker/api.Dockerfile
         - go.mod
@@ -441,7 +445,7 @@ build:api:
     - chmod +x ci/smart_build.sh
     - >
       ./ci/smart_build.sh api docker/api.Dockerfile
-      "VERSION cmd/sonar-api/ cmd/sonar-probe/ internal/api/ internal/auth/ internal/crypto/ internal/db/ internal/geoip/ internal/logging/ internal/probe/ internal/probebins/ internal/version/ web/ docker/api.Dockerfile go.mod go.sum"
+      "VERSION cmd/sonar-api/ cmd/sonar-probe/ docs/ mkdocs.yml internal/api/ internal/auth/ internal/crypto/ internal/db/ internal/geoip/ internal/logging/ internal/probe/ internal/probebins/ internal/version/ web/ docker/api.Dockerfile go.mod go.sum"
 
 build:poller:
   stage: build
