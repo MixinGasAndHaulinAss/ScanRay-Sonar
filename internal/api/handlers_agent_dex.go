@@ -301,7 +301,6 @@ func (s *Server) queryDEXIndex(r *http.Request, index, siteID, agentID, groupID,
 		args = append(args, v)
 		return fmt.Sprintf("$%d", len(args))
 	}
-	where := []string{"TRUE"}
 	timeCol := "time"
 
 	var sql string
@@ -401,9 +400,8 @@ func (s *Server) queryDEXIndex(r *http.Request, index, siteID, agentID, groupID,
 		if err != nil {
 			continue
 		}
-		fds := pgRows.FieldDescriptions()
 		row := map[string]any{}
-		for i, fd := range fds {
+		for i := range cols {
 			key := cols[i]
 			v := vals[i]
 			switch t := v.(type) {
