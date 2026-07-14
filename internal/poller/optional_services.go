@@ -25,4 +25,3 @@ func StartFlowListenerIfConfigured(ctx context.Context, pool *pgxpool.Pool, log 
 		}
 	}()
 }
-
