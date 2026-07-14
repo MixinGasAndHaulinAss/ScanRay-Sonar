@@ -207,12 +207,12 @@ func sendTeamsNotify(ctx context.Context, store AuditSink, httpCli *http.Client,
 		title = "RESOLVED: " + title
 	}
 	payload, _ := json.Marshal(map[string]any{
-		"@type":    "MessageCard",
-		"@context": "http://schema.org/extensions",
-		"summary":  title,
+		"@type":      "MessageCard",
+		"@context":   "http://schema.org/extensions",
+		"summary":    title,
 		"themeColor": "FF0000",
-		"title":    title,
-		"text":     fmt.Sprintf("Rule **%s** (%s)\nTarget: %s %s", evt.RuleName, evt.Severity, evt.TargetKind, evt.TargetID),
+		"title":      title,
+		"text":       fmt.Sprintf("Rule **%s** (%s)\nTarget: %s %s", evt.RuleName, evt.Severity, evt.TargetKind, evt.TargetID),
 	})
 	sendCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()

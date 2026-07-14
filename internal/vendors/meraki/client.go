@@ -41,12 +41,12 @@ type Network struct {
 
 // Device is a Meraki device row.
 type Device struct {
-	Name      string `json:"name"`
-	Model     string `json:"model"`
-	Serial    string `json:"serial"`
-	MAC       string `json:"mac"`
-	LANIP     string `json:"lanIp"`
-	NetworkID string `json:"networkId"`
+	Name        string `json:"name"`
+	Model       string `json:"model"`
+	Serial      string `json:"serial"`
+	MAC         string `json:"mac"`
+	LANIP       string `json:"lanIp"`
+	NetworkID   string `json:"networkId"`
 	ProductType string `json:"productType"`
 }
 

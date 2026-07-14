@@ -91,9 +91,9 @@ func vmwareLogout(ctx context.Context, cli *http.Client, base, session string) e
 
 func vmwareListVMs(ctx context.Context, cli *http.Client, base, session string) ([]VMwareVM, error) {
 	var raw []struct {
-		Name     string `json:"name"`
+		Name       string `json:"name"`
 		PowerState string `json:"power_state"`
-		VM       string `json:"vm"`
+		VM         string `json:"vm"`
 	}
 	if err := vmwareGET(ctx, cli, base+"/api/vcenter/vm", session, &raw); err != nil {
 		return nil, err

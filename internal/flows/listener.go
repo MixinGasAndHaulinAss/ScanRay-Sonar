@@ -21,14 +21,14 @@ type Listener struct {
 }
 
 type persistRow struct {
-	t         time.Time
-	src, dst  net.IP
-	srcPort   int
-	dstPort   int
-	proto     int
-	bytes     int64
-	packets   int64
-	exporter  net.IP
+	t        time.Time
+	src, dst net.IP
+	srcPort  int
+	dstPort  int
+	proto    int
+	bytes    int64
+	packets  int64
+	exporter net.IP
 }
 
 // NewListener binds UDP addr (e.g. ":2055").

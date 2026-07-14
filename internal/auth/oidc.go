@@ -29,7 +29,7 @@ func (c OIDCConfig) Enabled() bool {
 
 // OIDCProvider performs authorization-code login stubs.
 type OIDCProvider struct {
-	cfg OIDCConfig
+	cfg  OIDCConfig
 	http *http.Client
 }
 

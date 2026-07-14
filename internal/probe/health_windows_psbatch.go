@@ -192,20 +192,20 @@ $out | ConvertTo-Json -Compress
 // winPSResult mirrors the JSON keys emitted by winPSScript. Unset
 // keys decode as zero values; we treat the zero value as "absent".
 type winPSResult struct {
-	BatteryHealthPct        *float64 `json:"batteryHealthPct,omitempty"`
-	MissingPatchCount       *int     `json:"missingPatchCount,omitempty"`
-	BSODCount24h            *int     `json:"bsodCount24h,omitempty"`
-	UserRebootCount24h      *int     `json:"userRebootCount24h,omitempty"`
-	AppCrashCount24h        *int     `json:"appCrashCount24h,omitempty"`
-	EventLogErrorCount24h   *int     `json:"eventLogErrorCount24h,omitempty"`
-	HighloadCPUIncidents24h *int     `json:"highloadCpuIncidents24h,omitempty"`
-	WiFiSSID                string   `json:"wifiSsid,omitempty"`
-	WiFiSignalPct           *int     `json:"wifiSignalPct,omitempty"`
-	LogonAvgMs              *float64             `json:"logonAvgMs,omitempty"`
-	LogonMaxMs              *float64             `json:"logonMaxMs,omitempty"`
-	AppLaunchMaxMs          *float64             `json:"appLaunchMaxMs,omitempty"`
-	InputDelayAvgMs         *float64             `json:"inputDelayAvgMs,omitempty"`
-	AppCrashesByName        []AppCrashNameCount  `json:"appCrashesByName,omitempty"`
+	BatteryHealthPct        *float64            `json:"batteryHealthPct,omitempty"`
+	MissingPatchCount       *int                `json:"missingPatchCount,omitempty"`
+	BSODCount24h            *int                `json:"bsodCount24h,omitempty"`
+	UserRebootCount24h      *int                `json:"userRebootCount24h,omitempty"`
+	AppCrashCount24h        *int                `json:"appCrashCount24h,omitempty"`
+	EventLogErrorCount24h   *int                `json:"eventLogErrorCount24h,omitempty"`
+	HighloadCPUIncidents24h *int                `json:"highloadCpuIncidents24h,omitempty"`
+	WiFiSSID                string              `json:"wifiSsid,omitempty"`
+	WiFiSignalPct           *int                `json:"wifiSignalPct,omitempty"`
+	LogonAvgMs              *float64            `json:"logonAvgMs,omitempty"`
+	LogonMaxMs              *float64            `json:"logonMaxMs,omitempty"`
+	AppLaunchMaxMs          *float64            `json:"appLaunchMaxMs,omitempty"`
+	InputDelayAvgMs         *float64            `json:"inputDelayAvgMs,omitempty"`
+	AppCrashesByName        []AppCrashNameCount `json:"appCrashesByName,omitempty"`
 }
 
 // winRunPSBatch runs winPSScript once and copies the parsed result

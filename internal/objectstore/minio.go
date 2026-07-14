@@ -42,7 +42,7 @@ func LoadConfigFromEnv() (Config, bool) {
 
 // Client uploads and downloads objects via S3-compatible PUT/GET.
 type Client struct {
-	cfg Config
+	cfg  Config
 	http *http.Client
 }
 

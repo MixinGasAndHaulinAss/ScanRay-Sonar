@@ -52,7 +52,7 @@ type Server struct {
 	webFS       fs.FS
 	probeFS     fs.FS
 
-	oidc      *auth.OIDCProvider
+	oidc        *auth.OIDCProvider
 	objectStore *objectstore.Client
 }
 
