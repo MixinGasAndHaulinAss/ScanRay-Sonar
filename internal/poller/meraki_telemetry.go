@@ -24,46 +24,147 @@ type MerakiTelemetrySnapshot struct {
 	CapturedAt     time.Time               `json:"capturedAt"`
 	Status         string                  `json:"status,omitempty"`
 	ProductType    string                  `json:"productType,omitempty"`
+	Model          string                  `json:"model,omitempty"`
 	LastReportedAt string                  `json:"lastReportedAt,omitempty"`
 	Name           string                  `json:"name,omitempty"`
+	MAC            string                  `json:"mac,omitempty"`
+	PublicIP       string                  `json:"publicIp,omitempty"`
+	LANIP          string                  `json:"lanIp,omitempty"`
+	Gateway        string                  `json:"gateway,omitempty"`
+	IPType         string                  `json:"ipType,omitempty"`
+	PrimaryDNS     string                  `json:"primaryDns,omitempty"`
+	SecondaryDNS   string                  `json:"secondaryDns,omitempty"`
+	Tags           []string                `json:"tags,omitempty"`
+	PowerSupplies  []MerakiPowerSupplySnap `json:"powerSupplies,omitempty"`
+	HA             *MerakiHASnap           `json:"highAvailability,omitempty"`
 	Uplinks        []MerakiUplinkSnap      `json:"uplinks,omitempty"`
 	Ports          []MerakiPortSnap        `json:"ports,omitempty"`
 	ClientCount    *int                    `json:"clientCount,omitempty"`
 	PhysUp         *int                    `json:"physUp,omitempty"`
 	PhysTotal      *int                    `json:"physTotal,omitempty"`
 	UplinkCount    *int                    `json:"uplinkCount,omitempty"`
+	PortErrorCount *int                    `json:"portErrorCount,omitempty"`
 	LossLatency    []MerakiLossLatencySnap `json:"lossLatency,omitempty"`
+	VPN            *MerakiVPNSnap          `json:"vpn,omitempty"`
+	WirelessLoss   *MerakiWirelessLossSnap `json:"wirelessLoss,omitempty"`
+	PerfScore      *float64                `json:"perfScore,omitempty"`
+	Firmware       *MerakiFirmwareSnap     `json:"firmware,omitempty"`
+	SensorReadings []MerakiSensorReading   `json:"sensorReadings,omitempty"`
+	Alerts         []MerakiAlertSnap       `json:"alerts,omitempty"`
 }
 
-// MerakiUplinkSnap is one WAN/cellular uplink for UI display.
+type MerakiPowerSupplySnap struct {
+	Slot    int    `json:"slot"`
+	Serial  string `json:"serial,omitempty"`
+	Model   string `json:"model,omitempty"`
+	Status  string `json:"status,omitempty"`
+	PoEMax  *int   `json:"poeMaximum,omitempty"`
+	PoEUnit string `json:"poeUnit,omitempty"`
+}
+
+type MerakiHASnap struct {
+	Enabled bool   `json:"enabled"`
+	Role    string `json:"role,omitempty"`
+}
+
 type MerakiUplinkSnap struct {
-	Interface string `json:"interface"`
-	Status    string `json:"status"`
-	IP        string `json:"ip,omitempty"`
-	PublicIP  string `json:"publicIp,omitempty"`
+	Interface      string `json:"interface"`
+	Status         string `json:"status"`
+	IP             string `json:"ip,omitempty"`
+	Gateway        string `json:"gateway,omitempty"`
+	PublicIP       string `json:"publicIp,omitempty"`
+	PrimaryDNS     string `json:"primaryDns,omitempty"`
+	SecondaryDNS   string `json:"secondaryDns,omitempty"`
+	IPAssignedBy   string `json:"ipAssignedBy,omitempty"`
+	Provider       string `json:"provider,omitempty"`
+	SignalType     string `json:"signalType,omitempty"`
+	ICCID          string `json:"iccid,omitempty"`
+	ConnectionType string `json:"connectionType,omitempty"`
+	RSRP           string `json:"rsrp,omitempty"`
+	RSRQ           string `json:"rsrq,omitempty"`
 }
 
-// MerakiPortSnap is a condensed switch port status.
 type MerakiPortSnap struct {
-	PortID   string   `json:"portId"`
-	Status   string   `json:"status"`
-	Speed    string   `json:"speed,omitempty"`
-	Enabled  bool     `json:"enabled"`
-	IsUplink bool     `json:"isUplink"`
-	Errors   []string `json:"errors,omitempty"`
+	PortID       string   `json:"portId"`
+	Status       string   `json:"status"`
+	Speed        string   `json:"speed,omitempty"`
+	Duplex       string   `json:"duplex,omitempty"`
+	Enabled      bool     `json:"enabled"`
+	IsUplink     bool     `json:"isUplink"`
+	Errors       []string `json:"errors,omitempty"`
+	Warnings     []string `json:"warnings,omitempty"`
+	PoEAllocated *bool    `json:"poeAllocated,omitempty"`
+	SecurePort   string   `json:"securePort,omitempty"`
+	STPStatuses  []string `json:"stpStatuses,omitempty"`
+	RxPackets    *int64   `json:"rxPackets,omitempty"`
+	TxPackets    *int64   `json:"txPackets,omitempty"`
+	TotalPackets *int64   `json:"totalPackets,omitempty"`
 }
 
-// MerakiLossLatencySnap is the latest path-quality sample for an uplink.
 type MerakiLossLatencySnap struct {
 	Uplink      string   `json:"uplink"`
 	LossPercent *float64 `json:"lossPercent,omitempty"`
 	LatencyMs   *float64 `json:"latencyMs,omitempty"`
 }
 
+type MerakiVPNSnap struct {
+	Mode               string              `json:"mode,omitempty"`
+	DeviceStatus       string              `json:"deviceStatus,omitempty"`
+	MerakiPeers        []MerakiVPNPeerSnap `json:"merakiPeers,omitempty"`
+	ThirdPartyPeers    []MerakiVPNPeerSnap `json:"thirdPartyPeers,omitempty"`
+	ReachablePeerCount int                 `json:"reachablePeerCount"`
+	TotalPeerCount     int                 `json:"totalPeerCount"`
+}
+
+type MerakiVPNPeerSnap struct {
+	Name         string `json:"name"`
+	Reachability string `json:"reachability,omitempty"`
+	PublicIP     string `json:"publicIp,omitempty"`
+}
+
+type MerakiWirelessLossSnap struct {
+	DownstreamLossPct *float64 `json:"downstreamLossPct,omitempty"`
+	UpstreamLossPct   *float64 `json:"upstreamLossPct,omitempty"`
+}
+
+type MerakiFirmwareSnap struct {
+	Current     string `json:"current,omitempty"`
+	NextUpgrade string `json:"nextUpgrade,omitempty"`
+	NextAt      string `json:"nextAt,omitempty"`
+	Status      string `json:"status,omitempty"`
+}
+
+type MerakiSensorReading struct {
+	Metric string   `json:"metric"`
+	TS     string   `json:"ts,omitempty"`
+	Value  *float64 `json:"value,omitempty"`
+	Bool   *bool    `json:"bool,omitempty"`
+	Unit   string   `json:"unit,omitempty"`
+}
+
+type MerakiAlertSnap struct {
+	ID        string `json:"id,omitempty"`
+	Severity  string `json:"severity,omitempty"`
+	Title     string `json:"title,omitempty"`
+	Type      string `json:"type,omitempty"`
+	StartedAt string `json:"startedAt,omitempty"`
+}
+
 type merakiApplianceRow struct {
 	ID     uuid.UUID
 	Serial string
 	Name   string
+}
+
+type merakiOrgExtras struct {
+	vpnBySerial      map[string]meraki.ApplianceVPNStatus
+	wlanLossBySerial map[string]meraki.WirelessPacketLossByDevice
+	fwBySerial       map[string]meraki.FirmwareUpgradeByDevice
+	sensorBySerial   map[string]meraki.SensorReadingLatest
+	alertsBySerial   map[string][]meraki.AssuranceAlert
+	devicesBySerial  map[string]meraki.Device
+	perfBySerial     map[string]float64
+	portPktsBySerial map[string]map[string]meraki.SwitchPortPackets
 }
 
 // StartMerakiTelemetry starts the Dashboard health poll loop for sites
@@ -76,8 +177,6 @@ func runMerakiTelemetryLoop(ctx context.Context, pool *pgxpool.Pool, sealer *scr
 	log.Info("meraki telemetry loop starting")
 	t := time.NewTicker(1 * time.Minute)
 	defer t.Stop()
-	// First pass shortly after boot so Appliances light up without waiting
-	// a full inventory interval.
 	select {
 	case <-ctx.Done():
 		return
@@ -127,7 +226,7 @@ func syncMerakiTelemetryDue(ctx context.Context, pool *pgxpool.Pool, sealer *scr
 		}
 		var orgIDs []string
 		_ = json.Unmarshal(orgRaw, &orgIDs)
-		fctx, cancel := context.WithTimeout(ctx, 4*time.Minute)
+		fctx, cancel := context.WithTimeout(ctx, 6*time.Minute)
 		n, terr := SyncSiteMerakiTelemetry(fctx, pool, log, apiKey, siteID, orgIDs)
 		recordMerakiTelemetryStatus(fctx, pool, siteID, terr)
 		cancel()
@@ -150,10 +249,7 @@ func recordMerakiTelemetryStatus(ctx context.Context, pool *pgxpool.Pool, siteID
 		ON CONFLICT (site_id) DO UPDATE SET
 		  meraki_last_telemetry_at = NOW()`,
 		siteID)
-	if syncErr != nil {
-		// Keep inventory last_error separate; surface on appliances only.
-		_ = syncErr
-	}
+	_ = syncErr
 }
 
 // SyncSiteMerakiTelemetry pulls Dashboard health for Meraki appliances on a site.
@@ -197,7 +293,9 @@ func SyncSiteMerakiTelemetry(ctx context.Context, pool *pgxpool.Pool, log *slog.
 		}
 
 		uplinkBySerial := map[string]meraki.ApplianceUplinkStatus{}
-		if ups, uerr := cli.ListApplianceUplinkStatuses(ctx, org.ID); uerr == nil {
+		if ups, uerr := cli.ListApplianceUplinkStatuses(ctx, org.ID); uerr != nil {
+			log.Warn("meraki appliance uplinks failed", "org", org.Name, "err", uerr)
+		} else {
 			for _, u := range ups {
 				uplinkBySerial[u.Serial] = u
 			}
@@ -225,13 +323,14 @@ func SyncSiteMerakiTelemetry(ctx context.Context, pool *pgxpool.Pool, log *slog.
 			}
 		}
 
+		extras := loadMerakiOrgExtras(ctx, cli, log, org.ID, statusBySerial)
+
 		for serial, app := range appliances {
 			st, ok := statusBySerial[serial]
 			if !ok {
-				// Device may live in another org; skip until matched.
 				continue
 			}
-			tel := buildMerakiTelemetry(now, st, uplinkBySerial[serial], portsBySerial[serial], lossBySerial[serial])
+			tel := buildMerakiTelemetry(now, st, uplinkBySerial[serial], portsBySerial[serial], lossBySerial[serial], extras, serial)
 			if err := PersistMerakiTelemetry(ctx, pool, app.ID, app.Name, tel); err != nil {
 				continue
 			}
@@ -239,6 +338,110 @@ func SyncSiteMerakiTelemetry(ctx context.Context, pool *pgxpool.Pool, log *slog.
 		}
 	}
 	return updated, nil
+}
+
+func loadMerakiOrgExtras(
+	ctx context.Context,
+	cli *meraki.Client,
+	log *slog.Logger,
+	orgID string,
+	statuses map[string]meraki.DeviceStatus,
+) merakiOrgExtras {
+	ex := merakiOrgExtras{
+		vpnBySerial:      map[string]meraki.ApplianceVPNStatus{},
+		wlanLossBySerial: map[string]meraki.WirelessPacketLossByDevice{},
+		fwBySerial:       map[string]meraki.FirmwareUpgradeByDevice{},
+		sensorBySerial:   map[string]meraki.SensorReadingLatest{},
+		alertsBySerial:   map[string][]meraki.AssuranceAlert{},
+		devicesBySerial:  map[string]meraki.Device{},
+		perfBySerial:     map[string]float64{},
+		portPktsBySerial: map[string]map[string]meraki.SwitchPortPackets{},
+	}
+	if vpn, err := cli.ListApplianceVPNStatuses(ctx, orgID); err != nil {
+		log.Warn("meraki vpn statuses failed", "org", orgID, "err", err)
+	} else {
+		for _, v := range vpn {
+			if v.DeviceSerial != "" {
+				ex.vpnBySerial[v.DeviceSerial] = v
+			}
+		}
+	}
+	if pkts, err := cli.ListSwitchPortsStatusesPacketsByDeviceByPort(ctx, orgID); err != nil {
+		log.Warn("meraki switch port packets failed", "org", orgID, "err", err)
+	} else {
+		for _, sw := range pkts {
+			if sw.Serial == "" {
+				continue
+			}
+			byPort := map[string]meraki.SwitchPortPackets{}
+			for _, p := range sw.Ports {
+				byPort[p.PortID] = p
+			}
+			ex.portPktsBySerial[sw.Serial] = byPort
+		}
+	}
+	if wl, err := cli.ListWirelessPacketLossByDevice(ctx, orgID); err != nil {
+		log.Warn("meraki wireless packet loss failed", "org", orgID, "err", err)
+	} else {
+		for _, w := range wl {
+			if w.Device.Serial != "" {
+				ex.wlanLossBySerial[w.Device.Serial] = w
+			}
+		}
+	}
+	if fw, err := cli.ListFirmwareUpgradesByDevice(ctx, orgID); err != nil {
+		log.Warn("meraki firmware by device failed", "org", orgID, "err", err)
+	} else {
+		for _, f := range fw {
+			serial := f.Serial
+			if serial == "" && f.Device != nil {
+				serial = f.Device.Serial
+			}
+			if serial != "" {
+				ex.fwBySerial[serial] = f
+			}
+		}
+	}
+	if sens, err := cli.ListSensorReadingsLatest(ctx, orgID); err != nil {
+		log.Warn("meraki sensor readings failed", "org", orgID, "err", err)
+	} else {
+		for _, s := range sens {
+			if s.Serial != "" {
+				ex.sensorBySerial[s.Serial] = s
+			}
+		}
+	}
+	if alerts, err := cli.ListAssuranceAlerts(ctx, orgID); err != nil {
+		log.Warn("meraki assurance alerts failed", "org", orgID, "err", err)
+	} else {
+		for _, a := range alerts {
+			if a.DeviceSerial == "" {
+				continue
+			}
+			ex.alertsBySerial[a.DeviceSerial] = append(ex.alertsBySerial[a.DeviceSerial], a)
+		}
+	}
+	if devices, err := cli.ListDevices(ctx, orgID); err != nil {
+		log.Warn("meraki list devices (firmware) failed", "org", orgID, "err", err)
+	} else {
+		for _, d := range devices {
+			if d.Serial != "" {
+				ex.devicesBySerial[d.Serial] = d
+			}
+		}
+	}
+	// MX performance is per-serial; only hit appliances that appear in statuses.
+	for serial, st := range statuses {
+		if !strings.EqualFold(st.ProductType, "appliance") {
+			continue
+		}
+		perf, err := cli.GetAppliancePerformance(ctx, serial)
+		if err != nil || perf.PerfScore == nil {
+			continue
+		}
+		ex.perfBySerial[serial] = *perf.PerfScore
+	}
+	return ex
 }
 
 func loadMerakiAppliancesBySerial(ctx context.Context, pool *pgxpool.Pool, siteID uuid.UUID) (map[string]merakiApplianceRow, error) {
@@ -281,62 +484,254 @@ func buildMerakiTelemetry(
 	up meraki.ApplianceUplinkStatus,
 	sw meraki.SwitchPortsBySwitch,
 	loss []MerakiLossLatencySnap,
+	ex merakiOrgExtras,
+	serial string,
 ) MerakiTelemetrySnapshot {
 	tel := MerakiTelemetrySnapshot{
-		SchemaVersion:  "meraki-1",
+		SchemaVersion:  "meraki-2",
 		Source:         "meraki-dashboard",
 		CapturedAt:     now,
 		Status:         st.Status,
 		ProductType:    st.ProductType,
+		Model:          st.Model,
 		LastReportedAt: st.LastReportedAt,
 		Name:           st.Name,
+		MAC:            st.MAC,
+		PublicIP:       st.PublicIP,
+		LANIP:          st.LANIP,
+		Gateway:        st.Gateway,
+		IPType:         st.IPType,
+		PrimaryDNS:     st.PrimaryDNS,
+		SecondaryDNS:   st.SecondaryDNS,
+		Tags:           st.Tags,
 		LossLatency:    loss,
 	}
 	if st.Clients != nil {
 		n := st.Clients.Counts.Total
 		tel.ClientCount = &n
 	}
+	if st.Components != nil {
+		for _, ps := range st.Components.PowerSupplies {
+			row := MerakiPowerSupplySnap{
+				Slot:   ps.Slot,
+				Serial: ps.Serial,
+				Model:  ps.Model,
+				Status: ps.Status,
+			}
+			if ps.PoE != nil {
+				m := ps.PoE.Maximum
+				row.PoEMax = &m
+				row.PoEUnit = ps.PoE.Unit
+			}
+			tel.PowerSupplies = append(tel.PowerSupplies, row)
+		}
+	}
+	if up.HighAvailability != nil {
+		tel.HA = &MerakiHASnap{Enabled: up.HighAvailability.Enabled, Role: up.HighAvailability.Role}
+	}
+	if up.LastReportedAt != "" && tel.LastReportedAt == "" {
+		tel.LastReportedAt = up.LastReportedAt
+	}
 	for _, u := range up.Uplinks {
-		tel.Uplinks = append(tel.Uplinks, MerakiUplinkSnap{
-			Interface: u.Interface,
-			Status:    u.Status,
-			IP:        u.IP,
-			PublicIP:  u.PublicIP,
-		})
+		snap := MerakiUplinkSnap{
+			Interface:      u.Interface,
+			Status:         u.Status,
+			IP:             u.IP,
+			Gateway:        u.Gateway,
+			PublicIP:       u.PublicIP,
+			PrimaryDNS:     u.PrimaryDNS,
+			SecondaryDNS:   u.SecondaryDNS,
+			IPAssignedBy:   u.IPAssignedBy,
+			Provider:       u.Provider,
+			SignalType:     u.SignalType,
+			ICCID:          u.ICCID,
+			ConnectionType: u.ConnectionType,
+		}
+		if u.SignalStat != nil {
+			snap.RSRP = u.SignalStat.RSRP
+			snap.RSRQ = u.SignalStat.RSRQ
+		}
+		tel.Uplinks = append(tel.Uplinks, snap)
 	}
 	if n := countActiveUplinks(tel.Uplinks); n > 0 {
 		tel.UplinkCount = &n
 	}
 	if len(sw.Ports) > 0 {
-		physTotal, physUp, uplinkN := 0, 0, 0
+		physTotal, physUp, uplinkN, errN := 0, 0, 0, 0
 		for _, p := range sw.Ports {
 			physTotal++
-			connected := strings.EqualFold(p.Status, "Connected")
-			if connected {
+			if strings.EqualFold(p.Status, "Connected") {
 				physUp++
 			}
 			if p.IsUplink {
 				uplinkN++
 			}
-			// Cap stored port list for snapshot size; denorm counts cover the rest.
-			if len(tel.Ports) < 128 {
-				tel.Ports = append(tel.Ports, MerakiPortSnap{
+			if len(p.Errors) > 0 {
+				errN++
+			}
+			if len(tel.Ports) < 256 {
+				ps := MerakiPortSnap{
 					PortID:   p.PortID,
 					Status:   p.Status,
 					Speed:    p.Speed,
+					Duplex:   p.Duplex,
 					Enabled:  p.Enabled,
 					IsUplink: p.IsUplink,
 					Errors:   p.Errors,
-				})
+					Warnings: p.Warnings,
+				}
+				if p.PoE != nil {
+					v := p.PoE.IsAllocated
+					ps.PoEAllocated = &v
+				}
+				if p.SecurePort != nil && p.SecurePort.Active {
+					ps.SecurePort = p.SecurePort.AuthenticationStatus
+				}
+				if p.SpanningTree != nil {
+					ps.STPStatuses = p.SpanningTree.Statuses
+				}
+				if byPort, ok := ex.portPktsBySerial[serial]; ok {
+					if pkt, ok := byPort[p.PortID]; ok {
+						applyPortPackets(&ps, pkt)
+					}
+				}
+				tel.Ports = append(tel.Ports, ps)
 			}
 		}
 		tel.PhysTotal = &physTotal
 		tel.PhysUp = &physUp
+		tel.PortErrorCount = &errN
 		if uplinkN > 0 {
 			tel.UplinkCount = &uplinkN
 		}
 	}
+
+	if vpn, ok := ex.vpnBySerial[serial]; ok {
+		vs := &MerakiVPNSnap{Mode: vpn.VPNMode, DeviceStatus: vpn.DeviceStatus}
+		for _, p := range vpn.MerakiVPNPeers {
+			vs.TotalPeerCount++
+			if strings.EqualFold(p.Reachability, "reachable") {
+				vs.ReachablePeerCount++
+			}
+			vs.MerakiPeers = append(vs.MerakiPeers, MerakiVPNPeerSnap{
+				Name: p.NetworkName, Reachability: p.Reachability,
+			})
+		}
+		for _, p := range vpn.ThirdPartyVPNPeers {
+			vs.TotalPeerCount++
+			if strings.EqualFold(p.Reachability, "reachable") {
+				vs.ReachablePeerCount++
+			}
+			vs.ThirdPartyPeers = append(vs.ThirdPartyPeers, MerakiVPNPeerSnap{
+				Name: p.Name, Reachability: p.Reachability, PublicIP: p.PublicIP,
+			})
+		}
+		tel.VPN = vs
+	}
+	if wl, ok := ex.wlanLossBySerial[serial]; ok {
+		d := wl.Downstream.LossPercentage
+		u := wl.Upstream.LossPercentage
+		tel.WirelessLoss = &MerakiWirelessLossSnap{DownstreamLossPct: &d, UpstreamLossPct: &u}
+	}
+	if score, ok := ex.perfBySerial[serial]; ok {
+		tel.PerfScore = &score
+	}
+	if d, ok := ex.devicesBySerial[serial]; ok && d.Firmware != "" {
+		tel.Firmware = &MerakiFirmwareSnap{Current: d.Firmware}
+	}
+	if fw, ok := ex.fwBySerial[serial]; ok {
+		if tel.Firmware == nil {
+			tel.Firmware = &MerakiFirmwareSnap{}
+		}
+		tel.Firmware.Status = fw.Status
+		if fw.Device != nil && fw.Device.Firmware != nil {
+			if fw.Device.Firmware.CurrentVersion != nil {
+				if fw.Device.Firmware.CurrentVersion.ShortName != "" {
+					tel.Firmware.Current = fw.Device.Firmware.CurrentVersion.ShortName
+				} else {
+					tel.Firmware.Current = fw.Device.Firmware.CurrentVersion.Firmware
+				}
+			}
+			if fw.Device.Firmware.NextUpgrade != nil {
+				tel.Firmware.NextAt = fw.Device.Firmware.NextUpgrade.Time
+				if fw.Device.Firmware.NextUpgrade.ToVersion != nil {
+					tel.Firmware.NextUpgrade = fw.Device.Firmware.NextUpgrade.ToVersion.Firmware
+				}
+			}
+		}
+	}
+	if sens, ok := ex.sensorBySerial[serial]; ok {
+		tel.SensorReadings = convertSensorReadings(sens)
+	}
+	if alerts := ex.alertsBySerial[serial]; len(alerts) > 0 {
+		for i, a := range alerts {
+			if i >= 20 {
+				break
+			}
+			tel.Alerts = append(tel.Alerts, MerakiAlertSnap{
+				ID: a.ID, Severity: a.Severity, Title: a.Title, Type: a.Type, StartedAt: a.StartedAt,
+			})
+		}
+	}
 	return tel
+}
+
+func convertSensorReadings(sens meraki.SensorReadingLatest) []MerakiSensorReading {
+	var out []MerakiSensorReading
+	for _, r := range sens.Readings {
+		row := MerakiSensorReading{Metric: r.Metric, TS: r.TS}
+		switch {
+		case r.Temperature != nil:
+			v := r.Temperature.Celsius
+			row.Value, row.Unit = &v, "celsius"
+		case r.Humidity != nil:
+			v := r.Humidity.RelativePercentage
+			row.Value, row.Unit = &v, "%"
+		case r.Battery != nil:
+			v := r.Battery.Percentage
+			row.Value, row.Unit = &v, "%"
+		case r.Co2 != nil:
+			v := r.Co2.Concentration
+			row.Value, row.Unit = &v, "ppm"
+		case r.Tvoc != nil:
+			v := r.Tvoc.Concentration
+			row.Value, row.Unit = &v, "µg/m³"
+		case r.Pm25 != nil:
+			v := r.Pm25.Concentration
+			row.Value, row.Unit = &v, "µg/m³"
+		case r.Noise != nil && r.Noise.Ambient != nil:
+			v := r.Noise.Ambient.Level
+			row.Value, row.Unit = &v, "dB"
+		case r.Door != nil:
+			b := r.Door.Open
+			row.Bool = &b
+		case r.Water != nil:
+			b := r.Water.Present
+			row.Bool = &b
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+func applyPortPackets(ps *MerakiPortSnap, pkt meraki.SwitchPortPackets) {
+	for _, row := range pkt.Packets {
+		if !strings.EqualFold(row.Desc, "Total") && row.Desc != "" {
+			continue
+		}
+		rx, tx, total := row.Recv, row.Sent, row.Total
+		ps.RxPackets = &rx
+		ps.TxPackets = &tx
+		ps.TotalPackets = &total
+		return
+	}
+	if len(pkt.Packets) > 0 {
+		row := pkt.Packets[0]
+		rx, tx, total := row.Recv, row.Sent, row.Total
+		ps.RxPackets = &rx
+		ps.TxPackets = &tx
+		ps.TotalPackets = &total
+	}
 }
 
 func countActiveUplinks(uplinks []MerakiUplinkSnap) int {
@@ -452,9 +847,62 @@ func persistMerakiVendorSamples(ctx context.Context, tx pgx.Tx, id uuid.UUID, te
 		v := float64(*tel.PhysTotal)
 		add("meraki.switch.ports.total", &v, "")
 	}
+	if tel.PortErrorCount != nil {
+		v := float64(*tel.PortErrorCount)
+		add("meraki.switch.ports.error_count", &v, "")
+	}
+	var rxSum, txSum float64
+	havePkts := false
+	for _, p := range tel.Ports {
+		if p.RxPackets != nil {
+			rxSum += float64(*p.RxPackets)
+			havePkts = true
+		}
+		if p.TxPackets != nil {
+			txSum += float64(*p.TxPackets)
+			havePkts = true
+		}
+	}
+	if havePkts {
+		add("meraki.switch.ports.rx_packets", &rxSum, "")
+		add("meraki.switch.ports.tx_packets", &txSum, "")
+	}
 	if tel.ClientCount != nil {
 		v := float64(*tel.ClientCount)
 		add("meraki.wireless.clients", &v, "")
+	}
+	if tel.WirelessLoss != nil {
+		if tel.WirelessLoss.DownstreamLossPct != nil {
+			v := *tel.WirelessLoss.DownstreamLossPct
+			add("meraki.wireless.loss_downstream_pct", &v, "")
+		}
+		if tel.WirelessLoss.UpstreamLossPct != nil {
+			v := *tel.WirelessLoss.UpstreamLossPct
+			add("meraki.wireless.loss_upstream_pct", &v, "")
+		}
+	}
+	if tel.PerfScore != nil {
+		v := *tel.PerfScore
+		add("meraki.appliance.perf_score", &v, "")
+	}
+	if tel.VPN != nil {
+		v := float64(tel.VPN.ReachablePeerCount)
+		add("meraki.vpn.peers_reachable", &v, "")
+		t := float64(tel.VPN.TotalPeerCount)
+		add("meraki.vpn.peers_total", &t, "")
+	}
+	for _, r := range tel.SensorReadings {
+		key := "meraki.sensor." + strings.ToLower(r.Metric)
+		if r.Value != nil {
+			v := *r.Value
+			add(key, &v, r.Unit)
+		} else if r.Bool != nil {
+			v := 0.0
+			if *r.Bool {
+				v = 1
+			}
+			add(key, &v, "")
+		}
 	}
 	if batch.Len() == 0 {
 		return nil

@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.7.13.14"
+  version: "2026.7.13.15"
   license:
     name: MIT
 servers:
@@ -677,6 +677,44 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ApplianceMetricSeries" }
+
+  /appliances/{id}/vendor-metrics:
+    get:
+      summary: Time-series vendor metric samples (Meraki Dashboard keys, etc.)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: range
+          schema: { type: string, default: "24h" }
+        - in: query
+          name: keys
+          schema: { type: string, description: "Comma-separated metric_key filter; omit for all keys" }
+      responses:
+        "200":
+          description: Series
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  applianceId: { type: string, format: uuid }
+                  range: { type: string }
+                  keys:
+                    type: array
+                    items: { type: string }
+                  capturedAtTo: { type: string, format: date-time }
+                  samples:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        time: { type: string, format: date-time }
+                        metricKey: { type: string }
+                        valueDouble: { type: number, nullable: true }
+                        valueText: { type: string, nullable: true }
 
   /appliances/{id}/interfaces/{ifIndex}/metrics:
     get:

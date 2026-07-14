@@ -14,6 +14,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -224,6 +225,82 @@ func (s *Server) handleApplianceIfaceMetrics(w http.ResponseWriter, r *http.Requ
 		"applianceId":  id.String(),
 		"ifIndex":      ifIdx,
 		"range":        rangeStr,
+		"capturedAtTo": to,
+		"samples":      out,
+	})
+}
+
+type applianceVendorMetricSample struct {
+	Time        time.Time `json:"time"`
+	MetricKey   string    `json:"metricKey"`
+	ValueDouble *float64  `json:"valueDouble,omitempty"`
+	ValueText   *string   `json:"valueText,omitempty"`
+}
+
+func (s *Server) handleApplianceVendorMetrics(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "id must be a UUID")
+		return
+	}
+	rangeStr := r.URL.Query().Get("range")
+	if rangeStr == "" {
+		rangeStr = "24h"
+	}
+	dur, err := parseRangeDuration(rangeStr)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	keysRaw := strings.TrimSpace(r.URL.Query().Get("keys"))
+	var keys []string
+	if keysRaw != "" {
+		for _, k := range strings.Split(keysRaw, ",") {
+			k = strings.TrimSpace(k)
+			if k != "" {
+				keys = append(keys, k)
+			}
+		}
+	}
+
+	to := time.Now().UTC()
+	from := to.Add(-dur)
+
+	var rows pgx.Rows
+	if len(keys) == 0 {
+		rows, err = s.pool.Query(r.Context(), `
+			SELECT time, metric_key, value_double, value_text
+			  FROM appliance_vendor_samples
+			 WHERE appliance_id = $1 AND time >= $2 AND time <= $3
+			 ORDER BY time ASC`, id, from, to)
+	} else {
+		rows, err = s.pool.Query(r.Context(), `
+			SELECT time, metric_key, value_double, value_text
+			  FROM appliance_vendor_samples
+			 WHERE appliance_id = $1 AND time >= $2 AND time <= $3
+			   AND metric_key = ANY($4)
+			 ORDER BY time ASC`, id, from, to, keys)
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "server_error", "query vendor metrics failed")
+		return
+	}
+	defer rows.Close()
+
+	out := []applianceVendorMetricSample{}
+	for rows.Next() {
+		var smp applianceVendorMetricSample
+		if err := rows.Scan(&smp.Time, &smp.MetricKey, &smp.ValueDouble, &smp.ValueText); err != nil {
+			writeErr(w, http.StatusInternalServerError, "server_error", "scan failed")
+			return
+		}
+		out = append(out, smp)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"applianceId":  id.String(),
+		"range":        rangeStr,
+		"keys":         keys,
 		"capturedAtTo": to,
 		"samples":      out,
 	})

@@ -647,30 +647,116 @@ export interface MerakiDashboardSnapshot {
   capturedAt: string;
   status?: string;
   productType?: string;
+  model?: string;
   lastReportedAt?: string;
   name?: string;
+  mac?: string;
+  publicIp?: string;
+  lanIp?: string;
+  gateway?: string;
+  ipType?: string;
+  primaryDns?: string;
+  secondaryDns?: string;
+  tags?: string[];
+  powerSupplies?: Array<{
+    slot: number;
+    serial?: string;
+    model?: string;
+    status?: string;
+    poeMaximum?: number | null;
+    poeUnit?: string;
+  }>;
+  highAvailability?: { enabled: boolean; role?: string } | null;
   uplinks?: Array<{
     interface: string;
     status: string;
     ip?: string;
+    gateway?: string;
     publicIp?: string;
+    primaryDns?: string;
+    secondaryDns?: string;
+    ipAssignedBy?: string;
+    provider?: string;
+    signalType?: string;
+    iccid?: string;
+    connectionType?: string;
+    rsrp?: string;
+    rsrq?: string;
   }>;
   ports?: Array<{
     portId: string;
     status: string;
     speed?: string;
+    duplex?: string;
     enabled: boolean;
     isUplink: boolean;
     errors?: string[];
+    warnings?: string[];
+    poeAllocated?: boolean | null;
+    securePort?: string;
+    stpStatuses?: string[];
+    rxPackets?: number | null;
+    txPackets?: number | null;
+    totalPackets?: number | null;
   }>;
   clientCount?: number | null;
   physUp?: number | null;
   physTotal?: number | null;
   uplinkCount?: number | null;
+  portErrorCount?: number | null;
   lossLatency?: Array<{
     uplink: string;
     lossPercent?: number | null;
     latencyMs?: number | null;
+  }>;
+  vpn?: {
+    mode?: string;
+    deviceStatus?: string;
+    reachablePeerCount: number;
+    totalPeerCount: number;
+    merakiPeers?: Array<{ name: string; reachability?: string }>;
+    thirdPartyPeers?: Array<{
+      name: string;
+      reachability?: string;
+      publicIp?: string;
+    }>;
+  } | null;
+  wirelessLoss?: {
+    downstreamLossPct?: number | null;
+    upstreamLossPct?: number | null;
+  } | null;
+  perfScore?: number | null;
+  firmware?: {
+    current?: string;
+    nextUpgrade?: string;
+    nextAt?: string;
+    status?: string;
+  } | null;
+  sensorReadings?: Array<{
+    metric: string;
+    ts?: string;
+    value?: number | null;
+    bool?: boolean | null;
+    unit?: string;
+  }>;
+  alerts?: Array<{
+    id?: string;
+    severity?: string;
+    title?: string;
+    type?: string;
+    startedAt?: string;
+  }>;
+}
+
+export interface ApplianceVendorMetricSeries {
+  applianceId: string;
+  range: string;
+  keys?: string[];
+  samples: Array<{
+    time: string;
+    metricKey: string;
+    valueDouble?: number | null;
+    valueText?: string | null;
   }>;
 }
 

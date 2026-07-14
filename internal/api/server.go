@@ -216,6 +216,7 @@ func (s *Server) Routes() http.Handler {
 			r.With(requireRole(auth.RoleSiteAdmin)).Post("/appliances", s.handleCreateAppliance)
 			r.Get("/appliances/{id}", s.handleGetAppliance)
 			r.Get("/appliances/{id}/metrics", s.handleApplianceMetrics)
+			r.Get("/appliances/{id}/vendor-metrics", s.handleApplianceVendorMetrics)
 			r.Get("/appliances/{id}/interfaces/{ifIndex}/metrics", s.handleApplianceIfaceMetrics)
 			r.With(requireRole(auth.RoleSiteAdmin)).Patch("/appliances/{id}", s.handleUpdateAppliance)
 			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/appliances/{id}", s.handleDeleteAppliance)

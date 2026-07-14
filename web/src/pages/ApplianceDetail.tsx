@@ -18,6 +18,7 @@ import type {
   ApplianceLLDP,
   ApplianceMetricSeries,
   ApplianceSnapshot,
+  ApplianceVendorMetricSeries,
   MerakiDashboardSnapshot,
   Site,
 } from "../api/types";
@@ -248,6 +249,62 @@ function MerakiHealthBlock({
   const physUp = detail.physUpCount ?? snap.physUp ?? null;
   const physTotal = detail.physTotalCount ?? snap.physTotal ?? null;
   const uplinkCount = detail.uplinkCount ?? snap.uplinkCount ?? snap.uplinks?.length ?? null;
+  const product = (snap.productType ?? "").toLowerCase();
+  const isSwitch = product === "switch";
+  const isAppliance = product === "appliance";
+  const isWireless = product === "wireless";
+  const isSensor = product === "sensor";
+  const hasPortTraffic = (snap.ports ?? []).some(
+    (p) => p.rxPackets != null || p.txPackets != null,
+  );
+  const hasCellular = (snap.uplinks ?? []).some(
+    (u) => u.provider || u.iccid || u.rsrp || u.interface?.toLowerCase() === "cellular",
+  );
+
+  const vendorKeys = useMemo(() => {
+    const keys = [
+      "meraki.status.online",
+      "meraki.switch.ports.up",
+      "meraki.switch.ports.total",
+      "meraki.switch.ports.error_count",
+      "meraki.switch.ports.rx_packets",
+      "meraki.switch.ports.tx_packets",
+      "meraki.wireless.clients",
+      "meraki.wireless.loss_downstream_pct",
+      "meraki.wireless.loss_upstream_pct",
+      "meraki.appliance.perf_score",
+      "meraki.vpn.peers_reachable",
+      "meraki.vpn.peers_total",
+    ];
+    for (const u of snap.uplinks ?? []) {
+      const iface = u.interface.toLowerCase();
+      keys.push(`meraki.uplink.${iface}.loss_pct`, `meraki.uplink.${iface}.latency_ms`);
+    }
+    for (const r of snap.sensorReadings ?? []) {
+      keys.push(`meraki.sensor.${r.metric.toLowerCase()}`);
+    }
+    return [...new Set(keys)].join(",");
+  }, [snap.uplinks, snap.sensorReadings]);
+
+  const vendorMetrics = useQuery({
+    queryKey: ["appliance-vendor-metrics", detail.id, "24h", vendorKeys],
+    queryFn: () =>
+      api.get<ApplianceVendorMetricSeries>(
+        `/appliances/${detail.id}/vendor-metrics?range=24h&keys=${encodeURIComponent(vendorKeys)}`,
+      ),
+    refetchInterval: 60_000,
+  });
+
+  const seriesByKey = useMemo(() => {
+    const m = new Map<string, number[]>();
+    for (const s of vendorMetrics.data?.samples ?? []) {
+      if (s.valueDouble == null) continue;
+      const arr = m.get(s.metricKey) ?? [];
+      arr.push(Number(s.valueDouble));
+      m.set(s.metricKey, arr);
+    }
+    return m;
+  }, [vendorMetrics.data]);
 
   return (
     <div className="space-y-4">
@@ -268,106 +325,392 @@ function MerakiHealthBlock({
         <div className="rounded-xl border border-ink-800 bg-ink-900 p-4">
           <div className="text-xs uppercase tracking-wide text-slate-500">Product</div>
           <div className="mt-2 text-lg text-slate-200">
-            {snap.productType ?? detail.model ?? "—"}
+            {snap.model || snap.productType || detail.model || "—"}
           </div>
+          {snap.productType && (
+            <div className="mt-1 text-xs text-slate-500">{snap.productType}</div>
+          )}
         </div>
         <div className="rounded-xl border border-ink-800 bg-ink-900 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Ports</div>
+          <div className="text-xs uppercase tracking-wide text-slate-500">
+            {isSwitch ? "Ports" : isWireless ? "Clients" : isAppliance ? "Perf" : "Uplinks"}
+          </div>
           <div className="mt-2 text-lg text-slate-200">
-            {physTotal != null ? (
+            {isSwitch && physTotal != null ? (
               <>
                 <span className="text-emerald-300">{physUp ?? 0}</span>
                 <span className="text-slate-500"> / {physTotal}</span>
               </>
+            ) : isWireless && snap.clientCount != null ? (
+              snap.clientCount
+            ) : isAppliance && snap.perfScore != null ? (
+              `${snap.perfScore.toFixed(0)}`
             ) : (
-              "—"
+              uplinkCount ?? "—"
             )}
           </div>
         </div>
         <div className="rounded-xl border border-ink-800 bg-ink-900 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">
-            {snap.clientCount != null ? "Clients" : "Uplinks"}
+          <div className="text-xs uppercase tracking-wide text-slate-500">Network</div>
+          <div className="mt-2 font-mono text-sm text-slate-200">
+            {snap.lanIp || detail.mgmtIp || "—"}
           </div>
-          <div className="mt-2 text-lg text-slate-200">
-            {snap.clientCount != null ? snap.clientCount : (uplinkCount ?? "—")}
-          </div>
+          {snap.publicIp && (
+            <div className="mt-1 font-mono text-xs text-slate-500">pub {snap.publicIp}</div>
+          )}
         </div>
       </div>
+
+      <section className="rounded-xl border border-ink-800 bg-ink-900 p-4 text-sm">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Device addressing
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <Meta label="LAN IP" value={snap.lanIp || detail.mgmtIp || "—"} />
+          <Meta label="Public IP" value={snap.publicIp || "—"} />
+          <Meta label="Gateway" value={snap.gateway || "—"} />
+          <Meta label="IP type" value={snap.ipType || "—"} />
+          <Meta label="Primary DNS" value={snap.primaryDns || "—"} />
+          <Meta label="Secondary DNS" value={snap.secondaryDns || "—"} />
+          <Meta label="MAC" value={snap.mac || "—"} />
+          <Meta
+            label="Tags"
+            value={snap.tags && snap.tags.length ? snap.tags.join(", ") : "—"}
+          />
+          {snap.highAvailability && (
+            <Meta
+              label="HA"
+              value={`${snap.highAvailability.enabled ? "enabled" : "disabled"}${
+                snap.highAvailability.role ? ` · ${snap.highAvailability.role}` : ""
+              }`}
+            />
+          )}
+        </div>
+        {snap.powerSupplies && snap.powerSupplies.length > 0 && (
+          <div className="mt-3 border-t border-ink-800 pt-3">
+            <div className="mb-1 text-xs text-slate-500">Power supplies</div>
+            <ul className="space-y-1 text-xs text-slate-300">
+              {snap.powerSupplies.map((p) => (
+                <li key={`${p.slot}-${p.serial}`}>
+                  slot {p.slot}: {p.model || "—"} · {p.status || "—"}
+                  {p.poeMaximum != null
+                    ? ` · PoE ${p.poeMaximum}${p.poeUnit ? ` ${p.poeUnit}` : ""}`
+                    : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {snap.firmware && (
+          <div className="mt-3 border-t border-ink-800 pt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <Meta label="Firmware" value={snap.firmware.current || "—"} />
+            <Meta label="Next upgrade" value={snap.firmware.nextUpgrade || "—"} />
+            <Meta
+              label="Upgrade at"
+              value={
+                snap.firmware.nextAt ? formatRelative(snap.firmware.nextAt) : "—"
+              }
+            />
+          </div>
+        )}
+      </section>
+
+      {(seriesByKey.size > 0 || vendorMetrics.isLoading) && (
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {(snap.uplinks ?? []).flatMap((u) => {
+            const iface = u.interface.toLowerCase();
+            const loss = seriesByKey.get(`meraki.uplink.${iface}.loss_pct`) ?? [];
+            const lat = seriesByKey.get(`meraki.uplink.${iface}.latency_ms`) ?? [];
+            const cards = [];
+            if (loss.length > 0) {
+              cards.push(
+                <MerakiChartCard
+                  key={`${iface}-loss`}
+                  title={`${u.interface} loss %`}
+                  values={loss}
+                  now={loss[loss.length - 1]}
+                  suffix="%"
+                />,
+              );
+            }
+            if (lat.length > 0) {
+              cards.push(
+                <MerakiChartCard
+                  key={`${iface}-lat`}
+                  title={`${u.interface} latency`}
+                  values={lat}
+                  now={lat[lat.length - 1]}
+                  suffix=" ms"
+                />,
+              );
+            }
+            return cards;
+          })}
+          {(seriesByKey.get("meraki.switch.ports.up") ?? []).length > 0 && (
+            <MerakiChartCard
+              title="Ports up"
+              values={seriesByKey.get("meraki.switch.ports.up") ?? []}
+              now={(seriesByKey.get("meraki.switch.ports.up") ?? [])[
+                (seriesByKey.get("meraki.switch.ports.up") ?? []).length - 1
+              ]}
+            />
+          )}
+          {(seriesByKey.get("meraki.wireless.clients") ?? []).length > 0 && (
+            <MerakiChartCard
+              title="Wireless clients"
+              values={seriesByKey.get("meraki.wireless.clients") ?? []}
+              now={(seriesByKey.get("meraki.wireless.clients") ?? [])[
+                (seriesByKey.get("meraki.wireless.clients") ?? []).length - 1
+              ]}
+            />
+          )}
+          {(seriesByKey.get("meraki.appliance.perf_score") ?? []).length > 0 && (
+            <MerakiChartCard
+              title="Appliance perf"
+              values={seriesByKey.get("meraki.appliance.perf_score") ?? []}
+              now={(seriesByKey.get("meraki.appliance.perf_score") ?? [])[
+                (seriesByKey.get("meraki.appliance.perf_score") ?? []).length - 1
+              ]}
+            />
+          )}
+        </section>
+      )}
 
       {snap.uplinks && snap.uplinks.length > 0 && (
         <section className="overflow-hidden rounded-xl border border-ink-800 bg-ink-900">
           <div className="border-b border-ink-800 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
             WAN uplinks (telemetry — not management IP)
           </div>
-          <table className="w-full text-left text-sm">
-            <thead className="bg-ink-800/40 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-2">Interface</th>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2">IP</th>
-                <th className="px-4 py-2">Public IP</th>
-                <th className="px-4 py-2">Loss</th>
-                <th className="px-4 py-2">Latency</th>
-              </tr>
-            </thead>
-            <tbody>
-              {snap.uplinks.map((u) => {
-                const ll = lossByUplink.get(u.interface.toLowerCase());
-                return (
-                  <tr key={u.interface} className="border-t border-ink-800">
-                    <td className="px-4 py-2 font-mono text-slate-300">{u.interface}</td>
-                    <td className="px-4 py-2 capitalize text-slate-300">{u.status}</td>
-                    <td className="px-4 py-2 font-mono text-slate-400">{u.ip || "—"}</td>
-                    <td className="px-4 py-2 font-mono text-slate-400">
-                      {u.publicIp || "—"}
-                    </td>
-                    <td className="px-4 py-2 text-slate-300">
-                      {ll?.lossPercent != null ? `${ll.lossPercent.toFixed(2)}%` : "—"}
-                    </td>
-                    <td className="px-4 py-2 text-slate-300">
-                      {ll?.latencyMs != null ? `${ll.latencyMs.toFixed(0)} ms` : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-ink-800/40 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-4 py-2">Interface</th>
+                  <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2">IP</th>
+                  <th className="px-4 py-2">Gateway</th>
+                  <th className="px-4 py-2">Public IP</th>
+                  <th className="px-4 py-2">DNS</th>
+                  <th className="px-4 py-2">Assign</th>
+                  <th className="px-4 py-2">Loss</th>
+                  <th className="px-4 py-2">Latency</th>
+                  {hasCellular && <th className="px-4 py-2">Cellular</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {snap.uplinks.map((u) => {
+                  const ll = lossByUplink.get(u.interface.toLowerCase());
+                  return (
+                    <tr key={u.interface} className="border-t border-ink-800">
+                      <td className="px-4 py-2 font-mono text-slate-300">{u.interface}</td>
+                      <td className="px-4 py-2 capitalize text-slate-300">{u.status}</td>
+                      <td className="px-4 py-2 font-mono text-slate-400">{u.ip || "—"}</td>
+                      <td className="px-4 py-2 font-mono text-slate-400">
+                        {u.gateway || "—"}
+                      </td>
+                      <td className="px-4 py-2 font-mono text-slate-400">
+                        {u.publicIp || "—"}
+                      </td>
+                      <td className="px-4 py-2 font-mono text-xs text-slate-400">
+                        {u.primaryDns || "—"}
+                        {u.secondaryDns ? ` / ${u.secondaryDns}` : ""}
+                      </td>
+                      <td className="px-4 py-2 text-slate-400">{u.ipAssignedBy || "—"}</td>
+                      <td className="px-4 py-2 text-slate-300">
+                        {ll?.lossPercent != null ? `${ll.lossPercent.toFixed(2)}%` : "—"}
+                      </td>
+                      <td className="px-4 py-2 text-slate-300">
+                        {ll?.latencyMs != null ? `${ll.latencyMs.toFixed(0)} ms` : "—"}
+                      </td>
+                      {hasCellular && (
+                        <td className="px-4 py-2 text-xs text-slate-400">
+                          {[u.provider, u.signalType, u.rsrp && `rsrp ${u.rsrp}`, u.iccid]
+                            .filter(Boolean)
+                            .join(" · ") || "—"}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {snap.vpn && (
+        <section className="rounded-xl border border-ink-800 bg-ink-900 p-4">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Site-to-site VPN
+          </div>
+          <div className="mb-3 text-sm text-slate-300">
+            mode {snap.vpn.mode || "—"} · peers{" "}
+            <span className="text-emerald-300">{snap.vpn.reachablePeerCount}</span>
+            <span className="text-slate-500"> / {snap.vpn.totalPeerCount}</span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {(snap.vpn.merakiPeers ?? []).slice(0, 12).map((p) => (
+              <div key={p.name} className="text-xs text-slate-400">
+                {p.name}: <span className="text-slate-300">{p.reachability || "—"}</span>
+              </div>
+            ))}
+            {(snap.vpn.thirdPartyPeers ?? []).slice(0, 8).map((p) => (
+              <div key={p.name} className="text-xs text-slate-400">
+                {p.name}
+                {p.publicIp ? ` (${p.publicIp})` : ""}:{" "}
+                <span className="text-slate-300">{p.reachability || "—"}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {isWireless && snap.wirelessLoss && (
+        <section className="rounded-xl border border-ink-800 bg-ink-900 p-4 text-sm text-slate-300">
+          Wireless path loss — down{" "}
+          {snap.wirelessLoss.downstreamLossPct != null
+            ? `${snap.wirelessLoss.downstreamLossPct.toFixed(2)}%`
+            : "—"}
+          , up{" "}
+          {snap.wirelessLoss.upstreamLossPct != null
+            ? `${snap.wirelessLoss.upstreamLossPct.toFixed(2)}%`
+            : "—"}
         </section>
       )}
 
       {snap.ports && snap.ports.length > 0 && (
         <section className="overflow-hidden rounded-xl border border-ink-800 bg-ink-900">
           <div className="border-b border-ink-800 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Switch ports (sample)
+            Switch ports
+            {snap.portErrorCount != null && snap.portErrorCount > 0
+              ? ` · ${snap.portErrorCount} with errors`
+              : ""}
           </div>
-          <table className="w-full text-left text-sm">
-            <thead className="bg-ink-800/40 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-2">Port</th>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-4 py-2">Speed</th>
-                <th className="px-4 py-2">Uplink</th>
-              </tr>
-            </thead>
-            <tbody>
-              {snap.ports.slice(0, 48).map((p) => (
-                <tr key={p.portId} className="border-t border-ink-800">
-                  <td className="px-4 py-2 font-mono text-slate-300">{p.portId}</td>
-                  <td className="px-4 py-2 text-slate-300">{p.status}</td>
-                  <td className="px-4 py-2 text-slate-400">{p.speed || "—"}</td>
-                  <td className="px-4 py-2 text-slate-400">{p.isUplink ? "yes" : "—"}</td>
+          <div className="max-h-[28rem] overflow-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="sticky top-0 bg-ink-800/90 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-4 py-2">Port</th>
+                  <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2">Speed</th>
+                  <th className="px-4 py-2">Duplex</th>
+                  <th className="px-4 py-2">Enabled</th>
+                  <th className="px-4 py-2">Uplink</th>
+                  <th className="px-4 py-2">PoE</th>
+                  <th className="px-4 py-2">STP</th>
+                  {hasPortTraffic && <th className="px-4 py-2">Rx pkts</th>}
+                  {hasPortTraffic && <th className="px-4 py-2">Tx pkts</th>}
+                  <th className="px-4 py-2">Errors</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {snap.ports.map((p) => (
+                  <tr key={p.portId} className="border-t border-ink-800">
+                    <td className="px-4 py-2 font-mono text-slate-300">{p.portId}</td>
+                    <td className="px-4 py-2 text-slate-300">{p.status}</td>
+                    <td className="px-4 py-2 text-slate-400">{p.speed || "—"}</td>
+                    <td className="px-4 py-2 text-slate-400">{p.duplex || "—"}</td>
+                    <td className="px-4 py-2 text-slate-400">{p.enabled ? "yes" : "no"}</td>
+                    <td className="px-4 py-2 text-slate-400">{p.isUplink ? "yes" : "—"}</td>
+                    <td className="px-4 py-2 text-slate-400">
+                      {p.poeAllocated == null ? "—" : p.poeAllocated ? "alloc" : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-xs text-slate-400">
+                      {p.stpStatuses?.join(", ") || "—"}
+                    </td>
+                    {hasPortTraffic && (
+                      <td className="px-4 py-2 font-mono text-xs text-slate-400">
+                        {p.rxPackets != null ? p.rxPackets.toLocaleString() : "—"}
+                      </td>
+                    )}
+                    {hasPortTraffic && (
+                      <td className="px-4 py-2 font-mono text-xs text-slate-400">
+                        {p.txPackets != null ? p.txPackets.toLocaleString() : "—"}
+                      </td>
+                    )}
+                    <td className="px-4 py-2 text-xs text-amber-200">
+                      {[...(p.errors ?? []), ...(p.warnings ?? [])].join(", ") || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {isSensor && snap.sensorReadings && snap.sensorReadings.length > 0 && (
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {snap.sensorReadings.map((r) => (
+            <div
+              key={`${r.metric}-${r.ts}`}
+              className="rounded-xl border border-ink-800 bg-ink-900 p-4"
+            >
+              <div className="text-xs uppercase tracking-wide text-slate-500">{r.metric}</div>
+              <div className="mt-2 text-lg text-slate-200">
+                {r.value != null
+                  ? `${r.value}${r.unit ? ` ${r.unit}` : ""}`
+                  : r.bool != null
+                    ? r.bool
+                      ? "yes"
+                      : "no"
+                    : "—"}
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {snap.alerts && snap.alerts.length > 0 && (
+        <section className="rounded-xl border border-amber-800/40 bg-amber-950/20 p-4">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-200">
+            Recent Meraki alerts
+          </div>
+          <ul className="space-y-1 text-sm text-amber-100/90">
+            {snap.alerts.map((a) => (
+              <li key={a.id || `${a.title}-${a.startedAt}`}>
+                <span className="uppercase text-amber-300/80">{a.severity || "alert"}</span>
+                {": "}
+                {a.title || a.type || "—"}
+                {a.startedAt ? (
+                  <span className="text-amber-200/60"> · {formatRelative(a.startedAt)}</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
       <SystemMeta detail={detail} />
       <p className="text-xs text-slate-500">
         Live health from Meraki Dashboard API (not SNMP). Management IP stays on the
-        LAN/appliance address.
+        LAN/appliance address. Charts use vendor samples from the last 24h.
       </p>
+    </div>
+  );
+}
+
+function MerakiChartCard({
+  title,
+  values,
+  now,
+  suffix = "",
+}: {
+  title: string;
+  values: number[];
+  now?: number;
+  suffix?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-ink-800 bg-ink-900 p-3">
+      <div className="mb-1 flex items-baseline justify-between gap-2">
+        <div className="text-xs uppercase tracking-wide text-slate-500">{title}</div>
+        <div className="text-sm text-slate-200">
+          {now != null ? `${Number(now).toFixed(now < 10 ? 2 : 0)}${suffix}` : "—"}
+        </div>
+      </div>
+      <Sparkline values={values} height={40} min={0} />
+      <div className="mt-1 text-[10px] text-slate-600">24h</div>
     </div>
   );
 }
@@ -993,7 +1336,17 @@ function SystemMeta({ detail }: { detail: ApplianceDetail }) {
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           <Meta label="name" value={snap.name || detail.sysName || detail.name || "—"} />
           <Meta label="productType" value={snap.productType || "—"} />
+          <Meta label="model" value={snap.model || "—"} />
           <Meta label="status" value={snap.status || "—"} />
+          <Meta label="firmware" value={snap.firmware?.current || "—"} />
+          <Meta
+            label="upgrade"
+            value={
+              snap.firmware?.nextUpgrade
+                ? snap.firmware.nextUpgrade
+                : snap.firmware?.status || "none"
+            }
+          />
           <Meta label="source" value={snap.source} />
           <Meta
             label="lastReported"
