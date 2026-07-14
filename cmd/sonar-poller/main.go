@@ -79,7 +79,7 @@ func run() error {
 	sched := poller.New(pool, sealer, log)
 	poller.StartTrapReceiverIfConfigured(ctx, pool, nc, log)
 	poller.StartFlowListenerIfConfigured(ctx, pool, log)
-	poller.StartMerakiSyncIfConfigured(ctx, pool, log)
+	poller.StartMerakiSync(ctx, pool, sealer, log)
 
 	go sched.Run(ctx)
 	<-ctx.Done()

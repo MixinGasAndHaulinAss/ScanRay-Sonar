@@ -176,6 +176,29 @@ export default function Appliances() {
           New appliance
         </button>
       </div>
+
+      {(sites.data?.length ?? 0) > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink-800 bg-ink-900/50 px-4 py-3 text-sm">
+          <div>
+            <div className="font-medium text-slate-200">Import Meraki devices</div>
+            <p className="text-xs text-slate-400">
+              Pull Dashboard inventory into Appliances via a site Meraki API key.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(sites.data ?? []).slice(0, 4).map((s) => (
+              <Link
+                key={s.id}
+                to={`/sites/${s.id}/discovery?tab=meraki`}
+                className="rounded-md border border-ink-600 px-3 py-1.5 text-xs text-slate-200 hover:bg-ink-800"
+              >
+                {s.name} · Meraki
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-xl border border-ink-800 bg-ink-900">
         <table className="w-full text-left text-sm">
           <thead className="bg-ink-800/60 text-xs uppercase tracking-wide text-slate-400">

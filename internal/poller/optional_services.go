@@ -26,12 +26,3 @@ func StartFlowListenerIfConfigured(ctx context.Context, pool *pgxpool.Pool, log 
 	}()
 }
 
-// StartMerakiSyncIfConfigured periodically syncs Meraki org inventory.
-func StartMerakiSyncIfConfigured(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger) {
-	key := strings.TrimSpace(os.Getenv("SONAR_MERAKI_API_KEY"))
-	if key == "" {
-		return
-	}
-	siteID := strings.TrimSpace(os.Getenv("SONAR_MERAKI_SITE_ID"))
-	go RunMerakiSyncLoop(ctx, pool, log, key, siteID)
-}

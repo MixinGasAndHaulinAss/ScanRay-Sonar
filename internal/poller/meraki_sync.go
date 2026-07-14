@@ -2,52 +2,54 @@ package poller
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	scrypto "github.com/NCLGISA/ScanRay-Sonar/internal/crypto"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/vendors/meraki"
 )
 
-// RunMerakiSyncLoop periodically pulls Meraki devices into appliances.
-func RunMerakiSyncLoop(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger, apiKey, siteIDStr string) {
-	log.Info("meraki sync starting")
-	t := time.NewTicker(15 * time.Minute)
-	defer t.Stop()
-	syncMerakiOnce(ctx, pool, log, apiKey, siteIDStr)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			syncMerakiOnce(ctx, pool, log, apiKey, siteIDStr)
-		}
-	}
+// MerakiSyncResult summarizes one Dashboard inventory pull.
+type MerakiSyncResult struct {
+	Upserted int `json:"upserted"`
+	Orgs     int `json:"orgs"`
+	Devices  int `json:"devices"`
 }
 
-func syncMerakiOnce(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger, apiKey, siteIDStr string) {
-	siteID, err := resolveMerakiSite(ctx, pool, siteIDStr)
-	if err != nil {
-		log.Warn("meraki sync: no target site", "err", err)
-		return
-	}
+// SyncSiteMeraki pulls Meraki org devices into appliances for one site.
+// orgFilter empty means all orgs visible to the API key.
+func SyncSiteMeraki(ctx context.Context, pool *pgxpool.Pool, apiKey string, siteID uuid.UUID, orgFilter []string) (MerakiSyncResult, error) {
+	var out MerakiSyncResult
 	cli := meraki.New(apiKey)
-	fctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-	orgs, err := cli.ListOrganizations(fctx)
+	orgs, err := cli.ListOrganizations(ctx)
 	if err != nil {
-		log.Warn("meraki sync: list orgs failed", "err", err)
-		return
+		return out, err
+	}
+	allow := map[string]bool{}
+	for _, id := range orgFilter {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			allow[id] = true
+		}
 	}
 	for _, org := range orgs {
-		devs, err := cli.ListDevices(fctx, org.ID)
-		if err != nil {
-			log.Warn("meraki sync: list devices failed", "org", org.Name, "err", err)
+		if len(allow) > 0 && !allow[org.ID] {
 			continue
 		}
+		out.Orgs++
+		devs, err := cli.ListDevices(ctx, org.ID)
+		if err != nil {
+			return out, fmt.Errorf("list devices for org %s: %w", org.Name, err)
+		}
 		for _, d := range devs {
+			out.Devices++
 			name := d.Name
 			if name == "" {
 				name = d.Serial
@@ -63,7 +65,7 @@ func syncMerakiOnce(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger, a
 			if d.ProductType != "" {
 				tags = append(tags, d.ProductType)
 			}
-			_, err := pool.Exec(fctx, `
+			_, err := pool.Exec(ctx, `
 				INSERT INTO appliances (site_id, name, vendor, model, serial, mgmt_ip, snmp_version, is_active, tags)
 				VALUES ($1, $2, 'meraki', $3, $4, $5::inet, 'v2c', TRUE, $6)
 				ON CONFLICT (site_id, name) DO UPDATE SET
@@ -71,14 +73,163 @@ func syncMerakiOnce(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger, a
 				  serial = EXCLUDED.serial,
 				  mgmt_ip = EXCLUDED.mgmt_ip,
 				  tags = EXCLUDED.tags,
+				  vendor = 'meraki',
+				  is_active = TRUE,
 				  updated_at = NOW()`,
 				siteID, name, nullStr(d.Model), nullStr(d.Serial), ip, tags)
 			if err != nil {
-				log.Debug("meraki sync: upsert failed", "name", name, "err", err)
+				continue
+			}
+			out.Upserted++
+		}
+	}
+	return out, nil
+}
+
+// RecordMerakiSyncStatus writes last-sync metadata on site_discovery_settings.
+func RecordMerakiSyncStatus(ctx context.Context, pool *pgxpool.Pool, siteID uuid.UUID, syncErr error) {
+	var errText *string
+	if syncErr != nil {
+		s := syncErr.Error()
+		if len(s) > 500 {
+			s = s[:500]
+		}
+		errText = &s
+	}
+	_, _ = pool.Exec(ctx, `
+		INSERT INTO site_discovery_settings (site_id, meraki_last_sync_at, meraki_last_sync_error)
+		VALUES ($1, NOW(), $2)
+		ON CONFLICT (site_id) DO UPDATE SET
+		  meraki_last_sync_at = NOW(),
+		  meraki_last_sync_error = EXCLUDED.meraki_last_sync_error`,
+		siteID, errText)
+}
+
+// StartMerakiSync starts DB-driven Meraki sync for sites with sync enabled,
+// plus an optional env-based fallback (SONAR_MERAKI_API_KEY).
+func StartMerakiSync(ctx context.Context, pool *pgxpool.Pool, sealer *scrypto.Sealer, log *slog.Logger) {
+	go runMerakiDBLoop(ctx, pool, sealer, log)
+	key := strings.TrimSpace(os.Getenv("SONAR_MERAKI_API_KEY"))
+	if key == "" {
+		return
+	}
+	siteID := strings.TrimSpace(os.Getenv("SONAR_MERAKI_SITE_ID"))
+	go runMerakiEnvLoop(ctx, pool, log, key, siteID)
+}
+
+func runMerakiEnvLoop(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger, apiKey, siteIDStr string) {
+	log.Info("meraki env sync starting")
+	t := time.NewTicker(15 * time.Minute)
+	defer t.Stop()
+	syncMerakiEnvOnce(ctx, pool, log, apiKey, siteIDStr)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			syncMerakiEnvOnce(ctx, pool, log, apiKey, siteIDStr)
+		}
+	}
+}
+
+func syncMerakiEnvOnce(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger, apiKey, siteIDStr string) {
+	siteID, err := resolveMerakiSite(ctx, pool, siteIDStr)
+	if err != nil {
+		log.Warn("meraki env sync: no target site", "err", err)
+		return
+	}
+	fctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	res, err := SyncSiteMeraki(fctx, pool, apiKey, siteID, nil)
+	RecordMerakiSyncStatus(fctx, pool, siteID, err)
+	if err != nil {
+		log.Warn("meraki env sync failed", "err", err)
+		return
+	}
+	log.Info("meraki env sync complete", "site_id", siteID.String(), "upserted", res.Upserted, "devices", res.Devices)
+}
+
+func runMerakiDBLoop(ctx context.Context, pool *pgxpool.Pool, sealer *scrypto.Sealer, log *slog.Logger) {
+	log.Info("meraki db sync loop starting")
+	t := time.NewTicker(1 * time.Minute)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			syncMerakiDBDue(ctx, pool, sealer, log)
+		}
+	}
+}
+
+func syncMerakiDBDue(ctx context.Context, pool *pgxpool.Pool, sealer *scrypto.Sealer, log *slog.Logger) {
+	rows, err := pool.Query(ctx, `
+		SELECT ds.site_id, ds.meraki_org_ids, ds.meraki_sync_interval_seconds,
+		       sc.id, sc.enc_secret
+		  FROM site_discovery_settings ds
+		  JOIN site_credentials sc ON sc.site_id = ds.site_id AND sc.kind = 'meraki'
+		 WHERE ds.meraki_sync_enabled = TRUE
+		   AND (ds.meraki_last_sync_at IS NULL
+		        OR ds.meraki_last_sync_at < NOW() - make_interval(secs => ds.meraki_sync_interval_seconds))`)
+	if err != nil {
+		log.Debug("meraki db sync query failed", "err", err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var siteID, credID uuid.UUID
+		var orgRaw []byte
+		var interval int
+		var sealed []byte
+		if rows.Scan(&siteID, &orgRaw, &interval, &credID, &sealed) != nil {
+			continue
+		}
+		plain, err := sealer.Open(sealed, []byte("credential:"+credID.String()))
+		if err != nil {
+			log.Warn("meraki db sync: unseal failed", "site_id", siteID.String(), "err", err)
+			continue
+		}
+		apiKey := parseMerakiAPIKey(plain)
+		if apiKey == "" {
+			continue
+		}
+		var orgIDs []string
+		_ = json.Unmarshal(orgRaw, &orgIDs)
+		fctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		res, syncErr := SyncSiteMeraki(fctx, pool, apiKey, siteID, orgIDs)
+		RecordMerakiSyncStatus(fctx, pool, siteID, syncErr)
+		cancel()
+		if syncErr != nil {
+			log.Warn("meraki db sync failed", "site_id", siteID.String(), "err", syncErr)
+			continue
+		}
+		log.Info("meraki db sync complete",
+			"site_id", siteID.String(),
+			"upserted", res.Upserted,
+			"devices", res.Devices,
+			"interval_s", interval,
+		)
+	}
+}
+
+func parseMerakiAPIKey(plain []byte) string {
+	s := strings.TrimSpace(string(plain))
+	if s == "" {
+		return ""
+	}
+	if strings.HasPrefix(s, "{") {
+		var m map[string]string
+		if json.Unmarshal(plain, &m) == nil {
+			if k := strings.TrimSpace(m["apiKey"]); k != "" {
+				return k
+			}
+			if k := strings.TrimSpace(m["api_key"]); k != "" {
+				return k
 			}
 		}
 	}
-	log.Info("meraki sync complete", "site_id", siteID.String())
+	return s
 }
 
 func resolveMerakiSite(ctx context.Context, pool *pgxpool.Pool, siteIDStr string) (uuid.UUID, error) {

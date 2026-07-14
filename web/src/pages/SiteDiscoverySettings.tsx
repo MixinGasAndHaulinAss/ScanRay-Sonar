@@ -1,4 +1,4 @@
-// SiteDiscoveryAdmin — per-site discovery configuration. Two top-level
+// SiteDiscoveryAdmin — per-site discovery configuration. Three top-level
 // tabs:
 //
 //   Manage Credentials  Manage SNMP / SSH / Telnet / WMI / WinAgent /
@@ -12,24 +12,32 @@
 //                       rules — same form that lived here before. Now
 //                       extracted into a tab.
 //
+//   Meraki sync         Dashboard API key + inventory sync into Appliances.
+//
 // We deliberately never echo existing secrets back to the UI; Edit
 // only lets the operator rotate the secret (paste a new one) or
 // rename the credential. This avoids re-introducing plaintext into
 // the wire on every edit.
 
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api } from "../api/client";
 import type { Site } from "../api/types";
 
-type Tab = "credentials" | "settings";
+type Tab = "credentials" | "settings" | "meraki";
 
 export default function SiteDiscoveryAdmin() {
   const { siteId = "" } = useParams<{ siteId: string }>();
+  const [searchParams] = useSearchParams();
   const sites = useQuery({ queryKey: ["sites"], queryFn: () => api.get<Site[]>("/sites") });
   const site = useMemo(() => sites.data?.find((s) => s.id === siteId), [sites.data, siteId]);
-  const [tab, setTab] = useState<Tab>("credentials");
+  const initialTab = (searchParams.get("tab") as Tab | null) ?? "credentials";
+  const [tab, setTab] = useState<Tab>(
+    initialTab === "meraki" || initialTab === "settings" || initialTab === "credentials"
+      ? initialTab
+      : "credentials",
+  );
 
   if (!siteId) {
     return (
@@ -78,13 +86,18 @@ export default function SiteDiscoveryAdmin() {
           <TabButton active={tab === "settings"} onClick={() => setTab("settings")}>
             Discovery settings
           </TabButton>
+          <TabButton active={tab === "meraki"} onClick={() => setTab("meraki")}>
+            Meraki sync
+          </TabButton>
         </nav>
       </div>
 
       {tab === "credentials" ? (
         <SiteCredentialsAdmin siteId={siteId} />
-      ) : (
+      ) : tab === "settings" ? (
         <DiscoverySettingsForm siteId={siteId} />
+      ) : (
+        <MerakiSyncPanel siteId={siteId} />
       )}
     </div>
   );
@@ -855,3 +868,200 @@ function NumField({
     </label>
   );
 }
+
+// --------------------------------------------------------------------
+// Meraki Dashboard sync
+// --------------------------------------------------------------------
+
+interface MerakiSyncSettings {
+  siteId: string;
+  enabled: boolean;
+  orgIds: string[];
+  syncIntervalSeconds: number;
+  apiKeySet: boolean;
+  lastSyncAt?: string | null;
+  lastSyncError?: string | null;
+}
+
+interface MerakiSyncResult {
+  upserted: number;
+  orgs: number;
+  devices: number;
+}
+
+function MerakiSyncPanel({ siteId }: { siteId: string }) {
+  const qc = useQueryClient();
+  const settings = useQuery({
+    queryKey: ["site-meraki-sync", siteId],
+    queryFn: () => api.get<MerakiSyncSettings>(`/sites/${siteId}/meraki-sync`),
+  });
+
+  const [enabled, setEnabled] = useState(false);
+  const [intervalSec, setIntervalSec] = useState(900);
+  const [orgText, setOrgText] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    const d = settings.data;
+    if (!d) return;
+    setEnabled(d.enabled);
+    setIntervalSec(d.syncIntervalSeconds || 900);
+    setOrgText((d.orgIds ?? []).join("\n"));
+  }, [settings.data]);
+
+  const save = useMutation({
+    mutationFn: () => {
+      const body: Record<string, unknown> = {
+        enabled,
+        syncIntervalSeconds: intervalSec,
+        orgIds: parseLines(orgText),
+      };
+      if (apiKey.trim()) body.apiKey = apiKey.trim();
+      return api.put<MerakiSyncSettings>(`/sites/${siteId}/meraki-sync`, body);
+    },
+    onSuccess: () => {
+      setErr(null);
+      setApiKey("");
+      setOkMsg("Meraki settings saved.");
+      qc.invalidateQueries({ queryKey: ["site-meraki-sync", siteId] });
+      setTimeout(() => setOkMsg(null), 2500);
+    },
+    onError: (e: unknown) => setErr(e instanceof ApiError ? e.message : "Save failed"),
+  });
+
+  const syncNow = useMutation({
+    mutationFn: async () => {
+      if (apiKey.trim()) {
+        await api.put<MerakiSyncSettings>(`/sites/${siteId}/meraki-sync`, {
+          enabled,
+          syncIntervalSeconds: intervalSec,
+          orgIds: parseLines(orgText),
+          apiKey: apiKey.trim(),
+        });
+        setApiKey("");
+      }
+      return api.post<MerakiSyncResult>(`/sites/${siteId}/meraki/sync`, {});
+    },
+    onSuccess: (r) => {
+      setErr(null);
+      setOkMsg(`Synced ${r.upserted} appliance(s) from ${r.orgs} org(s) (${r.devices} device rows).`);
+      qc.invalidateQueries({ queryKey: ["site-meraki-sync", siteId] });
+      qc.invalidateQueries({ queryKey: ["appliances"] });
+    },
+    onError: (e: unknown) => setErr(e instanceof ApiError ? e.message : "Sync failed"),
+  });
+
+  const apiKeySet = settings.data?.apiKeySet ?? false;
+
+  return (
+    <div className="space-y-4">
+      <section className="space-y-3 rounded-xl border border-ink-800 bg-ink-900/40 p-4">
+        <h2 className="text-sm font-semibold text-slate-200">Meraki Dashboard inventory</h2>
+        <p className="text-xs text-slate-400">
+          Paste an Organization Dashboard API key. Sonar pulls devices into{" "}
+          <Link className="text-sonar-300 underline" to="/appliances">
+            Appliances
+          </Link>{" "}
+          as vendor <code className="font-mono">meraki</code>. Create a key in Meraki Dashboard →
+          Organization → Settings → Dashboard API access.
+        </p>
+
+        <label className="flex items-center gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+            className="rounded border-ink-600"
+          />
+          Enable automatic sync (poller)
+        </label>
+
+        <label className="block text-xs text-slate-400">
+          Dashboard API key {apiKeySet ? "(saved — leave blank to keep)" : ""}
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder={apiKeySet ? "••••••••••••" : "Paste Meraki API key"}
+            autoComplete="new-password"
+            className="mt-1 w-full max-w-xl rounded-md border border-ink-700 bg-ink-950 px-3 py-2 font-mono text-sm"
+          />
+        </label>
+
+        <NumField
+          label="Sync interval (seconds, min 300)"
+          value={intervalSec}
+          onChange={setIntervalSec}
+          min={300}
+        />
+
+        <label className="block text-xs text-slate-400">
+          Organization IDs (optional — one per line; empty = all orgs on this key)
+          <textarea
+            value={orgText}
+            onChange={(e) => setOrgText(e.target.value)}
+            className="mt-1 h-24 w-full max-w-xl rounded-md border border-ink-700 bg-ink-950 px-2 py-1 font-mono text-xs"
+            placeholder="123456"
+          />
+        </label>
+
+        <div className="flex flex-wrap gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => save.mutate()}
+            disabled={save.isPending}
+            className="rounded-md bg-sonar-500 px-3 py-1.5 text-sm font-medium text-ink-950 hover:bg-sonar-400 disabled:opacity-50"
+          >
+            {save.isPending ? "Saving…" : "Save"}
+          </button>
+          <button
+            type="button"
+            onClick={() => syncNow.mutate()}
+            disabled={syncNow.isPending || (!apiKeySet && !apiKey.trim())}
+            className="rounded-md border border-ink-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-ink-800 disabled:opacity-50"
+          >
+            {syncNow.isPending ? "Syncing…" : "Sync now"}
+          </button>
+          <Link
+            to="/appliances"
+            className="rounded-md border border-ink-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-ink-800"
+          >
+            Open Appliances
+          </Link>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-ink-800 bg-ink-900/40 p-4 text-xs text-slate-400">
+        <div>
+          API key:{" "}
+          <span className={apiKeySet ? "text-emerald-300" : "text-amber-300"}>
+            {apiKeySet ? "configured" : "not set"}
+          </span>
+        </div>
+        <div>
+          Last sync:{" "}
+          {settings.data?.lastSyncAt
+            ? new Date(settings.data.lastSyncAt).toLocaleString()
+            : "never"}
+        </div>
+        {settings.data?.lastSyncError ? (
+          <div className="mt-1 text-red-300">Last error: {settings.data.lastSyncError}</div>
+        ) : null}
+      </section>
+
+      {err && (
+        <div className="rounded-md border border-red-800 bg-red-950/40 p-2 text-sm text-red-200">
+          {err}
+        </div>
+      )}
+      {okMsg && (
+        <div className="rounded-md border border-emerald-800 bg-emerald-950/40 p-2 text-sm text-emerald-200">
+          {okMsg}
+        </div>
+      )}
+    </div>
+  );
+}
+

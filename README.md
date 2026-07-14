@@ -535,7 +535,7 @@ Refresh the databases with `make refresh-geoip` and restart `sonar-api` to pick 
 - **Phase 3 — Network module** ✅ (core shipped)
   SNMP v1/v2c/v3 poller, IF-MIB (port stats), ENTITY-MIB / ENTITY-SENSOR-MIB (chassis + transceiver DDM), LLDP + CDP auto-topology with Cisco IP-phone suppression, **physical-vs-virtual port** distinction, **uplink highlighting**, last-seen tracking, full appliance + site CRUD, encrypted SNMP credentials, **link-utilization overlay on topology** (IF-MIB bps), **SNMP trap receiver** (UDP 162 via `SONAR_SNMP_TRAP_LISTEN`), **vCenter REST inventory** during discovery.
 - **Phase 4 — Vendor + EDR** (partial)
-  **Meraki Dashboard API sync** (`SONAR_MERAKI_API_KEY`), **EDR/Sysmon presence** on Windows probes, **alarm rule editor** (channel multi-select, PATCH, forSeconds/clearForSeconds), **Slack/Teams webhook channels**.
+  **Meraki Dashboard sync** (GUI under Sites → Discovery → Meraki sync; sealed API key + Sync now; poller also honors `SONAR_MERAKI_API_KEY`), **EDR/Sysmon presence** on Windows probes, **alarm rule editor** (channel multi-select, PATCH, forSeconds/clearForSeconds), **Slack/Teams webhook channels**.
   *Still TODO:* full EDR event ingest, Cisco / Aruba / Ubiquiti / MikroTik plugin interface.
 - **Phase 5 — Traffic visualization** (partial)
   **NetFlow v5 / IPFIX stub parser**, **flow_summaries hypertable**, **sonar-flowd** / poller `SONAR_FLOW_LISTEN`, **Traffic UI** with IP search.

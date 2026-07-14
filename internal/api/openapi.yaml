@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.7.13.6"
+  version: "2026.7.13.7"
   license:
     name: MIT
 servers:
@@ -1625,6 +1625,78 @@ paths:
             schema: { type: object, additionalProperties: true }
       responses:
         "204": { description: updated }
+
+  /sites/{id}/meraki-sync:
+    get:
+      summary: Get Meraki Dashboard sync settings for a site
+      tags: [Discovery]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Meraki sync settings (apiKey never echoed)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  siteId: { type: string, format: uuid }
+                  enabled: { type: boolean }
+                  orgIds:
+                    type: array
+                    items: { type: string }
+                  syncIntervalSeconds: { type: integer }
+                  apiKeySet: { type: boolean }
+                  lastSyncAt: { type: string, format: date-time, nullable: true }
+                  lastSyncError: { type: string, nullable: true }
+    put:
+      summary: Update Meraki sync settings and optional API key
+      tags: [Discovery]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled: { type: boolean }
+                orgIds:
+                  type: array
+                  items: { type: string }
+                syncIntervalSeconds: { type: integer, minimum: 300 }
+                apiKey: { type: string, description: leave blank to keep existing }
+      responses:
+        "200":
+          description: updated settings
+  /sites/{id}/meraki/sync:
+    post:
+      summary: Sync Meraki Dashboard inventory into appliances now
+      tags: [Discovery]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: sync result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  upserted: { type: integer }
+                  orgs: { type: integer }
+                  devices: { type: integer }
+        "502": { description: Meraki API error }
 
   # ---- Passive SNMP discovery ------------------------------------------
   /sites/{id}/passive-snmp:

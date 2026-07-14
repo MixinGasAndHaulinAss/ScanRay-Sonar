@@ -257,6 +257,9 @@ func (s *Server) Routes() http.Handler {
 			r.With(requireRole(auth.RoleSiteAdmin)).Post("/sites/{id}/credentials", s.handleCreateSiteCredential)
 			r.With(requireRole(auth.RoleSiteAdmin)).Patch("/sites/{id}/credentials/{credId}", s.handlePatchSiteCredential)
 			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/sites/{id}/credentials/{credId}", s.handleDeleteSiteCredential)
+			r.With(requireRole(auth.RoleSiteAdmin)).Get("/sites/{id}/meraki-sync", s.handleGetSiteMerakiSync)
+			r.With(requireRole(auth.RoleSiteAdmin)).Put("/sites/{id}/meraki-sync", s.handlePutSiteMerakiSync)
+			r.With(requireRole(auth.RoleSiteAdmin)).Post("/sites/{id}/meraki/sync", s.handleSyncSiteMerakiNow)
 
 			r.Get("/sites/{id}/network-map", s.handleSiteNetworkMap)
 			r.Get("/sites/{id}/passive-snmp", s.handleListPassiveSNMP)
