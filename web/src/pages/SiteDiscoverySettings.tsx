@@ -987,9 +987,9 @@ function MerakiSyncPanel({ siteId }: { siteId: string }) {
           as vendor <code className="font-mono">meraki</code> with auto role tags (
           <code className="font-mono">firewall</code>, <code className="font-mono">wap</code>,{" "}
           <code className="font-mono">switch</code>, …). Saving polls immediately; use{" "}
-          <strong>Poll now</strong> anytime after. MX management IPs come from LAN/WAN or uplink
-          status when Dashboard omits <code className="font-mono">lanIp</code>. Create a key in
-          Meraki Dashboard → Organization → Settings → Dashboard API access.
+          <strong>Poll now</strong> anytime after. MX management IPs come from Addressing &amp; VLANs
+          (appliance LAN), not WAN. Create a key in Meraki Dashboard → Organization → Settings →
+          Dashboard API access.
         </p>
 
         <label className="flex items-center gap-2 text-sm text-slate-300">

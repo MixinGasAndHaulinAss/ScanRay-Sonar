@@ -49,15 +49,19 @@ func SyncSiteMeraki(ctx context.Context, pool *pgxpool.Pool, apiKey string, site
 		if err != nil {
 			return out, fmt.Errorf("list devices for org %s: %w", org.Name, err)
 		}
-		uplinkIP := map[string]string{}
-		if statuses, uerr := cli.ListApplianceUplinkStatuses(ctx, org.ID); uerr == nil {
-			for _, st := range statuses {
-				if ip := pickUplinkMgmtIP(st); ip != "" {
-					uplinkIP[st.Serial] = ip
-				}
+		// MX/Z lanIp is usually empty on the org devices list — pull appliance
+		// LAN/management IPs from Addressing & VLANs (or singleLan) per network.
+		networkLAN := map[string]string{}
+		for _, d := range devs {
+			if d.NetworkID == "" || !merakiNeedsApplianceLAN(d) {
+				continue
 			}
-		} else {
-			slog.Debug("meraki uplink statuses unavailable", "org", org.Name, "err", uerr)
+			if _, ok := networkLAN[d.NetworkID]; ok {
+				continue
+			}
+			if ip := fetchApplianceLANIP(ctx, cli, d.NetworkID); ip != "" {
+				networkLAN[d.NetworkID] = ip
+			}
 		}
 		for _, d := range devs {
 			out.Devices++
@@ -68,7 +72,7 @@ func SyncSiteMeraki(ctx context.Context, pool *pgxpool.Pool, apiKey string, site
 			if name == "" {
 				continue
 			}
-			ip := pickMerakiMgmtIP(d, uplinkIP[d.Serial])
+			ip := pickMerakiMgmtIP(d, networkLAN[d.NetworkID])
 			tags := merakiRoleTags(org.Name, d.ProductType, d.Model)
 			_, err := pool.Exec(ctx, `
 				INSERT INTO appliances (site_id, name, vendor, model, serial, mgmt_ip, snmp_version, is_active, tags)
@@ -89,6 +93,59 @@ func SyncSiteMeraki(ctx context.Context, pool *pgxpool.Pool, apiKey string, site
 		}
 	}
 	return out, nil
+}
+
+func merakiNeedsApplianceLAN(d meraki.Device) bool {
+	if strings.EqualFold(strings.TrimSpace(d.ProductType), "appliance") {
+		return true
+	}
+	m := strings.ToUpper(strings.TrimSpace(d.Model))
+	return strings.HasPrefix(m, "MX") || strings.HasPrefix(m, "Z")
+}
+
+func fetchApplianceLANIP(ctx context.Context, cli *meraki.Client, networkID string) string {
+	if vlans, err := cli.ListApplianceVLANs(ctx, networkID); err == nil {
+		if ip := pickVLANApplianceIP(vlans); ip != "" {
+			return ip
+		}
+	}
+	if sl, err := cli.GetApplianceSingleLAN(ctx, networkID); err == nil {
+		if usableMerakiIP(sl.ApplianceIP) && isPrivateIP(sl.ApplianceIP) {
+			return strings.TrimSpace(sl.ApplianceIP)
+		}
+	}
+	return ""
+}
+
+func pickVLANApplianceIP(vlans []meraki.ApplianceVLAN) string {
+	bestIP := ""
+	bestScore := -1 << 30
+	for _, v := range vlans {
+		ip := strings.TrimSpace(v.ApplianceIP)
+		if !usableMerakiIP(ip) || !isPrivateIP(ip) {
+			continue
+		}
+		name := strings.ToLower(strings.TrimSpace(v.Name))
+		score := 1000 - v.ID // prefer lower VLAN IDs when otherwise tied
+		if v.ID == 1 {
+			score += 500
+		}
+		switch name {
+		case "default", "lan", "data", "management", "mgmt":
+			score += 300
+		}
+		if strings.Contains(name, "data") {
+			score += 80
+		}
+		if strings.Contains(name, "guest") || strings.Contains(name, "dmz") {
+			score -= 400
+		}
+		if score > bestScore {
+			bestScore = score
+			bestIP = ip
+		}
+	}
+	return bestIP
 }
 
 // merakiRoleTags builds auto-detected inventory tags for a Meraki device.
@@ -139,42 +196,15 @@ func merakiRoleFromProduct(productType, model string) string {
 	return ""
 }
 
-func pickMerakiMgmtIP(d meraki.Device, uplinkFallback string) string {
-	for _, cand := range []string{d.LANIP, d.Wan1IP, d.Wan2IP, uplinkFallback} {
+func pickMerakiMgmtIP(d meraki.Device, applianceLAN string) string {
+	// Prefer Dashboard lanIp (APs/switches). For MX, use the network's
+	// Addressing & VLANs appliance IP — never WAN/uplink addresses.
+	for _, cand := range []string{d.LANIP, applianceLAN} {
 		if usableMerakiIP(cand) {
-			return cand
+			return strings.TrimSpace(cand)
 		}
 	}
 	return "0.0.0.0"
-}
-
-func pickUplinkMgmtIP(st meraki.ApplianceUplinkStatus) string {
-	var privateActive, privateAny, publicActive, publicAny string
-	for _, u := range st.Uplinks {
-		active := strings.EqualFold(u.Status, "active")
-		for _, cand := range []string{u.IP, u.PublicIP} {
-			if !usableMerakiIP(cand) {
-				continue
-			}
-			priv := isPrivateIP(cand)
-			switch {
-			case priv && active && privateActive == "":
-				privateActive = cand
-			case priv && privateAny == "":
-				privateAny = cand
-			case !priv && active && publicActive == "":
-				publicActive = cand
-			case !priv && publicAny == "":
-				publicAny = cand
-			}
-		}
-	}
-	for _, cand := range []string{privateActive, privateAny, publicActive, publicAny} {
-		if cand != "" {
-			return cand
-		}
-	}
-	return ""
 }
 
 func usableMerakiIP(s string) bool {
@@ -246,7 +276,7 @@ func syncMerakiEnvOnce(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger
 		log.Warn("meraki env sync: no target site", "err", err)
 		return
 	}
-	fctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	fctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 	res, err := SyncSiteMeraki(fctx, pool, apiKey, siteID, nil)
 	RecordMerakiSyncStatus(fctx, pool, siteID, err)
@@ -304,7 +334,7 @@ func syncMerakiDBDue(ctx context.Context, pool *pgxpool.Pool, sealer *scrypto.Se
 		}
 		var orgIDs []string
 		_ = json.Unmarshal(orgRaw, &orgIDs)
-		fctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		fctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 		res, syncErr := SyncSiteMeraki(fctx, pool, apiKey, siteID, orgIDs)
 		RecordMerakiSyncStatus(fctx, pool, siteID, syncErr)
 		cancel()

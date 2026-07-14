@@ -46,23 +46,22 @@ type Device struct {
 	Serial      string `json:"serial"`
 	MAC         string `json:"mac"`
 	LANIP       string `json:"lanIp"`
-	Wan1IP      string `json:"wan1Ip"`
-	Wan2IP      string `json:"wan2Ip"`
 	NetworkID   string `json:"networkId"`
 	ProductType string `json:"productType"`
 }
 
-// ApplianceUplinkStatus is one MX/Z appliance's uplink snapshot.
-type ApplianceUplinkStatus struct {
-	NetworkID string `json:"networkId"`
-	Serial    string `json:"serial"`
-	Model     string `json:"model"`
-	Uplinks   []struct {
-		Interface string `json:"interface"`
-		Status    string `json:"status"`
-		IP        string `json:"ip"`
-		PublicIP  string `json:"publicIp"`
-	} `json:"uplinks"`
+// ApplianceVLAN is one Addressing & VLANs row (MX LAN/management side).
+type ApplianceVLAN struct {
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	ApplianceIP string `json:"applianceIp"`
+	Subnet      string `json:"subnet"`
+}
+
+// ApplianceSingleLAN is the MX LAN when VLANs are disabled.
+type ApplianceSingleLAN struct {
+	ApplianceIP string `json:"applianceIp"`
+	Subnet      string `json:"subnet"`
 }
 
 func (c *Client) get(ctx context.Context, path string, out any) error {
@@ -111,11 +110,20 @@ func (c *Client) ListDevices(ctx context.Context, orgID string) ([]Device, error
 	return out, nil
 }
 
-// ListApplianceUplinkStatuses returns MX/Z uplink IPs for an org.
-func (c *Client) ListApplianceUplinkStatuses(ctx context.Context, orgID string) ([]ApplianceUplinkStatus, error) {
-	var out []ApplianceUplinkStatus
-	if err := c.get(ctx, "/organizations/"+orgID+"/appliance/uplink/statuses?perPage=1000", &out); err != nil {
+// ListApplianceVLANs returns MX VLAN / appliance LAN IPs for a network.
+func (c *Client) ListApplianceVLANs(ctx context.Context, networkID string) ([]ApplianceVLAN, error) {
+	var out []ApplianceVLAN
+	if err := c.get(ctx, "/networks/"+networkID+"/appliance/vlans", &out); err != nil {
 		return nil, err
+	}
+	return out, nil
+}
+
+// GetApplianceSingleLAN returns the MX LAN IP when the network has VLANs disabled.
+func (c *Client) GetApplianceSingleLAN(ctx context.Context, networkID string) (ApplianceSingleLAN, error) {
+	var out ApplianceSingleLAN
+	if err := c.get(ctx, "/networks/"+networkID+"/appliance/singleLan", &out); err != nil {
+		return ApplianceSingleLAN{}, err
 	}
 	return out, nil
 }
