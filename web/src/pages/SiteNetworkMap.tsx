@@ -136,8 +136,7 @@ export default function SiteNetworkMap() {
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Site network map</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            Topology limited to this site. Third-party VPN is off by default — turn it on
-            under Links if you need those peers.
+            Topology limited to this site. React Flow + ELK layout; third-party VPN off by default.
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-2">

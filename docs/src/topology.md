@@ -17,7 +17,7 @@
   - AND — appliance must have every selected tag.
   - OR — appliance must have any selected tag (use this when selecting multiple roles).
 
-Layout uses **L2 edges only** for the force simulation. WAN and VPN lines are drawn on top without pulling nodes around. Hover a node to see its name; dense maps hide labels until hover.
+Layout uses **React Flow + ELK** (layered, top-down). L2 and WAN edges place nodes (Internet → firewall → switch → AP); VPN lines are visual overlays only and do not pull the layout.
 
 ## What the edges mean
 
