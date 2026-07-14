@@ -47,6 +47,21 @@ type VendorHealth struct {
 	PaloAlto *PaloAltoHealth `json:"paloAlto,omitempty"`
 	Alletra  *AlletraHealth  `json:"alletra,omitempty"`
 	Cisco    *CiscoExtras    `json:"ciscoExtras,omitempty"`
+
+	// OIDMetrics holds samples from the data-driven OID pack catalog
+	// (internal/snmp/oidpack). Present whenever at least one pack
+	// metric was collected for this poll.
+	OIDMetrics []OIDMetric `json:"oidMetrics,omitempty"`
+}
+
+// OIDMetric is one value from an OID pack.
+type OIDMetric struct {
+	PackID string  `json:"packId"`
+	Key    string  `json:"key"`
+	Value  float64 `json:"value"`
+	Text   string  `json:"text,omitempty"`
+	Unit   string  `json:"unit,omitempty"`
+	Label  string  `json:"label,omitempty"`
 }
 
 // UPSHealth covers RFC1628 UPS-MIB plus APC enterprise extensions.

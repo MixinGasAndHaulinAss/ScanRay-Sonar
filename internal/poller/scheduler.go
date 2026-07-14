@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/nats-io/nats.go"
 
 	scrypto "github.com/NCLGISA/ScanRay-Sonar/internal/crypto"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/snmp"
@@ -49,6 +50,7 @@ type Scheduler struct {
 	pool   *pgxpool.Pool
 	sealer *scrypto.Sealer
 	log    *slog.Logger
+	nc     *nats.Conn
 
 	// sem caps concurrent SNMP sessions across all worker goroutines.
 	sem chan struct{}
@@ -86,11 +88,13 @@ type rateState struct {
 
 // New constructs a Scheduler. The sealer is needed to decrypt
 // per-appliance SNMP credentials from the appliances row.
-func New(pool *pgxpool.Pool, sealer *scrypto.Sealer, log *slog.Logger) *Scheduler {
+// nc may be nil; when set, successful polls publish metrics.appliance.
+func New(pool *pgxpool.Pool, sealer *scrypto.Sealer, log *slog.Logger, nc *nats.Conn) *Scheduler {
 	return &Scheduler{
 		pool:    pool,
 		sealer:  sealer,
 		log:     log,
+		nc:      nc,
 		sem:     make(chan struct{}, MaxParallelPolls),
 		rate:    map[rateKey]rateState{},
 		workers: map[uuid.UUID]workerHandle{},
@@ -259,6 +263,44 @@ func (s *Scheduler) pollOnce(ctx context.Context, id uuid.UUID, ip, vendor strin
 		s.recordPollError(ctx, id, fmt.Errorf("persist: %w", err))
 		return
 	}
+	s.publishApplianceMetrics(ctx, id, vendor, &snap)
+}
+
+// publishApplianceMetrics emits metrics.appliance for the alarm engine.
+func (s *Scheduler) publishApplianceMetrics(ctx context.Context, id uuid.UUID, vendor string, snap *snmp.Snapshot) {
+	if s.nc == nil || !s.nc.IsConnected() || snap == nil {
+		return
+	}
+	var siteID uuid.UUID
+	var crit string
+	err := s.pool.QueryRow(ctx, `
+		SELECT site_id, COALESCE(criticality::text,'normal')
+		  FROM appliances WHERE id = $1`, id).Scan(&siteID, &crit)
+	if err != nil {
+		return
+	}
+	var cpu float64
+	var memRatio float64
+	if snap.Chassis.CPUPct != nil {
+		cpu = *snap.Chassis.CPUPct
+	}
+	if snap.Chassis.MemTotalBytes != nil && *snap.Chassis.MemTotalBytes > 0 && snap.Chassis.MemUsedBytes != nil {
+		memRatio = float64(*snap.Chassis.MemUsedBytes) / float64(*snap.Chassis.MemTotalBytes)
+	}
+	payloadMap := map[string]any{
+		"applianceId":  id.String(),
+		"siteId":       siteID.String(),
+		"vendor":       vendor,
+		"criticality":  crit,
+		"cpuPct":       cpu,
+		"memUsedRatio": memRatio,
+	}
+	snmp.AddVendorMetricsToPayload(payloadMap, snap)
+	payload, err := json.Marshal(payloadMap)
+	if err != nil {
+		return
+	}
+	_ = s.nc.Publish("metrics.appliance", payload)
 }
 
 // computeRates fills Interface.InBps/OutBps based on previous-poll

@@ -101,10 +101,26 @@ func ClassifyDevice(ip, sysDescr, sysObjectID, sysName, sysLocation string) Pass
 
 	// Enterprise-OID prefixes — most reliable.
 	switch {
+	case strings.HasPrefix(oid, "1.3.6.1.4.1.674.10893"):
+		d.Vendor = "dell-storage"
+		d.Type = "san"
+	case strings.HasPrefix(oid, "1.3.6.1.4.1.674"):
+		d.Vendor = "dell"
+		d.Type = "server"
+	case strings.HasPrefix(oid, "1.3.6.1.4.1.9600"):
+		d.Vendor = "windows"
+		d.Type = "server"
+	case strings.HasPrefix(oid, "1.3.6.1.4.1.8072"), strings.HasPrefix(oid, "1.3.6.1.4.1.2021"):
+		d.Vendor = "linux"
+		d.Type = "server"
 	case strings.HasPrefix(oid, "1.3.6.1.4.1.318.1.1.1"):
 		d.Vendor = "apc"
 		d.Type = "ups"
 		d.SubType = "ups-apc"
+	case strings.HasPrefix(oid, "1.3.6.1.4.1.318.1.1.10"):
+		d.Vendor = "apc-env"
+		d.Type = "power"
+		d.SubType = "apc-env"
 	case strings.HasPrefix(oid, "1.3.6.1.4.1.318"):
 		d.Vendor = "apc"
 		d.Type = "power"
@@ -144,10 +160,12 @@ func ClassifyDevice(ip, sysDescr, sysObjectID, sysName, sysLocation string) Pass
 		d.Type = "switch"
 	case strings.HasPrefix(oid, "1.3.6.1.4.1.11"):
 		d.Vendor = "hp"
-		if strings.Contains(descrLow, "switch") {
+		if strings.Contains(descrLow, "switch") || strings.Contains(descrLow, "procurve") {
 			d.Type = "switch"
+			d.Vendor = "hp-procurve"
 		} else if strings.Contains(descrLow, "printer") || strings.Contains(descrLow, "laserjet") {
 			d.Type = "printer"
+			d.Vendor = "printer"
 		}
 	case strings.HasPrefix(oid, "1.3.6.1.4.1.30065"):
 		d.Vendor = "arista"

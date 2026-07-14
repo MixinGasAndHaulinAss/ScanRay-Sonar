@@ -32,6 +32,10 @@ Thumbs.db
 # commit messages staged from the agent).
 .git-commit-msg.tmp
 
+# Local SNMP OID extract (reference only). Transform into
+# internal/snmp/oidpacks via scripts/build-oidpacks.py — do not commit.
+/oid_bundle/
+
 # Environment / secrets — never commit
 .env
 .env.local

@@ -24,6 +24,7 @@ On a device page you typically see:
 - Interface or switch-port tables with rates
 - Expandable port graphs (iface samples) when history exists
 - Neighbors (LLDP/CDP or Meraki topology discovery)
+- **OID metrics** from the embedded SNMP OID pack catalog (vendor-selected packs; see below)
 - Meraki-only blocks: uplinks, VPN, wireless loss, sensors, firmware, alerts
 
 ### Meraki switch ports
@@ -34,6 +35,22 @@ For Meraki MS, Sonar enriches ports with name, VLAN, client counts, In/Out bps, 
 
 Physical and logical interfaces show admin/oper state, speed, In/Out bps, errors/discards, and uplink heuristics where configured.
 
+### OID pack catalog
+
+In addition to typed collectors (UPS, Cisco chassis, Synology, Palo Alto, Alletra), Sonar embeds **OID packs** under `internal/snmp/oidpack/data/`. On each poll, packs matching `appliances.vendor` and/or `sysObjectID` are collected into `last_snapshot.vendor.oidMetrics` and `appliance_vendor_samples`.
+
+- Packs are Sonar-native JSON (no third-party product names in runtime IDs).
+- Selection is selective: a Cisco switch does not pull Linux/host kitchen-sink packs.
+- Table walks are capped (rows + time) so a large MIB never stalls the poller.
+- Seeded alarm rules cover high-value pack fields (printer toner/paper/jam, Dell overall health, APC env alarm, host load).
+
+To regenerate packs from a local analysis extract:
+
+```bash
+# Place the extract at ./oid_bundle/ (gitignored), then:
+python scripts/build-oidpacks.py
+```
+
 ## Add or edit an appliance
 
-Siteadmins can create SNMP appliances (IP, community/v3, interval) or rely on Meraki sync / discovery to invent inventory. Prefer discovery or Meraki sync for large fleets so credentials stay centralized under the site.
+Siteadmins can create SNMP appliances (IP, community/v3, interval) or rely on Meraki sync / discovery to invent inventory. Prefer discovery or Meraki sync for large fleets so credentials stay centralized under the site. Vendor values such as `dell`, `linux`, `printer`, `windows`, `hp-procurve`, and `apc-env` select the matching OID packs.

@@ -8,7 +8,25 @@ import { formatBytes, formatDuration, formatPct, formatRelative } from "../lib/f
 type Vendor = Appliance["vendor"];
 type SNMPVersion = Appliance["snmpVersion"];
 
-const VENDORS: Vendor[] = ["meraki", "cisco", "aruba", "ubiquiti", "mikrotik", "generic"];
+const VENDORS: Vendor[] = [
+  "meraki",
+  "cisco",
+  "aruba",
+  "ubiquiti",
+  "mikrotik",
+  "dell",
+  "dell-storage",
+  "printer",
+  "linux",
+  "windows",
+  "hp-procurve",
+  "apc",
+  "apc-env",
+  "synology",
+  "paloalto",
+  "alletra",
+  "generic",
+];
 
 interface FormState {
   siteId: string;

@@ -594,7 +594,10 @@ export interface Appliance {
   id: string;
   siteId: string;
   name: string;
-  vendor: "meraki" | "cisco" | "aruba" | "ubiquiti" | "mikrotik" | "generic";
+  vendor: "meraki" | "cisco" | "aruba" | "ubiquiti" | "mikrotik" | "generic"
+    | "dell" | "dell-storage" | "dell-server" | "printer" | "printer-hp"
+    | "linux" | "unix" | "windows" | "hp-procurve" | "hp" | "apc" | "apc-env"
+    | "ups" | "ups-apc" | "synology" | "paloalto" | "alletra";
   model?: string | null;
   serial?: string | null;
   mgmtIp: string;
@@ -646,6 +649,16 @@ export interface ApplianceSnapshot {
   entities?: ApplianceEntity[];
   lldp?: ApplianceLLDP[];
   collectionWarnings?: string[];
+  vendor?: {
+    oidMetrics?: Array<{
+      packId: string;
+      key: string;
+      value: number;
+      text?: string;
+      unit?: string;
+      label?: string;
+    }>;
+  };
   /** Present on Meraki Dashboard snapshots only. */
   source?: string;
 }

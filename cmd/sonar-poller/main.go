@@ -76,7 +76,7 @@ func run() error {
 		"nats", cfg.NATSURL,
 	)
 
-	sched := poller.New(pool, sealer, log)
+	sched := poller.New(pool, sealer, log, nc)
 	poller.StartTrapReceiverIfConfigured(ctx, pool, nc, log)
 	poller.StartFlowListenerIfConfigured(ctx, pool, log)
 	poller.StartMerakiSync(ctx, pool, sealer, log)

@@ -211,6 +211,10 @@ export default function ApplianceDetailPage() {
 
           {snmpSnap.lldp && snmpSnap.lldp.length > 0 && <LLDPTable neighbors={snmpSnap.lldp} />}
 
+          {snmpSnap.vendor?.oidMetrics && snmpSnap.vendor.oidMetrics.length > 0 && (
+            <OIDMetricsTable metrics={snmpSnap.vendor.oidMetrics} />
+          )}
+
           <SystemMeta detail={a} />
 
           {snmpSnap.collectionWarnings && snmpSnap.collectionWarnings.length > 0 && (
@@ -1399,6 +1403,81 @@ function StatusBadge({ admin, oper }: { admin: boolean; oper: boolean }) {
     <span className="rounded bg-red-900/40 px-1.5 py-0.5 text-[11px] text-red-300">
       down
     </span>
+  );
+}
+
+// ---- OID pack metrics ----------------------------------------------------
+
+function OIDMetricsTable({
+  metrics,
+}: {
+  metrics: NonNullable<NonNullable<ApplianceSnapshot["vendor"]>["oidMetrics"]>;
+}) {
+  const [q, setQ] = useState("");
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return metrics.slice(0, 200);
+    return metrics
+      .filter(
+        (m) =>
+          m.key.toLowerCase().includes(needle) ||
+          m.packId.toLowerCase().includes(needle) ||
+          (m.label || "").toLowerCase().includes(needle),
+      )
+      .slice(0, 200);
+  }, [metrics, q]);
+
+  return (
+    <div className="rounded-xl border border-ink-800 bg-ink-900 p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm font-semibold text-slate-200">
+          OID metrics{" "}
+          <span className="font-normal text-slate-500">
+            ({metrics.length} collected
+            {metrics.length > 200 ? ", showing filtered/capped list" : ""})
+          </span>
+        </div>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Filter key / pack…"
+          className="rounded border border-ink-700 bg-ink-950 px-2 py-1 text-xs text-slate-200"
+        />
+      </div>
+      <div className="max-h-96 overflow-auto">
+        <table className="w-full text-left text-xs">
+          <thead className="sticky top-0 bg-ink-900 text-slate-500">
+            <tr>
+              <th className="px-2 py-1">Pack</th>
+              <th className="px-2 py-1">Key</th>
+              <th className="px-2 py-1">Value</th>
+              <th className="px-2 py-1">Unit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((m) => (
+              <tr key={m.key} className="border-t border-ink-800/80">
+                <td className="px-2 py-1 font-mono text-slate-500">{m.packId}</td>
+                <td className="px-2 py-1 font-mono text-slate-300" title={m.label || m.key}>
+                  {m.key}
+                </td>
+                <td className="px-2 py-1 text-slate-200">
+                  {m.text ? (
+                    <span>
+                      {m.text}{" "}
+                      <span className="text-slate-500">({m.value})</span>
+                    </span>
+                  ) : (
+                    m.value
+                  )}
+                </td>
+                <td className="px-2 py-1 text-slate-500">{m.unit || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 

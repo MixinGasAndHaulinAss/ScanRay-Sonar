@@ -256,6 +256,11 @@ func persistVendorSamples(ctx context.Context, tx pgx.Tx, id uuid.UUID, snap snm
 		add("cisco.cpu.1min_pct", c.CPU1min, "")
 		add("cisco.cpu.5min_pct", c.CPU5min, "")
 	}
+	// OID pack catalog metrics
+	for _, m := range snap.Vendor.OIDMetrics {
+		v := m.Value
+		add(m.Key, &v, m.Text)
+	}
 
 	if batch.Len() == 0 {
 		return nil
