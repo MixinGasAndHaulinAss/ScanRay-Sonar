@@ -723,7 +723,7 @@ func (c *Client) ListDevicesSystemMemoryUsageHistory(ctx context.Context, orgID 
 	var out []DeviceMemoryUsageHistory
 	startingAfter := ""
 	for {
-		path := "/organizations/" + orgID + "/devices/system/memory/usage/history/byInterval?timespan=3600&interval=300&perPage=100&productTypes[]=switch"
+		path := "/organizations/" + orgID + "/devices/system/memory/usage/history/byInterval?timespan=3600&interval=300&perPage=20&productTypes[]=switch"
 		if startingAfter != "" {
 			path += "&startingAfter=" + url.QueryEscape(startingAfter)
 		}
