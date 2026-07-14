@@ -5,9 +5,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Background,
+  ConnectionMode,
   Controls,
+  Handle,
   MarkerType,
   MiniMap,
+  Position,
   ReactFlow,
   ReactFlowProvider,
   useEdgesState,
@@ -20,6 +23,29 @@ import {
 import "@xyflow/react/dist/style.css";
 import ELK from "elkjs/lib/elk.bundled.js";
 import type { Topology, TopologyEdge, TopologyNode } from "../api/types";
+
+/** Invisible anchors — custom nodes need Handles or React Flow draws no edges. */
+function NodeHandles() {
+  const hidden: React.CSSProperties = {
+    width: 8,
+    height: 8,
+    opacity: 0,
+    border: "none",
+    background: "transparent",
+  };
+  return (
+    <>
+      <Handle type="target" position={Position.Top} id="t" style={hidden} isConnectable={false} />
+      <Handle type="source" position={Position.Top} id="ts" style={hidden} isConnectable={false} />
+      <Handle type="target" position={Position.Bottom} id="b" style={hidden} isConnectable={false} />
+      <Handle type="source" position={Position.Bottom} id="bs" style={hidden} isConnectable={false} />
+      <Handle type="target" position={Position.Left} id="l" style={hidden} isConnectable={false} />
+      <Handle type="source" position={Position.Left} id="ls" style={hidden} isConnectable={false} />
+      <Handle type="target" position={Position.Right} id="r" style={hidden} isConnectable={false} />
+      <Handle type="source" position={Position.Right} id="rs" style={hidden} isConnectable={false} />
+    </>
+  );
+}
 
 const STATUS_FILL: Record<TopologyNode["status"], string> = {
   up: "#0ea5e9",
@@ -190,7 +216,8 @@ async function layoutWithElk(
 function CloudNode({ data }: NodeProps<Node<TopoNodeData>>) {
   const n = data.ref;
   return (
-    <div className="flex w-[120px] flex-col items-center gap-1">
+    <div className="relative flex w-[120px] flex-col items-center gap-1">
+      <NodeHandles />
       <svg width="56" height="36" viewBox="0 0 56 36" aria-hidden>
         <path
           d="M22 36h34c8 0 14-6 14-13s-6-13-14-13c-1.5-7-8-12-15.5-12-7 0-13 4-15.5 10C20 8 14 13 14 20c0 1 .1 2 .3 3C8.5 24 4 29 4 35c0 6 5 11 12 11h6"
@@ -213,13 +240,14 @@ function ApplianceNode({ data }: NodeProps<Node<TopoNodeData>>) {
   return (
     <div
       title={title}
-      className="rounded-lg border px-2.5 py-1.5 shadow-sm"
+      className="relative rounded-lg border px-2.5 py-1.5 shadow-sm"
       style={{
         background: "rgb(var(--ink-950) / 0.92)",
         borderColor: ring,
         minWidth: data.compact ? 112 : 148,
       }}
     >
+      <NodeHandles />
       <div className="flex items-center gap-2">
         <span
           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
@@ -246,9 +274,10 @@ function ForeignNode({ data }: NodeProps<Node<TopoNodeData>>) {
   return (
     <div
       title={n.label}
-      className="rounded-md border border-slate-700 bg-slate-900/80 px-2 py-1 opacity-80"
+      className="relative rounded-md border border-slate-700 bg-slate-900/80 px-2 py-1 opacity-80"
       style={{ minWidth: data.compact ? 88 : 120 }}
     >
+      <NodeHandles />
       <div className="truncate text-[10px] text-slate-300">{n.label}</div>
       {!data.compact && n.mgmtIp && (
         <div className="truncate font-mono text-[9px] text-slate-500">{n.mgmtIp}</div>
@@ -280,43 +309,51 @@ function toFlowNodes(
   });
 }
 
-function toFlowEdges(edges: TopologyEdge[]): Edge<TopoEdgeData>[] {
-  return edges.map((e, i) => {
-    const v = edgeVisual(e);
-    const label =
-      v.kind === "wan"
-        ? e.fromPort || "WAN"
-        : v.kind === "vpn"
-          ? e.fromPort || (e.protocol === "meraki-autovpn" ? "Auto VPN" : "VPN")
-          : e.utilizationPct != null
-            ? `${e.utilizationPct.toFixed(0)}%`
-            : undefined;
-    return {
-      id: `e-${i}-${e.from}-${e.to}-${e.protocol}-${e.fromPort ?? ""}`,
-      source: e.from,
-      target: e.to,
-      type: "smoothstep",
-      animated: v.kind === "vpn" && e.operUp,
-      label: label && (v.kind !== "l2" || e.utilizationPct != null) ? label : undefined,
-      labelStyle: { fill: "#cbd5e1", fontSize: 9 },
-      labelBgStyle: { fill: "#0f172a", fillOpacity: 0.75 },
-      labelBgPadding: [3, 2] as [number, number],
-      style: {
-        stroke: v.stroke,
-        strokeWidth: v.width,
-        strokeDasharray: v.dashed ? "6 4" : undefined,
-        opacity: v.kind === "vpn" ? 0.75 : 0.95,
-      },
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        width: 14,
-        height: 14,
-        color: v.stroke,
-      },
-      data: { ref: e, kind: v.kind },
-      zIndex: v.kind === "l2" ? 2 : 1,
-    };
-  });
+function toFlowEdges(
+  edges: TopologyEdge[],
+  nodeIds: Set<string>,
+): Edge<TopoEdgeData>[] {
+  return edges
+    .filter((e) => nodeIds.has(e.from) && nodeIds.has(e.to) && e.from !== e.to)
+    .map((e, i) => {
+      const v = edgeVisual(e);
+      const label =
+        v.kind === "wan"
+          ? e.fromPort || "WAN"
+          : v.kind === "vpn"
+            ? e.fromPort || (e.protocol === "meraki-autovpn" ? "Auto VPN" : "VPN")
+            : e.utilizationPct != null
+              ? `${e.utilizationPct.toFixed(0)}%`
+              : undefined;
+      return {
+        id: `e-${i}-${e.from}-${e.to}-${e.protocol}-${e.fromPort ?? ""}`,
+        source: e.from,
+        target: e.to,
+        // Prefer bottom→top for DOWN layout; Loose mode still routes if reversed.
+        sourceHandle: "bs",
+        targetHandle: "t",
+        type: "smoothstep",
+        animated: v.kind === "vpn" && e.operUp,
+        label: label && (v.kind !== "l2" || e.utilizationPct != null) ? label : undefined,
+        labelStyle: { fill: "#cbd5e1", fontSize: 9 },
+        labelBgStyle: { fill: "#0f172a", fillOpacity: 0.75 },
+        labelBgPadding: [3, 2] as [number, number],
+        style: {
+          stroke: v.stroke,
+          strokeWidth: Math.max(v.width, 2),
+          strokeDasharray: v.dashed ? "6 4" : undefined,
+          opacity: v.kind === "vpn" ? 0.8 : 1,
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 14,
+          height: 14,
+          color: v.stroke,
+        },
+        data: { ref: e, kind: v.kind },
+        zIndex: v.kind === "l2" ? 2 : 1,
+      };
+    });
 }
 
 function TopologyFlowInner({ data }: { data: Topology }) {
@@ -344,8 +381,9 @@ function TopologyFlowInner({ data }: { data: Topology }) {
       try {
         const positions = await layoutWithElk(data.nodes, data.edges, compact);
         if (cancelled) return;
+        const idSet = new Set(data.nodes.map((n) => n.id));
         setNodes(toFlowNodes(data.nodes, positions, compact));
-        setEdges(toFlowEdges(data.edges));
+        setEdges(toFlowEdges(data.edges, idSet));
         setLayouting(false);
         requestAnimationFrame(() => {
           fitView({ padding: 0.12, duration: 200 });
@@ -361,8 +399,9 @@ function TopologyFlowInner({ data }: { data: Topology }) {
           const row = Math.floor(i / 8);
           fallback.set(n.id, { x: col * 180, y: row * 100 });
         });
+        const idSet = new Set(data.nodes.map((n) => n.id));
         setNodes(toFlowNodes(data.nodes, fallback, compact));
-        setEdges(toFlowEdges(data.edges));
+        setEdges(toFlowEdges(data.edges, idSet));
         setLayouting(false);
         requestAnimationFrame(() => fitView({ padding: 0.12 }));
       }
@@ -461,7 +500,12 @@ function TopologyFlowInner({ data }: { data: Topology }) {
         nodesConnectable={false}
         edgesReconnectable={false}
         elementsSelectable
-        defaultEdgeOptions={{ interactionWidth: 12 }}
+        connectionMode={ConnectionMode.Loose}
+        defaultEdgeOptions={{
+          interactionWidth: 16,
+          type: "smoothstep",
+          style: { strokeWidth: 2 },
+        }}
         className="topology-flow"
       >
         <Background gap={20} size={1} color="#1e293b" />

@@ -33,7 +33,7 @@ import ThemeToggle from "./ThemeToggle";
 // APP_VERSION is just the static fallback shown if /version hasn't
 // returned yet (or fails). The real source of truth is the Go binary's
 // embedded VERSION, fetched below via useQuery.
-const APP_VERSION = "2026.7.14.7";
+const APP_VERSION = "2026.7.14.8";
 
 type HeroIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
