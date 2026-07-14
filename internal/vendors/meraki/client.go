@@ -700,19 +700,19 @@ func (c *Client) ListSwitchPortsTopologyDiscoveryByDevice(ctx context.Context, o
 
 // DeviceMemoryUsageHistory is org memory history for one device.
 type DeviceMemoryUsageHistory struct {
-	Serial      string `json:"serial"`
-	Name        string `json:"name"`
-	Model       string `json:"model"`
-	Provisioned int64  `json:"provisioned"` // kB
+	Serial      string  `json:"serial"`
+	Name        string  `json:"name"`
+	Model       string  `json:"model"`
+	Provisioned float64 `json:"provisioned"` // kB (API may send ints as floats)
 	Used        *struct {
-		Median int64 `json:"median"`
+		Median float64 `json:"median"`
 	} `json:"used"`
 	Intervals []struct {
 		StartTS string `json:"startTs"`
 		EndTS   string `json:"endTs"`
 		Memory  *struct {
 			Used *struct {
-				Median int64 `json:"median"`
+				Median float64 `json:"median"`
 			} `json:"used"`
 		} `json:"memory"`
 	} `json:"intervals"`

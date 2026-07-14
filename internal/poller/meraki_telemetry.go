@@ -465,7 +465,7 @@ func loadMerakiOrgExtras(
 			if d.Serial == "" || d.Provisioned <= 0 {
 				continue
 			}
-			usedKB := int64(0)
+			usedKB := float64(0)
 			if len(d.Intervals) > 0 {
 				last := d.Intervals[len(d.Intervals)-1]
 				if last.Memory != nil && last.Memory.Used != nil {
@@ -476,8 +476,8 @@ func loadMerakiOrgExtras(
 				usedKB = d.Used.Median
 			}
 			ex.memBySerial[d.Serial] = merakiMemSample{
-				UsedBytes:  uint64(usedKB) * 1024,
-				TotalBytes: uint64(d.Provisioned) * 1024,
+				UsedBytes:  uint64(usedKB * 1024),
+				TotalBytes: uint64(d.Provisioned * 1024),
 			}
 		}
 	}
