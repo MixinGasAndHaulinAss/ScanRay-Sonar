@@ -236,6 +236,7 @@ function MerakiHealthBlock({
   detail: ApplianceDetail;
   snap: MerakiDashboardSnapshot;
 }) {
+  const [expandedPort, setExpandedPort] = useState<number | null>(null);
   const status = (snap.status ?? "unknown").toLowerCase();
   const statusClass =
     status === "online"
@@ -257,9 +258,19 @@ function MerakiHealthBlock({
   const hasPortTraffic = (snap.ports ?? []).some(
     (p) => p.rxPackets != null || p.txPackets != null,
   );
+  const hasPortBps = (snap.ports ?? []).some((p) => p.inBps != null || p.outBps != null);
+  const hasPortExtras = (snap.ports ?? []).some(
+    (p) => p.name || p.vlan != null || p.clientCount != null || p.neighbor,
+  );
   const hasCellular = (snap.uplinks ?? []).some(
     (u) => u.provider || u.iccid || u.rsrp || u.interface?.toLowerCase() === "cellular",
   );
+  const memUsed = detail.memUsedBytes ?? snap.memUsedBytes ?? null;
+  const memTotal = detail.memTotalBytes ?? snap.memTotalBytes ?? null;
+  const memPct =
+    memUsed != null && memTotal != null && Number(memTotal) > 0
+      ? (Number(memUsed) / Number(memTotal)) * 100
+      : null;
 
   const vendorKeys = useMemo(() => {
     const keys = [
@@ -294,6 +305,23 @@ function MerakiHealthBlock({
       ),
     refetchInterval: 60_000,
   });
+
+  const chassisMetrics = useQuery({
+    queryKey: ["appliance-metrics", detail.id, "24h", "meraki"],
+    queryFn: () =>
+      api.get<ApplianceMetricSeries>(`/appliances/${detail.id}/metrics?range=24h`),
+    refetchInterval: 60_000,
+    enabled: isSwitch,
+  });
+
+  const memSeries = useMemo(() => {
+    if (!chassisMetrics.data) return [];
+    return chassisMetrics.data.samples.map((s) => {
+      const used = Number(s.memUsedBytes ?? 0);
+      const total = Number(s.memTotalBytes ?? 0);
+      return total > 0 ? (used / total) * 100 : 0;
+    });
+  }, [chassisMetrics.data]);
 
   const seriesByKey = useMemo(() => {
     const m = new Map<string, number[]>();
@@ -351,15 +379,39 @@ function MerakiHealthBlock({
           </div>
         </div>
         <div className="rounded-xl border border-ink-800 bg-ink-900 p-4">
-          <div className="text-xs uppercase tracking-wide text-slate-500">Network</div>
-          <div className="mt-2 font-mono text-sm text-slate-200">
-            {snap.lanIp || detail.mgmtIp || "—"}
+          <div className="text-xs uppercase tracking-wide text-slate-500">
+            {isSwitch && memPct != null ? "Memory" : "Network"}
           </div>
-          {snap.publicIp && (
-            <div className="mt-1 font-mono text-xs text-slate-500">pub {snap.publicIp}</div>
+          {isSwitch && memPct != null ? (
+            <>
+              <div className="mt-2 text-lg text-slate-200">{formatPct(memPct)}</div>
+              <div className="mt-1 text-xs text-slate-500">
+                {formatBytes(Number(memUsed))} / {formatBytes(Number(memTotal))}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="mt-2 font-mono text-sm text-slate-200">
+                {snap.lanIp || detail.mgmtIp || "—"}
+              </div>
+              {snap.publicIp && (
+                <div className="mt-1 font-mono text-xs text-slate-500">pub {snap.publicIp}</div>
+              )}
+            </>
           )}
         </div>
       </div>
+
+      {isSwitch && (memSeries.length > 0 || chassisMetrics.isLoading) && (
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <MerakiChartCard
+            title="Memory %"
+            values={memSeries}
+            now={memSeries.length ? memSeries[memSeries.length - 1] : memPct ?? undefined}
+            suffix="%"
+          />
+        </section>
+      )}
 
       <section className="rounded-xl border border-ink-800 bg-ink-900 p-4 text-sm">
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -591,46 +643,78 @@ function MerakiHealthBlock({
               <thead className="sticky top-0 bg-ink-800/90 text-xs uppercase text-slate-500">
                 <tr>
                   <th className="px-4 py-2">Port</th>
+                  {hasPortExtras && <th className="px-4 py-2">Name</th>}
                   <th className="px-4 py-2">Status</th>
                   <th className="px-4 py-2">Speed</th>
-                  <th className="px-4 py-2">Duplex</th>
-                  <th className="px-4 py-2">Enabled</th>
+                  {hasPortExtras && <th className="px-4 py-2">VLAN</th>}
+                  {hasPortExtras && <th className="px-4 py-2">Clients</th>}
+                  {hasPortBps && <th className="px-4 py-2 text-right">In</th>}
+                  {hasPortBps && <th className="px-4 py-2 text-right">Out</th>}
+                  {hasPortExtras && <th className="px-4 py-2">Neighbor</th>}
                   <th className="px-4 py-2">Uplink</th>
                   <th className="px-4 py-2">PoE</th>
-                  <th className="px-4 py-2">STP</th>
                   {hasPortTraffic && <th className="px-4 py-2">Rx pkts</th>}
                   {hasPortTraffic && <th className="px-4 py-2">Tx pkts</th>}
                   <th className="px-4 py-2">Errors</th>
+                  {hasPortBps && <th className="px-4 py-2 text-right">Graph</th>}
                 </tr>
               </thead>
               <tbody>
-                {snap.ports.map((p) => (
-                  <tr key={p.portId} className="border-t border-ink-800">
-                    <td className="px-4 py-2 font-mono text-slate-300">{p.portId}</td>
-                    <td className="px-4 py-2 text-slate-300">{p.status}</td>
-                    <td className="px-4 py-2 text-slate-400">{p.speed || "—"}</td>
-                    <td className="px-4 py-2 text-slate-400">{p.duplex || "—"}</td>
-                    <td className="px-4 py-2 text-slate-400">{p.enabled ? "yes" : "no"}</td>
-                    <td className="px-4 py-2 text-slate-400">{p.isUplink ? "yes" : "—"}</td>
-                    <td className="px-4 py-2 text-slate-400">
-                      {p.poeAllocated == null ? "—" : p.poeAllocated ? "alloc" : "—"}
-                    </td>
-                    <td className="px-4 py-2 text-xs text-slate-400">
-                      {p.stpStatuses?.join(", ") || "—"}
-                    </td>
-                    {hasPortTraffic && (
-                      <td className="px-4 py-2 font-mono text-xs text-slate-400">
-                        {p.rxPackets != null ? p.rxPackets.toLocaleString() : "—"}
-                      </td>
-                    )}
-                    {hasPortTraffic && (
-                      <td className="px-4 py-2 font-mono text-xs text-slate-400">
-                        {p.txPackets != null ? p.txPackets.toLocaleString() : "—"}
-                      </td>
-                    )}
-                    <td className="px-4 py-2 text-xs text-amber-200">
-                      {[...(p.errors ?? []), ...(p.warnings ?? [])].join(", ") || "—"}
-                    </td>
+                {snap.ports.map((p) => {
+                  const ifIndex = p.ifIndex && p.ifIndex > 0 ? p.ifIndex : null;
+                  const expanded = ifIndex != null && expandedPort === ifIndex;
+                  const colSpan =
+                    6 +
+                    (hasPortExtras ? 4 : 0) +
+                    (hasPortBps ? 3 : 0) +
+                    (hasPortTraffic ? 2 : 0);
+                  return (
+                    <MerakiPortRows
+                      key={p.portId}
+                      applianceId={detail.id}
+                      port={p}
+                      ifIndex={ifIndex}
+                      expanded={expanded}
+                      colSpan={colSpan}
+                      hasPortExtras={hasPortExtras}
+                      hasPortBps={hasPortBps}
+                      hasPortTraffic={hasPortTraffic}
+                      onToggle={() =>
+                        ifIndex != null &&
+                        setExpandedPort(expanded ? null : ifIndex)
+                      }
+                    />
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {snap.neighbors && snap.neighbors.length > 0 && (
+        <section className="overflow-hidden rounded-xl border border-ink-800 bg-ink-900">
+          <div className="border-b border-ink-800 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Neighbors (LLDP/CDP)
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-ink-800/40 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-4 py-2">Port</th>
+                  <th className="px-4 py-2">Protocol</th>
+                  <th className="px-4 py-2">Neighbor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {snap.neighbors.map((n) => (
+                  <tr
+                    key={`${n.portId}-${n.protocol}-${n.summary}`}
+                    className="border-t border-ink-800"
+                  >
+                    <td className="px-4 py-2 font-mono text-slate-300">{n.portId}</td>
+                    <td className="px-4 py-2 uppercase text-slate-400">{n.protocol}</td>
+                    <td className="px-4 py-2 text-slate-300">{n.summary}</td>
                   </tr>
                 ))}
               </tbody>
@@ -687,6 +771,116 @@ function MerakiHealthBlock({
         LAN/appliance address. Charts use vendor samples from the last 24h.
       </p>
     </div>
+  );
+}
+
+}
+
+function MerakiPortRows({
+  applianceId,
+  port: p,
+  ifIndex,
+  expanded,
+  colSpan,
+  hasPortExtras,
+  hasPortBps,
+  hasPortTraffic,
+  onToggle,
+}: {
+  applianceId: string;
+  port: NonNullable<MerakiDashboardSnapshot["ports"]>[number];
+  ifIndex: number | null;
+  expanded: boolean;
+  colSpan: number;
+  hasPortExtras: boolean;
+  hasPortBps: boolean;
+  hasPortTraffic: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <>
+      <tr className="border-t border-ink-800">
+        <td className="px-4 py-2 font-mono text-slate-300">
+          {p.portId}
+          {p.type ? (
+            <span className="ml-1 text-[10px] uppercase text-slate-600">{p.type}</span>
+          ) : null}
+        </td>
+        {hasPortExtras && (
+          <td className="px-4 py-2 text-slate-400">{p.name || "—"}</td>
+        )}
+        <td className="px-4 py-2 text-slate-300">{p.status}</td>
+        <td className="px-4 py-2 text-slate-400">
+          {p.speed || "—"}
+          {p.duplex ? ` ${p.duplex}` : ""}
+        </td>
+        {hasPortExtras && (
+          <td className="px-4 py-2 text-slate-400">{p.vlan != null ? p.vlan : "—"}</td>
+        )}
+        {hasPortExtras && (
+          <td className="px-4 py-2 text-slate-400">
+            {p.clientCount != null ? p.clientCount : "—"}
+          </td>
+        )}
+        {hasPortBps && (
+          <td className="px-4 py-2 text-right text-emerald-300">
+            {p.inBps == null ? "—" : formatBitRate(Number(p.inBps))}
+          </td>
+        )}
+        {hasPortBps && (
+          <td className="px-4 py-2 text-right text-sonar-300">
+            {p.outBps == null ? "—" : formatBitRate(Number(p.outBps))}
+          </td>
+        )}
+        {hasPortExtras && (
+          <td
+            className="max-w-[14rem] truncate px-4 py-2 text-xs text-slate-400"
+            title={p.neighbor || undefined}
+          >
+            {p.neighbor || "—"}
+          </td>
+        )}
+        <td className="px-4 py-2 text-slate-400">{p.isUplink ? "yes" : "—"}</td>
+        <td className="px-4 py-2 text-slate-400">
+          {p.poeAllocated == null ? "—" : p.poeAllocated ? "alloc" : "—"}
+        </td>
+        {hasPortTraffic && (
+          <td className="px-4 py-2 font-mono text-xs text-slate-400">
+            {p.rxPackets != null ? p.rxPackets.toLocaleString() : "—"}
+          </td>
+        )}
+        {hasPortTraffic && (
+          <td className="px-4 py-2 font-mono text-xs text-slate-400">
+            {p.txPackets != null ? p.txPackets.toLocaleString() : "—"}
+          </td>
+        )}
+        <td className="px-4 py-2 text-xs text-amber-200">
+          {[...(p.errors ?? []), ...(p.warnings ?? [])].join(", ") || "—"}
+        </td>
+        {hasPortBps && (
+          <td className="px-4 py-2 text-right">
+            {ifIndex != null && (p.inBps != null || p.outBps != null) ? (
+              <button
+                type="button"
+                onClick={onToggle}
+                className="rounded border border-ink-700 px-2 py-0.5 text-xs text-slate-300 hover:bg-ink-800"
+              >
+                {expanded ? "hide" : "graph"}
+              </button>
+            ) : (
+              <span className="text-slate-600">—</span>
+            )}
+          </td>
+        )}
+      </tr>
+      {expanded && ifIndex != null && (
+        <tr className="bg-ink-950/50">
+          <td colSpan={colSpan} className="px-3 py-3">
+            <IfaceSparkline applianceId={applianceId} ifIndex={ifIndex} />
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 

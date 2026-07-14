@@ -685,6 +685,8 @@ export interface MerakiDashboardSnapshot {
   }>;
   ports?: Array<{
     portId: string;
+    ifIndex?: number;
+    name?: string;
     status: string;
     speed?: string;
     duplex?: string;
@@ -698,6 +700,14 @@ export interface MerakiDashboardSnapshot {
     rxPackets?: number | null;
     txPackets?: number | null;
     totalPackets?: number | null;
+    inBps?: number | null;
+    outBps?: number | null;
+    vlan?: number | null;
+    type?: string;
+    clientCount?: number | null;
+    neighbor?: string;
+    lldp?: string[];
+    cdp?: string[];
   }>;
   clientCount?: number | null;
   physUp?: number | null;
@@ -726,6 +736,8 @@ export interface MerakiDashboardSnapshot {
     upstreamLossPct?: number | null;
   } | null;
   perfScore?: number | null;
+  memUsedBytes?: number | null;
+  memTotalBytes?: number | null;
   firmware?: {
     current?: string;
     nextUpgrade?: string;
@@ -745,6 +757,11 @@ export interface MerakiDashboardSnapshot {
     title?: string;
     type?: string;
     startedAt?: string;
+  }>;
+  neighbors?: Array<{
+    portId: string;
+    protocol: string;
+    summary: string;
   }>;
 }
 

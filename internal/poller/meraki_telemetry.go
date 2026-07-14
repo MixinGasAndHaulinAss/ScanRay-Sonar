@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,9 +50,12 @@ type MerakiTelemetrySnapshot struct {
 	VPN            *MerakiVPNSnap          `json:"vpn,omitempty"`
 	WirelessLoss   *MerakiWirelessLossSnap `json:"wirelessLoss,omitempty"`
 	PerfScore      *float64                `json:"perfScore,omitempty"`
+	MemUsedBytes   *uint64                 `json:"memUsedBytes,omitempty"`
+	MemTotalBytes  *uint64                 `json:"memTotalBytes,omitempty"`
 	Firmware       *MerakiFirmwareSnap     `json:"firmware,omitempty"`
 	SensorReadings []MerakiSensorReading   `json:"sensorReadings,omitempty"`
 	Alerts         []MerakiAlertSnap       `json:"alerts,omitempty"`
+	Neighbors      []MerakiNeighborSnap    `json:"neighbors,omitempty"`
 }
 
 type MerakiPowerSupplySnap struct {
@@ -86,6 +91,8 @@ type MerakiUplinkSnap struct {
 
 type MerakiPortSnap struct {
 	PortID       string   `json:"portId"`
+	IfIndex      int      `json:"ifIndex,omitempty"`
+	Name         string   `json:"name,omitempty"`
 	Status       string   `json:"status"`
 	Speed        string   `json:"speed,omitempty"`
 	Duplex       string   `json:"duplex,omitempty"`
@@ -99,6 +106,14 @@ type MerakiPortSnap struct {
 	RxPackets    *int64   `json:"rxPackets,omitempty"`
 	TxPackets    *int64   `json:"txPackets,omitempty"`
 	TotalPackets *int64   `json:"totalPackets,omitempty"`
+	InBps        *uint64  `json:"inBps,omitempty"`
+	OutBps       *uint64  `json:"outBps,omitempty"`
+	VLAN         *int     `json:"vlan,omitempty"`
+	Type         string   `json:"type,omitempty"`
+	ClientCount  *int     `json:"clientCount,omitempty"`
+	Neighbor     string   `json:"neighbor,omitempty"`
+	LLDP         []string `json:"lldp,omitempty"`
+	CDP          []string `json:"cdp,omitempty"`
 }
 
 type MerakiLossLatencySnap struct {
@@ -150,6 +165,12 @@ type MerakiAlertSnap struct {
 	StartedAt string `json:"startedAt,omitempty"`
 }
 
+type MerakiNeighborSnap struct {
+	PortID   string `json:"portId"`
+	Protocol string `json:"protocol"` // lldp | cdp
+	Summary  string `json:"summary"`
+}
+
 type merakiApplianceRow struct {
 	ID     uuid.UUID
 	Serial string
@@ -165,6 +186,27 @@ type merakiOrgExtras struct {
 	devicesBySerial  map[string]meraki.Device
 	perfBySerial     map[string]float64
 	portPktsBySerial map[string]map[string]meraki.SwitchPortPackets
+	usageBySerial    map[string]map[string]merakiPortRate
+	portTopoBySerial map[string]map[string]merakiPortTopo
+	memBySerial      map[string]merakiMemSample
+	clientsBySerial  map[string]map[string]int
+	portCfgBySerial  map[string]map[string]meraki.SwitchPortConfig
+}
+
+type merakiPortRate struct {
+	InBps  uint64
+	OutBps uint64
+}
+
+type merakiPortTopo struct {
+	Neighbor string
+	LLDP     []string
+	CDP      []string
+}
+
+type merakiMemSample struct {
+	UsedBytes  uint64
+	TotalBytes uint64
 }
 
 // StartMerakiTelemetry starts the Dashboard health poll loop for sites
@@ -323,7 +365,7 @@ func SyncSiteMerakiTelemetry(ctx context.Context, pool *pgxpool.Pool, log *slog.
 			}
 		}
 
-		extras := loadMerakiOrgExtras(ctx, cli, log, org.ID, statusBySerial)
+		extras := loadMerakiOrgExtras(ctx, cli, log, org.ID, statusBySerial, appliances)
 
 		for serial, app := range appliances {
 			st, ok := statusBySerial[serial]
@@ -346,6 +388,7 @@ func loadMerakiOrgExtras(
 	log *slog.Logger,
 	orgID string,
 	statuses map[string]meraki.DeviceStatus,
+	appliances map[string]merakiApplianceRow,
 ) merakiOrgExtras {
 	ex := merakiOrgExtras{
 		vpnBySerial:      map[string]meraki.ApplianceVPNStatus{},
@@ -356,6 +399,11 @@ func loadMerakiOrgExtras(
 		devicesBySerial:  map[string]meraki.Device{},
 		perfBySerial:     map[string]float64{},
 		portPktsBySerial: map[string]map[string]meraki.SwitchPortPackets{},
+		usageBySerial:    map[string]map[string]merakiPortRate{},
+		portTopoBySerial: map[string]map[string]merakiPortTopo{},
+		memBySerial:      map[string]merakiMemSample{},
+		clientsBySerial:  map[string]map[string]int{},
+		portCfgBySerial:  map[string]map[string]meraki.SwitchPortConfig{},
 	}
 	if vpn, err := cli.ListApplianceVPNStatuses(ctx, orgID); err != nil {
 		log.Warn("meraki vpn statuses failed", "org", orgID, "err", err)
@@ -378,6 +426,77 @@ func loadMerakiOrgExtras(
 				byPort[p.PortID] = p
 			}
 			ex.portPktsBySerial[sw.Serial] = byPort
+		}
+	}
+	if usage, err := cli.ListSwitchPortsUsageHistoryByDevice(ctx, orgID); err != nil {
+		log.Warn("meraki switch port usage history failed", "org", orgID, "err", err)
+	} else {
+		for _, sw := range usage {
+			if sw.Serial == "" {
+				continue
+			}
+			byPort := map[string]merakiPortRate{}
+			for _, p := range sw.Ports {
+				if rate, ok := latestPortUsageRate(p.Intervals); ok {
+					byPort[p.PortID] = rate
+				}
+			}
+			ex.usageBySerial[sw.Serial] = byPort
+		}
+	}
+	if topo, err := cli.ListSwitchPortsTopologyDiscoveryByDevice(ctx, orgID); err != nil {
+		log.Warn("meraki switch topology discovery failed", "org", orgID, "err", err)
+	} else {
+		for _, sw := range topo {
+			if sw.Serial == "" {
+				continue
+			}
+			byPort := map[string]merakiPortTopo{}
+			for _, p := range sw.Ports {
+				byPort[p.PortID] = summarizePortTopo(p.LLDP, p.CDP)
+			}
+			ex.portTopoBySerial[sw.Serial] = byPort
+		}
+	}
+	if mem, err := cli.ListDevicesSystemMemoryUsageHistory(ctx, orgID); err != nil {
+		log.Warn("meraki device memory history failed", "org", orgID, "err", err)
+	} else {
+		for _, d := range mem {
+			if d.Serial == "" || d.Provisioned <= 0 {
+				continue
+			}
+			usedKB := int64(0)
+			if len(d.Intervals) > 0 {
+				last := d.Intervals[len(d.Intervals)-1]
+				if last.Memory != nil && last.Memory.Used != nil {
+					usedKB = last.Memory.Used.Median
+				}
+			}
+			if usedKB == 0 && d.Used != nil {
+				usedKB = d.Used.Median
+			}
+			ex.memBySerial[d.Serial] = merakiMemSample{
+				UsedBytes:  uint64(usedKB) * 1024,
+				TotalBytes: uint64(d.Provisioned) * 1024,
+			}
+		}
+	}
+	if clients, err := cli.ListSwitchPortsClientsOverviewByDevice(ctx, orgID); err != nil {
+		log.Warn("meraki switch port clients failed", "org", orgID, "err", err)
+	} else {
+		for _, sw := range clients {
+			if sw.Serial == "" {
+				continue
+			}
+			byPort := map[string]int{}
+			for _, p := range sw.Ports {
+				n := 0
+				if p.Counts != nil && p.Counts.ByStatus != nil {
+					n = p.Counts.ByStatus.Online
+				}
+				byPort[p.PortID] = n
+			}
+			ex.clientsBySerial[sw.Serial] = byPort
 		}
 	}
 	if wl, err := cli.ListWirelessPacketLossByDevice(ctx, orgID); err != nil {
@@ -440,6 +559,25 @@ func loadMerakiOrgExtras(
 			continue
 		}
 		ex.perfBySerial[serial] = *perf.PerfScore
+	}
+	// Port names/VLANs: one GET per known switch serial in Sonar inventory.
+	for serial, st := range statuses {
+		if !strings.EqualFold(st.ProductType, "switch") {
+			continue
+		}
+		if _, ok := appliances[serial]; !ok {
+			continue
+		}
+		cfg, err := cli.ListDeviceSwitchPorts(ctx, serial)
+		if err != nil {
+			log.Warn("meraki switch port config failed", "serial", serial, "err", err)
+			continue
+		}
+		byPort := map[string]meraki.SwitchPortConfig{}
+		for _, p := range cfg {
+			byPort[p.PortID] = p
+		}
+		ex.portCfgBySerial[serial] = byPort
 	}
 	return ex
 }
@@ -572,6 +710,7 @@ func buildMerakiTelemetry(
 			if len(tel.Ports) < 256 {
 				ps := MerakiPortSnap{
 					PortID:   p.PortID,
+					IfIndex:  merakiPortIfIndex(p.PortID),
 					Status:   p.Status,
 					Speed:    p.Speed,
 					Duplex:   p.Duplex,
@@ -593,6 +732,39 @@ func buildMerakiTelemetry(
 				if byPort, ok := ex.portPktsBySerial[serial]; ok {
 					if pkt, ok := byPort[p.PortID]; ok {
 						applyPortPackets(&ps, pkt)
+					}
+				}
+				if byPort, ok := ex.usageBySerial[serial]; ok {
+					if rate, ok := byPort[p.PortID]; ok {
+						in, out := rate.InBps, rate.OutBps
+						ps.InBps, ps.OutBps = &in, &out
+					}
+				}
+				if byPort, ok := ex.portTopoBySerial[serial]; ok {
+					if topo, ok := byPort[p.PortID]; ok {
+						ps.Neighbor, ps.LLDP, ps.CDP = topo.Neighbor, topo.LLDP, topo.CDP
+						if topo.Neighbor != "" {
+							proto := "lldp"
+							if len(topo.LLDP) == 0 && len(topo.CDP) > 0 {
+								proto = "cdp"
+							}
+							tel.Neighbors = append(tel.Neighbors, MerakiNeighborSnap{
+								PortID: p.PortID, Protocol: proto, Summary: topo.Neighbor,
+							})
+						}
+					}
+				}
+				if byPort, ok := ex.clientsBySerial[serial]; ok {
+					if n, ok := byPort[p.PortID]; ok {
+						n := n
+						ps.ClientCount = &n
+					}
+				}
+				if byPort, ok := ex.portCfgBySerial[serial]; ok {
+					if cfg, ok := byPort[p.PortID]; ok {
+						ps.Name = cfg.Name
+						ps.Type = cfg.Type
+						ps.VLAN = cfg.VLAN
 					}
 				}
 				tel.Ports = append(tel.Ports, ps)
@@ -635,6 +807,10 @@ func buildMerakiTelemetry(
 	}
 	if score, ok := ex.perfBySerial[serial]; ok {
 		tel.PerfScore = &score
+	}
+	if mem, ok := ex.memBySerial[serial]; ok {
+		u, t := mem.UsedBytes, mem.TotalBytes
+		tel.MemUsedBytes, tel.MemTotalBytes = &u, &t
 	}
 	if d, ok := ex.devicesBySerial[serial]; ok && d.Firmware != "" {
 		tel.Firmware = &MerakiFirmwareSnap{Current: d.Firmware}
@@ -734,6 +910,113 @@ func applyPortPackets(ps *MerakiPortSnap, pkt meraki.SwitchPortPackets) {
 	}
 }
 
+func merakiPortIfIndex(portID string) int {
+	portID = strings.TrimSpace(portID)
+	if n, err := strconv.Atoi(portID); err == nil && n > 0 {
+		return n
+	}
+	// Stable positive index for modular IDs like "1_24".
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(portID))
+	return int(h.Sum32()%90000) + 10000
+}
+
+func latestPortUsageRate(intervals []struct {
+	StartTS   string `json:"startTs"`
+	EndTS     string `json:"endTs"`
+	Data      *struct {
+		Usage *struct {
+			Total      int64 `json:"total"`
+			Upstream   int64 `json:"upstream"`
+			Downstream int64 `json:"downstream"`
+		} `json:"usage"`
+	} `json:"data"`
+	Bandwidth *struct {
+		Usage *struct {
+			Total      float64 `json:"total"`
+			Upstream   float64 `json:"upstream"`
+			Downstream float64 `json:"downstream"`
+		} `json:"usage"`
+	} `json:"bandwidth"`
+}) (merakiPortRate, bool) {
+	if len(intervals) == 0 {
+		return merakiPortRate{}, false
+	}
+	iv := intervals[len(intervals)-1]
+	// Prefer explicit average bandwidth (Mbps) when present.
+	if iv.Bandwidth != nil && iv.Bandwidth.Usage != nil {
+		// Meraki switch: upstream = sent by switch (out), downstream = received (in).
+		in := uint64(iv.Bandwidth.Usage.Downstream * 1_000_000)
+		out := uint64(iv.Bandwidth.Usage.Upstream * 1_000_000)
+		return merakiPortRate{InBps: in, OutBps: out}, true
+	}
+	if iv.Data == nil || iv.Data.Usage == nil {
+		return merakiPortRate{}, false
+	}
+	secs := 1200.0
+	if t0, err0 := time.Parse(time.RFC3339Nano, iv.StartTS); err0 == nil {
+		if t1, err1 := time.Parse(time.RFC3339Nano, iv.EndTS); err1 == nil && t1.After(t0) {
+			secs = t1.Sub(t0).Seconds()
+		}
+	}
+	if secs <= 0 {
+		secs = 1200
+	}
+	// kilobytes over interval → bits/sec
+	in := uint64(float64(iv.Data.Usage.Downstream) * 1024 * 8 / secs)
+	out := uint64(float64(iv.Data.Usage.Upstream) * 1024 * 8 / secs)
+	return merakiPortRate{InBps: in, OutBps: out}, true
+}
+
+func summarizePortTopo(lldp, cdp []struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}) merakiPortTopo {
+	out := merakiPortTopo{}
+	pick := func(rows []struct {
+		Name  string `json:"name"`
+		Value string `json:"value"`
+	}, keys ...string) string {
+		want := map[string]bool{}
+		for _, k := range keys {
+			want[strings.ToLower(k)] = true
+		}
+		for _, r := range rows {
+			if want[strings.ToLower(r.Name)] && strings.TrimSpace(r.Value) != "" {
+				return strings.TrimSpace(r.Value)
+			}
+		}
+		return ""
+	}
+	for _, r := range lldp {
+		out.LLDP = append(out.LLDP, r.Name+": "+r.Value)
+	}
+	for _, r := range cdp {
+		out.CDP = append(out.CDP, r.Name+": "+r.Value)
+	}
+	sys := pick(lldp, "System Name", "system name", "System Description")
+	if sys == "" {
+		sys = pick(cdp, "Device ID", "device id", "Platform")
+	}
+	port := pick(lldp, "Port ID", "port id", "Port Description")
+	if port == "" {
+		port = pick(cdp, "Port ID", "port id")
+	}
+	switch {
+	case sys != "" && port != "":
+		out.Neighbor = sys + " · " + port
+	case sys != "":
+		out.Neighbor = sys
+	case port != "":
+		out.Neighbor = port
+	case len(out.LLDP) > 0:
+		out.Neighbor = out.LLDP[0]
+	case len(out.CDP) > 0:
+		out.Neighbor = out.CDP[0]
+	}
+	return out
+}
+
 func countActiveUplinks(uplinks []MerakiUplinkSnap) int {
 	n := 0
 	for _, u := range uplinks {
@@ -784,6 +1067,8 @@ func PersistMerakiTelemetry(ctx context.Context, pool *pgxpool.Pool, id uuid.UUI
 		       phys_up_count     = COALESCE($6, phys_up_count),
 		       phys_total_count  = COALESCE($7, phys_total_count),
 		       uplink_count      = COALESCE($8, uplink_count),
+		       mem_used_bytes    = COALESCE($9, mem_used_bytes),
+		       mem_total_bytes   = COALESCE($10, mem_total_bytes),
 		       updated_at        = NOW()
 		 WHERE id = $1`,
 		id,
@@ -794,15 +1079,74 @@ func PersistMerakiTelemetry(ctx context.Context, pool *pgxpool.Pool, id uuid.UUI
 		intPtrSQL(tel.PhysUp),
 		intPtrSQL(tel.PhysTotal),
 		intPtrSQL(tel.UplinkCount),
+		uint64SQL(tel.MemUsedBytes),
+		uint64SQL(tel.MemTotalBytes),
 	)
 	if err != nil {
 		return fmt.Errorf("update appliances: %w", err)
 	}
 
+	if tel.MemUsedBytes != nil || tel.MemTotalBytes != nil {
+		_, err = tx.Exec(ctx, `
+			INSERT INTO appliance_metric_samples
+			  (appliance_id, time, cpu_pct, mem_used_bytes, mem_total_bytes)
+			VALUES ($1, $2, NULL, $3, $4)
+			ON CONFLICT (appliance_id, time) DO UPDATE SET
+			  mem_used_bytes  = COALESCE(EXCLUDED.mem_used_bytes, appliance_metric_samples.mem_used_bytes),
+			  mem_total_bytes = COALESCE(EXCLUDED.mem_total_bytes, appliance_metric_samples.mem_total_bytes)
+		`,
+			id, tel.CapturedAt,
+			uint64SQL(tel.MemUsedBytes),
+			uint64SQL(tel.MemTotalBytes),
+		)
+		if err != nil {
+			return fmt.Errorf("insert meraki mem sample: %w", err)
+		}
+	}
+
+	if err := persistMerakiIfaceSamples(ctx, tx, id, tel); err != nil {
+		return err
+	}
 	if err := persistMerakiVendorSamples(ctx, tx, id, tel); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+func persistMerakiIfaceSamples(ctx context.Context, tx pgx.Tx, id uuid.UUID, tel MerakiTelemetrySnapshot) error {
+	batch := &pgx.Batch{}
+	n := 0
+	for _, p := range tel.Ports {
+		if p.InBps == nil && p.OutBps == nil {
+			continue
+		}
+		ifIndex := p.IfIndex
+		if ifIndex <= 0 {
+			ifIndex = merakiPortIfIndex(p.PortID)
+		}
+		batch.Queue(`
+			INSERT INTO appliance_iface_samples
+			  (appliance_id, if_index, time, in_bps, out_bps,
+			   in_errors, out_errors, in_discards, out_discards)
+			VALUES ($1, $2, $3, $4, $5, NULL, NULL, NULL, NULL)
+			ON CONFLICT (appliance_id, if_index, time) DO NOTHING
+		`,
+			id, ifIndex, tel.CapturedAt,
+			uint64SQL(p.InBps), uint64SQL(p.OutBps),
+		)
+		n++
+	}
+	if n == 0 {
+		return nil
+	}
+	br := tx.SendBatch(ctx, batch)
+	defer br.Close()
+	for i := 0; i < n; i++ {
+		if _, err := br.Exec(); err != nil {
+			return fmt.Errorf("insert meraki iface sample: %w", err)
+		}
+	}
+	return nil
 }
 
 func persistMerakiVendorSamples(ctx context.Context, tx pgx.Tx, id uuid.UUID, tel MerakiTelemetrySnapshot) error {

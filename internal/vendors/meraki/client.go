@@ -581,3 +581,232 @@ func (c *Client) ListAssuranceAlerts(ctx context.Context, orgID string) ([]Assur
 	}
 	return out, nil
 }
+
+// SwitchPortUsageByDevice is org switch-port traffic history for one switch.
+type SwitchPortUsageByDevice struct {
+	Serial string `json:"serial"`
+	Name   string `json:"name"`
+	Ports  []struct {
+		PortID    string `json:"portId"`
+		Intervals []struct {
+			StartTS   string `json:"startTs"`
+			EndTS     string `json:"endTs"`
+			Data      *struct {
+				Usage *struct {
+					Total      int64 `json:"total"`
+					Upstream   int64 `json:"upstream"`
+					Downstream int64 `json:"downstream"`
+				} `json:"usage"`
+			} `json:"data"`
+			Bandwidth *struct {
+				Usage *struct {
+					Total      float64 `json:"total"`
+					Upstream   float64 `json:"upstream"`
+					Downstream float64 `json:"downstream"`
+				} `json:"usage"`
+			} `json:"bandwidth"`
+		} `json:"intervals"`
+	} `json:"ports"`
+}
+
+type itemsPage[T any] struct {
+	Items []T `json:"items"`
+	Meta  struct {
+		Counts struct {
+			Items struct {
+				Remaining int `json:"remaining"`
+				Total     int `json:"total"`
+			} `json:"items"`
+		} `json:"counts"`
+	} `json:"meta"`
+}
+
+// ListSwitchPortsUsageHistoryByDevice returns recent per-port bandwidth for an org.
+// Uses a short timespan + 20m interval so each port yields ~1 latest sample.
+func (c *Client) ListSwitchPortsUsageHistoryByDevice(ctx context.Context, orgID string) ([]SwitchPortUsageByDevice, error) {
+	var out []SwitchPortUsageByDevice
+	startingAfter := ""
+	for {
+		path := "/organizations/" + orgID + "/switch/ports/usage/history/byDevice/byInterval?timespan=2400&interval=1200&perPage=20"
+		if startingAfter != "" {
+			path += "&startingAfter=" + url.QueryEscape(startingAfter)
+		}
+		var page itemsPage[SwitchPortUsageByDevice]
+		if err := c.get(ctx, path, &page); err != nil {
+			return nil, err
+		}
+		if len(page.Items) == 0 {
+			break
+		}
+		out = append(out, page.Items...)
+		if page.Meta.Counts.Items.Remaining <= 0 {
+			break
+		}
+		last := page.Items[len(page.Items)-1].Serial
+		if last == "" || last == startingAfter {
+			break
+		}
+		startingAfter = last
+	}
+	return out, nil
+}
+
+// SwitchPortTopologyByDevice is LLDP/CDP discovery keyed by switch serial.
+type SwitchPortTopologyByDevice struct {
+	Serial string `json:"serial"`
+	Name   string `json:"name"`
+	Ports  []struct {
+		PortID        string `json:"portId"`
+		LastUpdatedAt string `json:"lastUpdatedAt"`
+		CDP           []struct {
+			Name  string `json:"name"`
+			Value string `json:"value"`
+		} `json:"cdp"`
+		LLDP []struct {
+			Name  string `json:"name"`
+			Value string `json:"value"`
+		} `json:"lldp"`
+	} `json:"ports"`
+}
+
+// ListSwitchPortsTopologyDiscoveryByDevice returns org-wide LLDP/CDP per port.
+func (c *Client) ListSwitchPortsTopologyDiscoveryByDevice(ctx context.Context, orgID string) ([]SwitchPortTopologyByDevice, error) {
+	var out []SwitchPortTopologyByDevice
+	startingAfter := ""
+	for {
+		path := "/organizations/" + orgID + "/switch/ports/topology/discovery/byDevice?timespan=86400&perPage=20"
+		if startingAfter != "" {
+			path += "&startingAfter=" + url.QueryEscape(startingAfter)
+		}
+		var page itemsPage[SwitchPortTopologyByDevice]
+		if err := c.get(ctx, path, &page); err != nil {
+			return nil, err
+		}
+		if len(page.Items) == 0 {
+			break
+		}
+		out = append(out, page.Items...)
+		if page.Meta.Counts.Items.Remaining <= 0 {
+			break
+		}
+		last := page.Items[len(page.Items)-1].Serial
+		if last == "" || last == startingAfter {
+			break
+		}
+		startingAfter = last
+	}
+	return out, nil
+}
+
+// DeviceMemoryUsageHistory is org memory history for one device.
+type DeviceMemoryUsageHistory struct {
+	Serial      string `json:"serial"`
+	Name        string `json:"name"`
+	Model       string `json:"model"`
+	Provisioned int64  `json:"provisioned"` // kB
+	Used        *struct {
+		Median int64 `json:"median"`
+	} `json:"used"`
+	Intervals []struct {
+		StartTS string `json:"startTs"`
+		EndTS   string `json:"endTs"`
+		Memory  *struct {
+			Used *struct {
+				Median int64 `json:"median"`
+			} `json:"used"`
+		} `json:"memory"`
+	} `json:"intervals"`
+}
+
+// ListDevicesSystemMemoryUsageHistory returns recent memory samples (kB) for an org.
+func (c *Client) ListDevicesSystemMemoryUsageHistory(ctx context.Context, orgID string) ([]DeviceMemoryUsageHistory, error) {
+	var out []DeviceMemoryUsageHistory
+	startingAfter := ""
+	for {
+		path := "/organizations/" + orgID + "/devices/system/memory/usage/history/byInterval?timespan=3600&interval=300&perPage=100&productTypes[]=switch"
+		if startingAfter != "" {
+			path += "&startingAfter=" + url.QueryEscape(startingAfter)
+		}
+		var page itemsPage[DeviceMemoryUsageHistory]
+		if err := c.get(ctx, path, &page); err != nil {
+			return nil, err
+		}
+		if len(page.Items) == 0 {
+			break
+		}
+		out = append(out, page.Items...)
+		if page.Meta.Counts.Items.Remaining <= 0 {
+			break
+		}
+		last := page.Items[len(page.Items)-1].Serial
+		if last == "" || last == startingAfter {
+			break
+		}
+		startingAfter = last
+	}
+	return out, nil
+}
+
+// SwitchPortClientsByDevice is online client counts per switch port.
+type SwitchPortClientsByDevice struct {
+	Serial string `json:"serial"`
+	Name   string `json:"name"`
+	Ports  []struct {
+		PortID string `json:"portId"`
+		Counts *struct {
+			ByStatus *struct {
+				Online int `json:"online"`
+			} `json:"byStatus"`
+		} `json:"counts"`
+	} `json:"ports"`
+}
+
+// ListSwitchPortsClientsOverviewByDevice returns online client counts per port.
+func (c *Client) ListSwitchPortsClientsOverviewByDevice(ctx context.Context, orgID string) ([]SwitchPortClientsByDevice, error) {
+	var out []SwitchPortClientsByDevice
+	startingAfter := ""
+	for {
+		path := "/organizations/" + orgID + "/switch/ports/clients/overview/byDevice?timespan=86400&perPage=20"
+		if startingAfter != "" {
+			path += "&startingAfter=" + url.QueryEscape(startingAfter)
+		}
+		var page itemsPage[SwitchPortClientsByDevice]
+		if err := c.get(ctx, path, &page); err != nil {
+			return nil, err
+		}
+		if len(page.Items) == 0 {
+			break
+		}
+		out = append(out, page.Items...)
+		if page.Meta.Counts.Items.Remaining <= 0 {
+			break
+		}
+		last := page.Items[len(page.Items)-1].Serial
+		if last == "" || last == startingAfter {
+			break
+		}
+		startingAfter = last
+	}
+	return out, nil
+}
+
+// SwitchPortConfig is configured name/VLAN for one switch port.
+type SwitchPortConfig struct {
+	PortID       string `json:"portId"`
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	VLAN         *int   `json:"vlan"`
+	VoiceVLAN    *int   `json:"voiceVlan"`
+	AllowedVLANs string `json:"allowedVlans"`
+	Enabled      bool   `json:"enabled"`
+	PoEEnabled   bool   `json:"poeEnabled"`
+}
+
+// ListDeviceSwitchPorts returns configured switch ports for one serial.
+func (c *Client) ListDeviceSwitchPorts(ctx context.Context, serial string) ([]SwitchPortConfig, error) {
+	var out []SwitchPortConfig
+	if err := c.get(ctx, "/devices/"+url.PathEscape(serial)+"/switch/ports", &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
