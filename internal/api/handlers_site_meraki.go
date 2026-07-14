@@ -29,6 +29,9 @@ type putMerakiSyncReq struct {
 	OrgIDs              []string `json:"orgIds,omitempty"`
 	SyncIntervalSeconds *int     `json:"syncIntervalSeconds,omitempty"`
 	APIKey              *string  `json:"apiKey,omitempty"`
+	// PollNow runs a Dashboard inventory pull after saving (default: true when
+	// a key is available and this is the first sync or the caller asks for it).
+	PollNow *bool `json:"pollNow,omitempty"`
 }
 
 func (s *Server) handleGetSiteMerakiSync(w http.ResponseWriter, r *http.Request) {
@@ -180,33 +183,108 @@ func (s *Server) handlePutSiteMerakiSync(w http.ResponseWriter, r *http.Request)
 	uid := userIDFromCtx(r.Context())
 	s.store.Audit(r.Context(), "user", "meraki.settings.update", &uid, clientIP(r),
 		map[string]any{"site_id": sid.String(), "enabled": enabled})
-	s.handleGetSiteMerakiSync(w, r)
+
+	// Decide whether to poll immediately after save.
+	var hadSyncBefore bool
+	var lastAt *time.Time
+	_ = s.pool.QueryRow(r.Context(), `
+		SELECT meraki_last_sync_at FROM site_discovery_settings WHERE site_id = $1`, sid).Scan(&lastAt)
+	hadSyncBefore = lastAt != nil
+
+	keyJustSet := req.APIKey != nil && strings.TrimSpace(*req.APIKey) != ""
+	var one int
+	hasKey := s.pool.QueryRow(r.Context(), `
+		SELECT 1 FROM site_credentials WHERE site_id = $1 AND kind = 'meraki' LIMIT 1`, sid).Scan(&one) == nil
+
+	pollNow := false
+	if req.PollNow != nil {
+		pollNow = *req.PollNow
+	} else {
+		// Default: poll on first configure or when a new key is saved.
+		pollNow = hasKey && (keyJustSet || !hadSyncBefore)
+	}
+
+	var pollResult map[string]any
+	if pollNow && hasKey {
+		res, syncErr := s.runSiteMerakiSync(r, sid)
+		if syncErr != nil {
+			// Settings were saved; surface poll failure without failing the PUT.
+			pollResult = map[string]any{"ok": false, "error": syncErr.Error()}
+		} else {
+			pollResult = map[string]any{
+				"ok":       true,
+				"upserted": res.Upserted,
+				"orgs":     res.Orgs,
+				"devices":  res.Devices,
+			}
+		}
+	}
+
+	view := s.loadSiteMerakiSyncView(r, sid)
+	out := map[string]any{
+		"siteId":              view.SiteID,
+		"enabled":             view.Enabled,
+		"orgIds":              view.OrgIDs,
+		"syncIntervalSeconds": view.SyncIntervalSeconds,
+		"apiKeySet":           view.APIKeySet,
+		"lastSyncAt":          view.LastSyncAt,
+		"lastSyncError":       view.LastSyncError,
+	}
+	if pollResult != nil {
+		out["poll"] = pollResult
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) handleSyncSiteMerakiNow(w http.ResponseWriter, r *http.Request) {
-	sid, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, "bad_request", "site id must be UUID")
-		return
+func (s *Server) loadSiteMerakiSyncView(r *http.Request, sid uuid.UUID) merakiSyncSettingsView {
+	view := merakiSyncSettingsView{
+		SiteID:              sid.String(),
+		OrgIDs:              []string{},
+		SyncIntervalSeconds: 900,
+	}
+	var orgRaw []byte
+	var lastAt *time.Time
+	var lastErr *string
+	qerr := s.pool.QueryRow(r.Context(), `
+		SELECT meraki_sync_enabled, meraki_org_ids, meraki_sync_interval_seconds,
+		       meraki_last_sync_at, meraki_last_sync_error
+		  FROM site_discovery_settings WHERE site_id = $1`, sid).
+		Scan(&view.Enabled, &orgRaw, &view.SyncIntervalSeconds, &lastAt, &lastErr)
+	if qerr == nil {
+		if len(orgRaw) > 0 {
+			_ = json.Unmarshal(orgRaw, &view.OrgIDs)
+		}
+		if view.OrgIDs == nil {
+			view.OrgIDs = []string{}
+		}
+		if lastAt != nil {
+			ts := lastAt.UTC().Format(time.RFC3339)
+			view.LastSyncAt = &ts
+		}
+		view.LastSyncError = lastErr
 	}
 	var credID uuid.UUID
+	cerr := s.pool.QueryRow(r.Context(), `
+		SELECT id FROM site_credentials
+		 WHERE site_id = $1 AND kind = 'meraki'
+		 ORDER BY created_at LIMIT 1`, sid).Scan(&credID)
+	view.APIKeySet = cerr == nil
+	return view
+}
+
+func (s *Server) runSiteMerakiSync(r *http.Request, sid uuid.UUID) (poller.MerakiSyncResult, error) {
+	var credID uuid.UUID
 	var sealed []byte
-	err = s.pool.QueryRow(r.Context(), `
+	err := s.pool.QueryRow(r.Context(), `
 		SELECT id, enc_secret FROM site_credentials
 		 WHERE site_id = $1 AND kind = 'meraki'
 		 ORDER BY created_at LIMIT 1`, sid).Scan(&credID, &sealed)
-	if errors.Is(err, pgx.ErrNoRows) {
-		writeErr(w, http.StatusBadRequest, "bad_request", "save a Meraki Dashboard API key first")
-		return
-	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "server_error", "credential lookup failed")
-		return
+		return poller.MerakiSyncResult{}, err
 	}
 	plain, err := s.sealer.Open(sealed, []byte("credential:"+credID.String()))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, "server_error", "unseal failed")
-		return
+		return poller.MerakiSyncResult{}, err
 	}
 	apiKey := strings.TrimSpace(string(plain))
 	if strings.HasPrefix(apiKey, "{") {
@@ -220,10 +298,8 @@ func (s *Server) handleSyncSiteMerakiNow(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	if apiKey == "" {
-		writeErr(w, http.StatusBadRequest, "bad_request", "empty Meraki API key")
-		return
+		return poller.MerakiSyncResult{}, errors.New("empty Meraki API key")
 	}
-
 	var orgRaw []byte
 	_ = s.pool.QueryRow(r.Context(), `
 		SELECT meraki_org_ids FROM site_discovery_settings WHERE site_id = $1`, sid).Scan(&orgRaw)
@@ -235,6 +311,27 @@ func (s *Server) handleSyncSiteMerakiNow(w http.ResponseWriter, r *http.Request)
 	uid := userIDFromCtx(r.Context())
 	s.store.Audit(r.Context(), "user", "meraki.sync", &uid, clientIP(r),
 		map[string]any{"site_id": sid.String(), "upserted": res.Upserted, "ok": syncErr == nil})
+	return res, syncErr
+}
+
+func (s *Server) handleSyncSiteMerakiNow(w http.ResponseWriter, r *http.Request) {
+	sid, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", "site id must be UUID")
+		return
+	}
+	var exists int
+	err = s.pool.QueryRow(r.Context(), `
+		SELECT 1 FROM site_credentials WHERE site_id = $1 AND kind = 'meraki' LIMIT 1`, sid).Scan(&exists)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusBadRequest, "bad_request", "save a Meraki Dashboard API key first")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "server_error", "credential lookup failed")
+		return
+	}
+	res, syncErr := s.runSiteMerakiSync(r, sid)
 	if syncErr != nil {
 		writeErr(w, http.StatusBadGateway, "meraki_error", syncErr.Error())
 		return

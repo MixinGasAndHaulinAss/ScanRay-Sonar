@@ -881,6 +881,13 @@ interface MerakiSyncSettings {
   apiKeySet: boolean;
   lastSyncAt?: string | null;
   lastSyncError?: string | null;
+  poll?: {
+    ok: boolean;
+    upserted?: number;
+    orgs?: number;
+    devices?: number;
+    error?: string;
+  };
 }
 
 interface MerakiSyncResult {
@@ -917,16 +924,28 @@ function MerakiSyncPanel({ siteId }: { siteId: string }) {
         enabled,
         syncIntervalSeconds: intervalSec,
         orgIds: parseLines(orgText),
+        // Always pull Dashboard inventory after save when a key is (or will be) available.
+        pollNow: !!(apiKey.trim() || settings.data?.apiKeySet),
       };
       if (apiKey.trim()) body.apiKey = apiKey.trim();
       return api.put<MerakiSyncSettings>(`/sites/${siteId}/meraki-sync`, body);
     },
-    onSuccess: () => {
+    onSuccess: (r) => {
       setErr(null);
       setApiKey("");
-      setOkMsg("Meraki settings saved.");
+      if (r.poll?.ok) {
+        setOkMsg(
+          `Saved and polled: ${r.poll.upserted ?? 0} appliance(s) from ${r.poll.orgs ?? 0} org(s).`,
+        );
+      } else if (r.poll && !r.poll.ok) {
+        setErr(r.poll.error || "Settings saved, but Meraki poll failed");
+        setOkMsg("Meraki settings saved.");
+      } else {
+        setOkMsg("Meraki settings saved.");
+      }
       qc.invalidateQueries({ queryKey: ["site-meraki-sync", siteId] });
-      setTimeout(() => setOkMsg(null), 2500);
+      qc.invalidateQueries({ queryKey: ["appliances"] });
+      setTimeout(() => setOkMsg(null), 4000);
     },
     onError: (e: unknown) => setErr(e instanceof ApiError ? e.message : "Save failed"),
   });
@@ -939,6 +958,7 @@ function MerakiSyncPanel({ siteId }: { siteId: string }) {
           syncIntervalSeconds: intervalSec,
           orgIds: parseLines(orgText),
           apiKey: apiKey.trim(),
+          pollNow: false,
         });
         setApiKey("");
       }
@@ -946,11 +966,11 @@ function MerakiSyncPanel({ siteId }: { siteId: string }) {
     },
     onSuccess: (r) => {
       setErr(null);
-      setOkMsg(`Synced ${r.upserted} appliance(s) from ${r.orgs} org(s) (${r.devices} device rows).`);
+      setOkMsg(`Polled ${r.upserted} appliance(s) from ${r.orgs} org(s) (${r.devices} device rows).`);
       qc.invalidateQueries({ queryKey: ["site-meraki-sync", siteId] });
       qc.invalidateQueries({ queryKey: ["appliances"] });
     },
-    onError: (e: unknown) => setErr(e instanceof ApiError ? e.message : "Sync failed"),
+    onError: (e: unknown) => setErr(e instanceof ApiError ? e.message : "Poll failed"),
   });
 
   const apiKeySet = settings.data?.apiKeySet ?? false;
@@ -964,8 +984,9 @@ function MerakiSyncPanel({ siteId }: { siteId: string }) {
           <Link className="text-sonar-300 underline" to="/appliances">
             Appliances
           </Link>{" "}
-          as vendor <code className="font-mono">meraki</code>. Create a key in Meraki Dashboard →
-          Organization → Settings → Dashboard API access.
+          as vendor <code className="font-mono">meraki</code>. Saving polls the Dashboard
+          immediately; use <strong>Poll now</strong> anytime after that. Create a key in Meraki
+          Dashboard → Organization → Settings → Dashboard API access.
         </p>
 
         <label className="flex items-center gap-2 text-sm text-slate-300">
@@ -1015,18 +1036,18 @@ function MerakiSyncPanel({ siteId }: { siteId: string }) {
           <button
             type="button"
             onClick={() => save.mutate()}
-            disabled={save.isPending}
+            disabled={save.isPending || syncNow.isPending}
             className="rounded-md bg-sonar-500 px-3 py-1.5 text-sm font-medium text-ink-950 hover:bg-sonar-400 disabled:opacity-50"
           >
-            {save.isPending ? "Saving…" : "Save"}
+            {save.isPending ? "Saving…" : "Save & poll"}
           </button>
           <button
             type="button"
             onClick={() => syncNow.mutate()}
-            disabled={syncNow.isPending || (!apiKeySet && !apiKey.trim())}
+            disabled={syncNow.isPending || save.isPending || (!apiKeySet && !apiKey.trim())}
             className="rounded-md border border-ink-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-ink-800 disabled:opacity-50"
           >
-            {syncNow.isPending ? "Syncing…" : "Sync now"}
+            {syncNow.isPending ? "Polling…" : "Poll now"}
           </button>
           <Link
             to="/appliances"

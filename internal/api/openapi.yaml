@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.7.13.8"
+  version: "2026.7.13.9"
   license:
     name: MIT
 servers:
@@ -1673,6 +1673,9 @@ paths:
                   items: { type: string }
                 syncIntervalSeconds: { type: integer, minimum: 300 }
                 apiKey: { type: string, description: leave blank to keep existing }
+                pollNow:
+                  type: boolean
+                  description: When true, pull Dashboard inventory immediately after save
       responses:
         "200":
           description: updated settings
