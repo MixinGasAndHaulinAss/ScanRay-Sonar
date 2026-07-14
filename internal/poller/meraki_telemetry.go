@@ -922,9 +922,9 @@ func merakiPortIfIndex(portID string) int {
 }
 
 func latestPortUsageRate(intervals []struct {
-	StartTS   string `json:"startTs"`
-	EndTS     string `json:"endTs"`
-	Data      *struct {
+	StartTS string `json:"startTs"`
+	EndTS   string `json:"endTs"`
+	Data    *struct {
 		Usage *struct {
 			Total      int64 `json:"total"`
 			Upstream   int64 `json:"upstream"`

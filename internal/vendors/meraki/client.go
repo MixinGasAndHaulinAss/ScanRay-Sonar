@@ -589,9 +589,9 @@ type SwitchPortUsageByDevice struct {
 	Ports  []struct {
 		PortID    string `json:"portId"`
 		Intervals []struct {
-			StartTS   string `json:"startTs"`
-			EndTS     string `json:"endTs"`
-			Data      *struct {
+			StartTS string `json:"startTs"`
+			EndTS   string `json:"endTs"`
+			Data    *struct {
 				Usage *struct {
 					Total      int64 `json:"total"`
 					Upstream   int64 `json:"upstream"`
