@@ -60,6 +60,8 @@ export interface ForceEdgeInput {
   to: string;
   /** Optional spring rest length override; defaults to RESTPX. */
   rest?: number;
+  /** Drawn but ignored by the spring force (WAN/VPN overlays). */
+  decorative?: boolean;
 }
 
 export interface SimNode<N extends ForceNodeInput> {
@@ -117,14 +119,14 @@ interface Props<N extends ForceNodeInput, E extends ForceEdgeInput> {
   staticLayout?: boolean;
 }
 
-const REPULSE = 22000;
-const SPRING = 0.04;
-const RESTPX = 140;
-const CENTER = 0.006;
-const DAMP = 0.82;
-const PRELAYOUT_TICKS = 280;
+const REPULSE = 48000;
+const SPRING = 0.035;
+const RESTPX = 160;
+const CENTER = 0.001;
+const DAMP = 0.85;
+const PRELAYOUT_TICKS = 420;
 const LIVE_TICKS_PER_FRAME = 6;
-const MIN_ZOOM = 0.2;
+const MIN_ZOOM = 0.15;
 const MAX_ZOOM = 4;
 
 function hashCode(s: string): number {
@@ -190,6 +192,7 @@ function tick<N extends ForceNodeInput, E extends ForceEdgeInput>(
     }
   }
   for (const e of edges) {
+    if (e.decorative) continue;
     const a = idx.get(e.from);
     const b = idx.get(e.to);
     if (!a || !b) continue;
@@ -218,6 +221,12 @@ function tick<N extends ForceNodeInput, E extends ForceEdgeInput>(
     n.vy *= DAMP;
     n.x += n.vx;
     n.y += n.vy;
+    // Soft walls: push back before hard clamp so nodes don't stack in corners.
+    const soft = pad + 24;
+    if (n.x < soft) n.vx += (soft - n.x) * 0.08;
+    if (n.x > w - soft) n.vx -= (n.x - (w - soft)) * 0.08;
+    if (n.y < soft) n.vy += (soft - n.y) * 0.08;
+    if (n.y > h - soft) n.vy -= (n.y - (h - soft)) * 0.08;
     n.x = Math.max(pad, Math.min(w - pad, n.x));
     n.y = Math.max(pad, Math.min(h - pad, n.y));
   }
@@ -231,8 +240,8 @@ function separateNodes<N extends ForceNodeInput>(
   pad: number,
   radiusOf?: (node: N) => number,
 ) {
-  const gap = 8;
-  for (let pass = 0; pass < 3; pass++) {
+  const gap = 18;
+  for (let pass = 0; pass < 8; pass++) {
     for (let i = 0; i < sims.length; i++) {
       const a = sims[i];
       if (a.fx != null && a.fy != null) continue;

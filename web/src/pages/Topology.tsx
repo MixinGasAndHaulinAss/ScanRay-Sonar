@@ -1,6 +1,6 @@
-// Topology — switch fabric + Meraki WAN/VPN view. Renders managed
-// appliances, foreign neighbors, Internet cloud, and tunnel edges as a
-// draggable force-directed graph with zoom/pan.
+// Topology — switch fabric + Meraki WAN/VPN view.
+// Physics uses L2 edges only; WAN/VPN are decorative overlays so they
+// cannot collapse the graph into a corner hairball.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -15,6 +15,7 @@ import ForceGraph, {
 } from "../components/ForceGraph";
 import TopologyFilterBar, {
   filterTopologyByTags,
+  type LinkVisibility,
   type TagMatchMode,
 } from "../components/TopologyFilterBar";
 
@@ -31,10 +32,16 @@ const STATUS_RING: Record<TopologyNode["status"], string> = {
   unknown: "#64748b",
 };
 
+const DEFAULT_LINKS: LinkVisibility = {
+  wan: true,
+  autoVpn: true,
+  thirdPartyVpn: false,
+};
+
 function nodeRadius(n: TopologyNode): number {
-  if (n.kind === "cloud") return 28;
-  if (n.kind === "foreign") return 16;
-  return 22 + Math.min((n.uplinkCount ?? 0) * 1.5, 8);
+  if (n.kind === "cloud") return 26;
+  if (n.kind === "foreign") return 14;
+  return 20 + Math.min((n.uplinkCount ?? 0) * 1.2, 6);
 }
 
 function linkMedium(e: TopologyEdge): string {
@@ -50,8 +57,28 @@ function isVPNEdge(e: TopologyEdge): boolean {
   return linkMedium(e) === "vpn" || e.protocol.includes("vpn");
 }
 
+function isAutoVPN(e: TopologyEdge): boolean {
+  return e.protocol === "meraki-autovpn";
+}
+
+function isThirdPartyVPN(e: TopologyEdge): boolean {
+  return e.protocol === "third-party-vpn" || e.protocol === "ipsec";
+}
+
 function isWANEdge(e: TopologyEdge): boolean {
   return linkMedium(e) === "wan" || e.protocol === "uplink";
+}
+
+function isL2Edge(e: TopologyEdge): boolean {
+  return linkLayer(e) === 2 || e.protocol === "lldp" || e.protocol === "cdp" || e.protocol === "both";
+}
+
+function edgeAllowed(e: TopologyEdge, links: LinkVisibility): boolean {
+  if (isWANEdge(e)) return links.wan;
+  if (isAutoVPN(e)) return links.autoVpn;
+  if (isThirdPartyVPN(e)) return links.thirdPartyVpn;
+  if (isVPNEdge(e)) return links.autoVpn;
+  return true;
 }
 
 interface TopoNode extends ForceNodeInput {
@@ -64,6 +91,7 @@ interface TopoEdge extends ForceEdgeInput {
 
 const TAG_FILTER_KEY = "sonar.topology.tags";
 const TAG_MODE_KEY = "sonar.topology.tagMode";
+const LINKS_KEY = "sonar.topology.links";
 
 function loadTags(): string[] {
   try {
@@ -80,31 +108,151 @@ function loadTagMode(): TagMatchMode {
   return localStorage.getItem(TAG_MODE_KEY) === "or" ? "or" : "and";
 }
 
-function seedPosition(
-  n: TopologyNode,
+function loadLinks(): LinkVisibility {
+  try {
+    const raw = localStorage.getItem(LINKS_KEY);
+    if (!raw) return DEFAULT_LINKS;
+    const parsed = JSON.parse(raw) as Partial<LinkVisibility>;
+    return {
+      wan: parsed.wan ?? true,
+      autoVpn: parsed.autoVpn ?? true,
+      thirdPartyVpn: parsed.thirdPartyVpn ?? false,
+    };
+  } catch {
+    return DEFAULT_LINKS;
+  }
+}
+
+function isFirewall(n: TopologyNode): boolean {
+  const tags = new Set((n.tags ?? []).map((t) => t.toLowerCase()));
+  return tags.has("firewall") || /mx|firewall|asa|palo|forti/i.test(`${n.model ?? ""} ${n.label}`);
+}
+
+function isAP(n: TopologyNode): boolean {
+  const tags = new Set((n.tags ?? []).map((t) => t.toLowerCase()));
+  return tags.has("wap") || /mr|access.?point/i.test(`${n.model ?? ""} ${n.label}`);
+}
+
+/** Structured seeds: Internet top, firewalls under it, fabric in a wide ring. */
+function layoutSeeds(
+  nodes: TopologyNode[],
+  edges: TopologyEdge[],
   w: number,
   h: number,
-): { initialX: number; initialY: number } {
-  // Soft hierarchy: Internet near top, firewalls under it, switches lower.
-  if (n.kind === "cloud") {
-    return { initialX: w * 0.5, initialY: h * 0.12 };
+): Map<string, { x: number; y: number; pinned?: boolean }> {
+  const out = new Map<string, { x: number; y: number; pinned?: boolean }>();
+  const pad = 70;
+  const cx = w / 2;
+
+  const cloud = nodes.find((n) => n.kind === "cloud");
+  if (cloud) out.set(cloud.id, { x: cx, y: pad + 10, pinned: true });
+
+  const firewalls = nodes.filter((n) => n.kind === "appliance" && isFirewall(n));
+  const aps = nodes.filter((n) => n.kind === "appliance" && isAP(n) && !isFirewall(n));
+  const switches = nodes.filter(
+    (n) => n.kind === "appliance" && !isFirewall(n) && !isAP(n),
+  );
+  const foreign = nodes.filter((n) => n.kind === "foreign");
+
+  const placeRow = (list: TopologyNode[], y: number) => {
+    const n = list.length;
+    if (n === 0) return;
+    const span = Math.min(w - pad * 2, Math.max(180, n * 90));
+    const start = cx - span / 2;
+    list.forEach((node, i) => {
+      const t = n === 1 ? 0.5 : i / (n - 1);
+      out.set(node.id, { x: start + t * span, y });
+    });
+  };
+
+  placeRow(firewalls, pad + 110);
+
+  // Switches: ring / arc in the middle band so they don't stack.
+  const placeRing = (list: TopologyNode[], y0: number, y1: number, radiusScale: number) => {
+    const n = list.length;
+    if (n === 0) return;
+    const ry = Math.max(80, (y1 - y0) / 2);
+    const rx = Math.min(w / 2 - pad, Math.max(160, n * 28)) * radiusScale;
+    const midY = (y0 + y1) / 2;
+    list.forEach((node, i) => {
+      const ang = -Math.PI * 0.85 + (Math.PI * 1.7 * (n === 1 ? 0.5 : i / (n - 1 || 1)));
+      out.set(node.id, {
+        x: cx + Math.cos(ang) * rx,
+        y: midY + Math.sin(ang) * ry * 0.85,
+      });
+    });
+  };
+
+  placeRing(switches, pad + 180, h - pad - 140, 1);
+  placeRow(aps, h - pad - 40);
+
+  // Foreign L2 peers: park near a connected appliance if possible.
+  const l2 = edges.filter(isL2Edge);
+  const nbr = new Map<string, string[]>();
+  for (const e of l2) {
+    (nbr.get(e.from) ?? (nbr.set(e.from, []), nbr.get(e.from)!)).push(e.to);
+    (nbr.get(e.to) ?? (nbr.set(e.to, []), nbr.get(e.to)!)).push(e.from);
   }
-  const tags = new Set((n.tags ?? []).map((t) => t.toLowerCase()));
-  const isFW = tags.has("firewall") || /mx|firewall|asa|palo|forti/i.test(n.model ?? n.label);
-  const isAP = tags.has("wap") || /mr|access.?point/i.test(n.model ?? n.label);
-  let u = 0;
-  for (let i = 0; i < n.id.length; i++) u = (u * 31 + n.id.charCodeAt(i)) >>> 0;
-  const jitterX = ((u % 1000) / 1000 - 0.5) * w * 0.55;
-  if (isFW) {
-    return { initialX: w * 0.5 + jitterX * 0.5, initialY: h * 0.28 + ((u % 80) - 40) };
+  foreign.forEach((node, i) => {
+    const neighbors = nbr.get(node.id) ?? [];
+    const host = neighbors.map((id) => out.get(id)).find(Boolean);
+    if (host) {
+      const ang = ((i * 47) % 360) * (Math.PI / 180);
+      out.set(node.id, {
+        x: host.x + Math.cos(ang) * 70,
+        y: host.y + Math.sin(ang) * 70,
+      });
+    } else {
+      const ang = (i / Math.max(1, foreign.length)) * Math.PI * 2;
+      out.set(node.id, {
+        x: cx + Math.cos(ang) * (w * 0.38),
+        y: h * 0.55 + Math.sin(ang) * (h * 0.22),
+      });
+    }
+  });
+
+  // Any leftover nodes (shouldn't happen often).
+  for (const n of nodes) {
+    if (out.has(n.id)) continue;
+    const u = n.id.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+    out.set(n.id, {
+      x: pad + (u % Math.max(1, w - pad * 2)),
+      y: pad + ((u * 7) % Math.max(1, h - pad * 2)),
+    });
   }
-  if (isAP) {
-    return { initialX: w * 0.5 + jitterX, initialY: h * 0.78 + ((u % 60) - 30) };
+  return out;
+}
+
+function applyLinkFilter(data: Topology, links: LinkVisibility): Topology {
+  const edges = data.edges.filter((e) => edgeAllowed(e, links));
+  const used = new Set<string>();
+  for (const e of edges) {
+    used.add(e.from);
+    used.add(e.to);
   }
-  if (n.kind === "foreign") {
-    return { initialX: w * 0.5 + jitterX, initialY: h * 0.55 + ((u % 100) - 50) };
-  }
-  return { initialX: w * 0.5 + jitterX, initialY: h * 0.55 + ((u % 120) - 60) };
+  // Always keep appliances + cloud; drop foreign nodes that only existed for hidden VPN.
+  const nodes = data.nodes.filter((n) => {
+    if (n.kind === "appliance" || n.kind === "cloud") return true;
+    return used.has(n.id);
+  });
+  // Drop cloud if no WAN edges remain and nothing points at it.
+  const cloudId = nodes.find((n) => n.kind === "cloud")?.id;
+  const keepCloud =
+    !cloudId ||
+    edges.some((e) => e.from === cloudId || e.to === cloudId) ||
+    links.wan;
+  const finalNodes = keepCloud
+    ? nodes
+    : nodes.filter((n) => n.kind !== "cloud");
+  // If WAN off, also drop cloud even if keepCloud logic...
+  const withoutCloud =
+    links.wan
+      ? finalNodes
+      : finalNodes.filter((n) => n.kind !== "cloud");
+  const withoutCloudEdges = links.wan
+    ? edges
+    : edges.filter((e) => e.from !== cloudId && e.to !== cloudId);
+  return { ...data, nodes: withoutCloud, edges: withoutCloudEdges };
 }
 
 export default function Topology() {
@@ -125,6 +273,11 @@ export default function Topology() {
     localStorage.setItem(TAG_MODE_KEY, tagMode);
   }, [tagMode]);
 
+  const [links, setLinks] = useState<LinkVisibility>(loadLinks);
+  useEffect(() => {
+    localStorage.setItem(LINKS_KEY, JSON.stringify(links));
+  }, [links]);
+
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["topology", includePhones],
     queryFn: () =>
@@ -144,8 +297,9 @@ export default function Topology() {
 
   const filtered = useMemo<Topology | undefined>(() => {
     if (!data) return data;
-    return filterTopologyByTags(data, tagFilter, tagMode);
-  }, [data, tagFilter, tagMode]);
+    const tagged = filterTopologyByTags(data, tagFilter, tagMode);
+    return applyLinkFilter(tagged, links);
+  }, [data, tagFilter, tagMode, links]);
 
   return (
     <div className="space-y-4">
@@ -153,8 +307,8 @@ export default function Topology() {
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Topology</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            LLDP/CDP fabric plus Meraki WAN uplinks and Auto VPN. Drag nodes;
-            scroll to zoom. Refreshes every 30 seconds.
+            L2 fabric drives layout. WAN / Auto VPN overlay without collapsing the map.
+            Third-party VPN is off by default. Drag · scroll-zoom · Fit.
           </p>
         </div>
         <TopologyFilterBar
@@ -165,6 +319,8 @@ export default function Topology() {
           onMatchModeChange={setTagMode}
           includePhones={includePhones}
           onIncludePhonesChange={setIncludePhones}
+          links={links}
+          onLinksChange={setLinks}
           onRefresh={() => refetch()}
           refreshing={isFetching}
         />
@@ -187,6 +343,9 @@ export function TopologyGraph({ data }: { data: Topology }) {
   const navigate = useNavigate();
   const graphRef = useRef<ForceGraphHandle>(null);
   const [size, setSize] = useState({ w: 1200, h: 720 });
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const fittedKey = useRef<string>("");
+
   const wrapRef = (el: HTMLDivElement | null) => {
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
@@ -198,6 +357,21 @@ export function TopologyGraph({ data }: { data: Topology }) {
     ro.observe(el);
   };
 
+  const shapeKey = useMemo(
+    () =>
+      `${data.nodes.map((n) => n.id).join("|")}::${data.edges
+        .map((e) => `${e.from}-${e.to}-${e.protocol}`)
+        .join("|")}`,
+    [data],
+  );
+
+  useEffect(() => {
+    if (fittedKey.current === shapeKey) return;
+    fittedKey.current = shapeKey;
+    const t = window.setTimeout(() => graphRef.current?.fit(48), 80);
+    return () => window.clearTimeout(t);
+  }, [shapeKey, size.w, size.h]);
+
   if (data.nodes.length === 0) {
     return (
       <div className="rounded-xl border border-ink-800 bg-ink-900 p-10 text-center text-sm text-slate-400">
@@ -205,33 +379,43 @@ export function TopologyGraph({ data }: { data: Topology }) {
         <Link to="/appliances" className="text-sonar-400 hover:underline">
           Appliances
         </Link>{" "}
-        or clear the tag filter above.
+        or clear the tag filter / enable more link layers above.
       </div>
     );
   }
 
   const onlyManaged = data.nodes.every((n) => n.kind === "appliance");
   const noEdges = data.edges.length === 0;
+  const seeds = layoutSeeds(data.nodes, data.edges, size.w, size.h);
 
   const nodes: TopoNode[] = data.nodes.map((n) => {
-    const seed = seedPosition(n, size.w, size.h);
-    return { id: n.id, ref: n, initialX: seed.initialX, initialY: seed.initialY };
+    const s = seeds.get(n.id)!;
+    return {
+      id: n.id,
+      ref: n,
+      initialX: s.x,
+      initialY: s.y,
+      pinned: s.pinned,
+    };
   });
-  const edges: TopoEdge[] = data.edges.map((e) => ({
-    from: e.from,
-    to: e.to,
-    rest: isVPNEdge(e) || isWANEdge(e) ? 200 : 140,
-    ref: e,
-  }));
+  const edges: TopoEdge[] = data.edges.map((e) => {
+    const decorative = isWANEdge(e) || isVPNEdge(e);
+    return {
+      from: e.from,
+      to: e.to,
+      rest: isL2Edge(e) ? 150 : 220,
+      decorative,
+      ref: e,
+    };
+  });
 
   return (
     <div ref={wrapRef} className="relative h-[72vh] overflow-hidden rounded-xl border border-ink-800 bg-ink-900">
       {noEdges && (
         <div className="absolute left-3 top-3 z-10 max-w-md rounded-md border border-amber-900/60 bg-amber-950/40 px-3 py-2 text-xs text-amber-200">
           {onlyManaged
-            ? "Showing managed appliances only — no LLDP/CDP neighbors or WAN/VPN links discovered yet."
-            : "No discovery links yet."}{" "}
-          Enable LLDP/CDP on switches, or Meraki Dashboard sync for MX WAN/VPN edges.
+            ? "No L2 / WAN / VPN links in the current view."
+            : "No discovery links yet."}
         </div>
       )}
 
@@ -240,7 +424,6 @@ export function TopologyGraph({ data }: { data: Topology }) {
           type="button"
           className="rounded border border-ink-700 bg-ink-950/90 px-2 py-1 text-xs text-slate-300 hover:bg-ink-800"
           onClick={() => graphRef.current?.zoomBy(1.2)}
-          title="Zoom in"
         >
           +
         </button>
@@ -248,15 +431,13 @@ export function TopologyGraph({ data }: { data: Topology }) {
           type="button"
           className="rounded border border-ink-700 bg-ink-950/90 px-2 py-1 text-xs text-slate-300 hover:bg-ink-800"
           onClick={() => graphRef.current?.zoomBy(1 / 1.2)}
-          title="Zoom out"
         >
           −
         </button>
         <button
           type="button"
           className="rounded border border-ink-700 bg-ink-950/90 px-2 py-1 text-xs text-slate-300 hover:bg-ink-800"
-          onClick={() => graphRef.current?.fit(50)}
-          title="Fit all nodes"
+          onClick={() => graphRef.current?.fit(48)}
         >
           Fit
         </button>
@@ -264,7 +445,6 @@ export function TopologyGraph({ data }: { data: Topology }) {
           type="button"
           className="rounded border border-ink-700 bg-ink-950/90 px-2 py-1 text-xs text-slate-300 hover:bg-ink-800"
           onClick={() => graphRef.current?.resetView()}
-          title="Reset pan/zoom"
         >
           Reset
         </button>
@@ -278,17 +458,18 @@ export function TopologyGraph({ data }: { data: Topology }) {
         height={size.h}
         enableZoomPan
         nodeRadius={(n) => nodeRadius(n.ref)}
-        worldPadding={56}
+        worldPadding={64}
+        onNodeHover={setHoverId}
         renderEdge={(e, a, b) => {
           const vpn = isVPNEdge(e.ref);
           const wan = isWANEdge(e.ref);
           const layer = linkLayer(e.ref);
-          let sw = layer === 2 ? 2 : 1.4;
-          if (vpn || wan) sw = 2.2;
+          let sw = layer === 2 ? 2 : 1.2;
+          if (vpn || wan) sw = 1.8;
           const util = e.ref.utilizationPct;
-          let stroke = e.ref.operUp ? "#475569" : "#1e293b";
-          if (vpn) stroke = e.ref.operUp ? "#a855f7" : "#4c1d95";
-          else if (wan) stroke = e.ref.operUp ? "#f59e0b" : "#78350f";
+          let stroke = e.ref.operUp ? "#64748b" : "#334155";
+          if (vpn) stroke = e.ref.operUp ? "#c084fc" : "#6b21a8";
+          else if (wan) stroke = e.ref.operUp ? "#fbbf24" : "#92400e";
           else if (util != null) {
             if (util >= 80) stroke = "#ef4444";
             else if (util >= 50) stroke = "#f59e0b";
@@ -296,15 +477,24 @@ export function TopologyGraph({ data }: { data: Topology }) {
           }
           const midX = (a.x + b.x) / 2;
           const midY = (a.y + b.y) / 2;
-          let label: string | null = null;
-          if (vpn) label = e.ref.fromPort || "VPN";
-          else if (wan) label = e.ref.fromPort || "WAN";
-          else if (util != null) label = `${util.toFixed(0)}%`;
-          else if (e.ref.inBps != null || e.ref.outBps != null)
-            label = formatEdgeBps(e.ref.inBps, e.ref.outBps);
+          const nearHover =
+            hoverId != null && (e.from === hoverId || e.to === hoverId);
+          const showEdgeLabel =
+            nearHover &&
+            (wan || vpn || util != null);
+          const label = wan
+            ? e.ref.fromPort || "WAN"
+            : vpn
+              ? e.ref.fromPort || "VPN"
+              : util != null
+                ? `${util.toFixed(0)}%`
+                : null;
           const dashed = !e.ref.operUp || vpn;
           return (
-            <g key={`${e.from}->${e.to}:${e.ref.protocol}:${e.ref.fromPort ?? ""}`}>
+            <g
+              key={`${e.from}->${e.to}:${e.ref.protocol}:${e.ref.fromPort ?? ""}`}
+              opacity={hoverId && !nearHover && (wan || vpn) ? 0.25 : 0.9}
+            >
               <line
                 x1={a.x}
                 y1={a.y}
@@ -313,14 +503,13 @@ export function TopologyGraph({ data }: { data: Topology }) {
                 stroke={stroke}
                 strokeWidth={sw}
                 strokeDasharray={dashed ? "6 4" : undefined}
-                opacity={0.9}
               />
-              {label && (
+              {showEdgeLabel && label && (
                 <text
                   x={midX}
                   y={midY - 4}
                   textAnchor="middle"
-                  className="pointer-events-none select-none fill-slate-300 font-mono text-[9px]"
+                  className="pointer-events-none select-none fill-slate-200 font-mono text-[9px]"
                 >
                   {label}
                 </text>
@@ -328,7 +517,9 @@ export function TopologyGraph({ data }: { data: Topology }) {
             </g>
           );
         }}
-        renderNode={(s) => <NodeBubble sim={s} />}
+        renderNode={(s) => (
+          <NodeBubble sim={s} showLabel={hoverId === s.id || data.nodes.length <= 24} />
+        )}
         onNodeClick={(n) => {
           if (n.ref.kind === "appliance") {
             navigate(`/appliances/${n.ref.id}`);
@@ -341,7 +532,13 @@ export function TopologyGraph({ data }: { data: Topology }) {
   );
 }
 
-function NodeBubble({ sim }: { sim: SimNode<TopoNode> }) {
+function NodeBubble({
+  sim,
+  showLabel,
+}: {
+  sim: SimNode<TopoNode>;
+  showLabel: boolean;
+}) {
   const n = sim.data.ref;
   const r = nodeRadius(n);
 
@@ -388,23 +585,27 @@ function NodeBubble({ sim }: { sim: SimNode<TopoNode> }) {
           {n.portsUp ?? "?"}/{n.portsTotal ?? "?"}
         </text>
       )}
-      <text
-        x={sim.x}
-        y={sim.y + r + 14}
-        textAnchor="middle"
-        className="pointer-events-none select-none fill-slate-200 text-[11px]"
-      >
-        {n.label}
-      </text>
-      {n.mgmtIp && (
-        <text
-          x={sim.x}
-          y={sim.y + r + 26}
-          textAnchor="middle"
-          className="pointer-events-none select-none fill-slate-500 font-mono text-[9px]"
-        >
-          {n.mgmtIp}
-        </text>
+      {showLabel && (
+        <>
+          <text
+            x={sim.x}
+            y={sim.y + r + 14}
+            textAnchor="middle"
+            className="pointer-events-none select-none fill-slate-100 text-[11px]"
+          >
+            {n.label}
+          </text>
+          {n.mgmtIp && (
+            <text
+              x={sim.x}
+              y={sim.y + r + 26}
+              textAnchor="middle"
+              className="pointer-events-none select-none fill-slate-500 font-mono text-[9px]"
+            >
+              {n.mgmtIp}
+            </text>
+          )}
+        </>
       )}
     </g>
   );
@@ -432,16 +633,10 @@ function Legend() {
         <Dot color={STATUS_FILL.degraded} /> degraded
         <Dot color={STATUS_FILL.down} /> down
         <Dot color="#1e293b" ring="#475569" /> foreign
-        <span className="inline-flex items-center gap-1 normal-case tracking-normal text-sky-300">
-          ○ Internet
-        </span>
+        <span className="normal-case tracking-normal text-sky-300">Internet</span>
       </div>
       <div className="flex flex-wrap items-center gap-3 border-t border-ink-800 pt-2 normal-case tracking-normal text-slate-500">
-        <span className="text-[9px] uppercase tracking-wide text-slate-400">Edges</span>
-        <span>L2 thicker</span>
-        <span className="text-amber-400">WAN</span>
-        <span className="text-purple-400">VPN (dashed)</span>
-        <span className="text-green-400">Util &lt;50%</span>
+        <span>Hover a node for its name · WAN/VPN labels on hover</span>
       </div>
     </div>
   );
@@ -451,12 +646,10 @@ export function TopologyLinkLegend() {
   return (
     <div className="flex flex-wrap gap-3 rounded-md border border-ink-800 bg-ink-900/60 p-3 text-xs text-slate-300">
       <span className="font-semibold text-slate-200">Link kinds:</span>
-      <Swatch color="bg-sonar-400" label="L2 LLDP/CDP" />
-      <Swatch color="bg-amber-400" label="WAN uplink → Internet" />
-      <Swatch color="bg-purple-500" label="Meraki Auto VPN" />
-      <Swatch color="bg-fuchsia-500" label="Third-party VPN" />
-      <Swatch color="bg-rose-500" label="L3 OSPF (future)" />
-      <Swatch color="bg-pink-500" label="L3 BGP (future)" />
+      <Swatch color="bg-slate-400" label="L2 LLDP/CDP (layout)" />
+      <Swatch color="bg-amber-400" label="WAN → Internet" />
+      <Swatch color="bg-purple-400" label="Auto VPN" />
+      <Swatch color="bg-fuchsia-500" label="3rd-party VPN (opt-in)" />
     </div>
   );
 }
@@ -468,14 +661,6 @@ function Swatch({ color, label }: { color: string; label: string }) {
       <span>{label}</span>
     </span>
   );
-}
-
-function formatEdgeBps(inBps?: number, outBps?: number): string {
-  const max = Math.max(inBps ?? 0, outBps ?? 0);
-  if (max >= 1_000_000_000) return `${(max / 1_000_000_000).toFixed(1)}G`;
-  if (max >= 1_000_000) return `${(max / 1_000_000).toFixed(1)}M`;
-  if (max >= 1_000) return `${(max / 1_000).toFixed(0)}K`;
-  return `${max}b`;
 }
 
 function Dot({ color, ring }: { color: string; ring?: string }) {

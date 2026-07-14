@@ -10,14 +10,14 @@
 
 ## Filters
 
+- **Links** — **WAN**, **Auto VPN**, and **3rd-party VPN** toggles. Third-party VPN is **off by default** (peer lists are huge and turn the map into a hairball).
 - **Show IP phones** — off by default so access-switch phone leaves do not drown the backbone.
 - **Role chips** — quick toggles for common Meraki tags (`firewall`, `switch`, `wap`, `meraki`, …).
 - **Tag filter** with **AND / OR**:
   - AND — appliance must have every selected tag.
   - OR — appliance must have any selected tag (use this when selecting multiple roles).
-- Foreign neighbors and the Internet cloud stay visible when they connect to a kept appliance.
 
-Preferences persist in the browser (tags, AND/OR, phones).
+Layout uses **L2 edges only** for the force simulation. WAN and VPN lines are drawn on top without pulling nodes around. Hover a node to see its name; dense maps hide labels until hover.
 
 ## What the edges mean
 

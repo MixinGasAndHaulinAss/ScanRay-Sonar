@@ -8,6 +8,12 @@ const ROLE_CHIP_ORDER = ["firewall", "switch", "wap", "meraki", "sensor", "camer
 
 export type TagMatchMode = "and" | "or";
 
+export interface LinkVisibility {
+  wan: boolean;
+  autoVpn: boolean;
+  thirdPartyVpn: boolean;
+}
+
 interface Props {
   availableTags: string[];
   selectedTags: string[];
@@ -16,6 +22,8 @@ interface Props {
   onMatchModeChange: (mode: TagMatchMode) => void;
   includePhones: boolean;
   onIncludePhonesChange: (v: boolean) => void;
+  links: LinkVisibility;
+  onLinksChange: (next: LinkVisibility) => void;
   onRefresh?: () => void;
   refreshing?: boolean;
 }
@@ -28,6 +36,8 @@ export default function TopologyFilterBar({
   onMatchModeChange,
   includePhones,
   onIncludePhonesChange,
+  links,
+  onLinksChange,
   onRefresh,
   refreshing,
 }: Props) {
@@ -40,6 +50,25 @@ export default function TopologyFilterBar({
         : [...selectedTags, t],
     );
   };
+
+  const linkToggle = (
+    key: keyof LinkVisibility,
+    label: string,
+    title: string,
+  ) => (
+    <label
+      className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-full border border-ink-700 bg-ink-900 px-2.5 py-1 text-[11px] text-slate-300 hover:border-ink-600"
+      title={title}
+    >
+      <input
+        type="checkbox"
+        className="accent-sonar-500"
+        checked={links[key]}
+        onChange={(e) => onLinksChange({ ...links, [key]: e.target.checked })}
+      />
+      {label}
+    </label>
+  );
 
   return (
     <div className="flex flex-col items-stretch gap-2 sm:items-end">
@@ -66,6 +95,16 @@ export default function TopologyFilterBar({
           })}
         </div>
       )}
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
+        <span className="text-[10px] uppercase tracking-wide text-slate-500">Links</span>
+        {linkToggle("wan", "WAN", "Meraki WAN uplinks and SNMP tunnel stubs to Internet")}
+        {linkToggle("autoVpn", "Auto VPN", "Meraki site-to-site Auto VPN between networks")}
+        {linkToggle(
+          "thirdPartyVpn",
+          "3rd-party VPN",
+          "Third-party IPsec peers — off by default (very noisy)",
+        )}
+      </div>
       <div className="flex flex-wrap items-center justify-end gap-2">
         <label
           className="inline-flex cursor-pointer select-none items-center gap-2 rounded-full border border-ink-700 bg-ink-900 px-3 py-1.5 text-xs text-slate-300 hover:border-ink-600"
@@ -156,7 +195,6 @@ export function filterTopologyByTags<
         : tagFilter.every((t) => tags.has(t));
     if (match) keepIds.add(n.id);
   }
-  // Expand once so Internet / VPN peers attached to kept appliances remain.
   for (const e of data.edges) {
     if (keepIds.has(e.from) || keepIds.has(e.to)) {
       keepIds.add(e.from);
