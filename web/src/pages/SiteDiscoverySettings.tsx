@@ -978,17 +978,19 @@ function MerakiSyncPanel({ siteId }: { siteId: string }) {
           Enable automatic sync (poller)
         </label>
 
-        <label className="block text-xs text-slate-400">
-          Dashboard API key {apiKeySet ? "(saved — leave blank to keep)" : ""}
+        <div className="space-y-1">
+          <div className="text-xs text-slate-400">
+            Dashboard API key {apiKeySet ? "(saved — leave blank to keep)" : ""}
+          </div>
           <input
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder={apiKeySet ? "••••••••••••" : "Paste Meraki API key"}
             autoComplete="new-password"
-            className="mt-1 w-full max-w-xl rounded-md border border-ink-700 bg-ink-950 px-3 py-2 font-mono text-sm"
+            className="block w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 font-mono text-sm"
           />
-        </label>
+        </div>
 
         <NumField
           label="Sync interval (seconds, min 300)"
@@ -997,15 +999,17 @@ function MerakiSyncPanel({ siteId }: { siteId: string }) {
           min={300}
         />
 
-        <label className="block text-xs text-slate-400">
-          Organization IDs (optional — one per line; empty = all orgs on this key)
+        <div className="space-y-1">
+          <div className="text-xs text-slate-400">
+            Organization IDs (optional — one per line; empty = all orgs on this key)
+          </div>
           <textarea
             value={orgText}
             onChange={(e) => setOrgText(e.target.value)}
-            className="mt-1 h-24 w-full max-w-xl rounded-md border border-ink-700 bg-ink-950 px-2 py-1 font-mono text-xs"
+            className="block h-28 w-full rounded-md border border-ink-700 bg-ink-950 px-2 py-1 font-mono text-xs"
             placeholder="123456"
           />
-        </label>
+        </div>
 
         <div className="flex flex-wrap gap-2 pt-1">
           <button
