@@ -128,7 +128,7 @@ func syncMerakiTelemetryDue(ctx context.Context, pool *pgxpool.Pool, sealer *scr
 		var orgIDs []string
 		_ = json.Unmarshal(orgRaw, &orgIDs)
 		fctx, cancel := context.WithTimeout(ctx, 4*time.Minute)
-		n, terr := SyncSiteMerakiTelemetry(fctx, pool, apiKey, siteID, orgIDs)
+		n, terr := SyncSiteMerakiTelemetry(fctx, pool, log, apiKey, siteID, orgIDs)
 		recordMerakiTelemetryStatus(fctx, pool, siteID, terr)
 		cancel()
 		if terr != nil {
@@ -157,7 +157,7 @@ func recordMerakiTelemetryStatus(ctx context.Context, pool *pgxpool.Pool, siteID
 }
 
 // SyncSiteMerakiTelemetry pulls Dashboard health for Meraki appliances on a site.
-func SyncSiteMerakiTelemetry(ctx context.Context, pool *pgxpool.Pool, apiKey string, siteID uuid.UUID, orgFilter []string) (int, error) {
+func SyncSiteMerakiTelemetry(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger, apiKey string, siteID uuid.UUID, orgFilter []string) (int, error) {
 	appliances, err := loadMerakiAppliancesBySerial(ctx, pool, siteID)
 	if err != nil {
 		return 0, err
@@ -204,14 +204,18 @@ func SyncSiteMerakiTelemetry(ctx context.Context, pool *pgxpool.Pool, apiKey str
 		}
 
 		portsBySerial := map[string]meraki.SwitchPortsBySwitch{}
-		if sw, serr := cli.ListSwitchPortsStatusesBySwitch(ctx, org.ID); serr == nil {
+		if sw, serr := cli.ListSwitchPortsStatusesBySwitch(ctx, org.ID); serr != nil {
+			log.Warn("meraki switch ports bySwitch failed", "org", org.Name, "err", serr)
+		} else {
 			for _, s := range sw {
 				portsBySerial[s.Serial] = s
 			}
 		}
 
 		lossBySerial := map[string][]MerakiLossLatencySnap{}
-		if ll, lerr := cli.ListUplinksLossAndLatency(ctx, org.ID); lerr == nil {
+		if ll, lerr := cli.ListUplinksLossAndLatency(ctx, org.ID); lerr != nil {
+			log.Warn("meraki uplinks loss/latency failed", "org", org.Name, "err", lerr)
+		} else {
 			for _, row := range ll {
 				snap := latestLossLatency(row)
 				if snap.Uplink == "" {

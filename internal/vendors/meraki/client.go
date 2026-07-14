@@ -211,13 +211,19 @@ func (c *Client) ListApplianceUplinkStatuses(ctx context.Context, orgID string) 
 	return out, nil
 }
 
+// switchPortsBySwitchPage is the paginated envelope for bySwitch.
+// Meraki returns {"items":[...],"meta":{...}} rather than a bare array.
+type switchPortsBySwitchPage struct {
+	Items []SwitchPortsBySwitch `json:"items"`
+}
+
 // ListSwitchPortsStatusesBySwitch returns all switch port statuses for an org.
 func (c *Client) ListSwitchPortsStatusesBySwitch(ctx context.Context, orgID string) ([]SwitchPortsBySwitch, error) {
-	var out []SwitchPortsBySwitch
-	if err := c.get(ctx, "/organizations/"+orgID+"/switch/ports/statuses/bySwitch?perPage=1000", &out); err != nil {
+	var page switchPortsBySwitchPage
+	if err := c.get(ctx, "/organizations/"+orgID+"/switch/ports/statuses/bySwitch?perPage=1000", &page); err != nil {
 		return nil, err
 	}
-	return out, nil
+	return page.Items, nil
 }
 
 // ListUplinksLossAndLatency returns MX path-quality samples for an org.
