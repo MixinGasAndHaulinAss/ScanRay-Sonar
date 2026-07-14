@@ -23,6 +23,14 @@ type InstalledApp struct {
 	InstallLocation string `json:"installLocation,omitempty"`
 }
 
+// BrowserExtension is one Chrome/Edge extension from the profile Extensions path.
+type BrowserExtension struct {
+	Browser string `json:"browser"`
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
+	ID      string `json:"id,omitempty"`
+}
+
 // MissingPatch is one outstanding Windows Update / patch.
 type MissingPatch struct {
 	Title    string   `json:"title"`
@@ -95,12 +103,13 @@ type StorageIOEvent struct {
 
 // DexInventory is the slow-cadence DEX cache.
 type DexInventory struct {
-	InstalledApps  []InstalledApp  `json:"installedApps,omitempty"`
-	MissingPatches []MissingPatch  `json:"missingPatches,omitempty"`
-	Win11Readiness *Win11Readiness `json:"win11Readiness,omitempty"`
-	EventLog       []EventLogRow   `json:"eventLog,omitempty"`
-	PowerEvents    []PowerEvent    `json:"powerEvents,omitempty"`
-	CollectedAt    string          `json:"collectedAt,omitempty"`
+	InstalledApps       []InstalledApp     `json:"installedApps,omitempty"`
+	InstalledExtensions []BrowserExtension `json:"installedExtensions,omitempty"`
+	MissingPatches      []MissingPatch     `json:"missingPatches,omitempty"`
+	Win11Readiness      *Win11Readiness    `json:"win11Readiness,omitempty"`
+	EventLog            []EventLogRow      `json:"eventLog,omitempty"`
+	PowerEvents         []PowerEvent       `json:"powerEvents,omitempty"`
+	CollectedAt         string             `json:"collectedAt,omitempty"`
 }
 
 type dexState struct {
@@ -143,6 +152,7 @@ func (d *dexState) latestInventory() *DexInventory {
 	}
 	cp := *d.inventory
 	cp.InstalledApps = append([]InstalledApp(nil), d.inventory.InstalledApps...)
+	cp.InstalledExtensions = append([]BrowserExtension(nil), d.inventory.InstalledExtensions...)
 	cp.MissingPatches = append([]MissingPatch(nil), d.inventory.MissingPatches...)
 	cp.EventLog = append([]EventLogRow(nil), d.inventory.EventLog...)
 	cp.PowerEvents = append([]PowerEvent(nil), d.inventory.PowerEvents...)

@@ -1,15 +1,25 @@
-// Devices shell — ControlUp-style Overview | Details | Reports IA.
-// Enrollment stays reachable from Overview (admin link) and the
-// Details empty-state.
+// Devices shell — ControlUp-style Overview | Details | Data | Events | Compliance | Groups | Reports IA.
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Devices from "./agents/Devices";
+import DevicesCompliance from "./agents/DevicesCompliance";
+import DevicesData from "./agents/DevicesData";
+import DevicesEvents from "./agents/DevicesEvents";
+import DevicesGroups from "./agents/DevicesGroups";
 import DevicesReports from "./agents/DevicesReports";
 import Enrollment from "./agents/Enrollment";
 import Overview, { type OverviewPanel } from "./agents/Overview";
 
-type DevicesTab = "overview" | "details" | "reports" | "enrollment";
+type DevicesTab =
+  | "overview"
+  | "details"
+  | "data"
+  | "events"
+  | "compliance"
+  | "groups"
+  | "reports"
+  | "enrollment";
 
 const TAB_KEY = "sonar.devices.tab";
 const PANEL_KEY = "sonar.devices.overview.panel";
@@ -17,7 +27,17 @@ const PANEL_KEY = "sonar.devices.overview.panel";
 function loadTab(): DevicesTab {
   try {
     const v = localStorage.getItem(TAB_KEY);
-    if (v === "overview" || v === "details" || v === "reports" || v === "enrollment") return v;
+    const ok: DevicesTab[] = [
+      "overview",
+      "details",
+      "data",
+      "events",
+      "compliance",
+      "groups",
+      "reports",
+      "enrollment",
+    ];
+    if (ok.includes(v as DevicesTab)) return v as DevicesTab;
   } catch {
     /* ignore */
   }
@@ -46,6 +66,10 @@ function loadPanel(): OverviewPanel {
 const TABS: { id: DevicesTab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "details", label: "Details" },
+  { id: "data", label: "Data" },
+  { id: "events", label: "Events" },
+  { id: "compliance", label: "Compliance" },
+  { id: "groups", label: "Groups" },
   { id: "reports", label: "Reports" },
 ];
 
@@ -73,7 +97,7 @@ export default function Agents() {
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Devices</h2>
           <p className="text-sm text-slate-400">
-            Endpoint fleet visibility — live grid, device drill-down, and DEX reports.
+            Endpoint fleet visibility — live grid, DEX history, events, compliance, and reports.
           </p>
         </div>
         <button
@@ -110,12 +134,23 @@ export default function Agents() {
 
       {tab === "overview" && <Overview panel={panel} onPanel={setPanel} />}
       {tab === "details" && <Devices />}
+      {tab === "data" && <DevicesData />}
+      {tab === "events" && <DevicesEvents />}
+      {tab === "compliance" && <DevicesCompliance />}
+      {tab === "groups" && <DevicesGroups />}
       {tab === "reports" && <DevicesReports />}
       {tab === "enrollment" && (
         <div className="space-y-3">
           <p className="text-sm text-slate-400">
             Issue install tokens for new probes.{" "}
-            <Link to="#" className="text-sonar-400 hover:underline" onClick={(e) => { e.preventDefault(); setTab("details"); }}>
+            <Link
+              to="#"
+              className="text-sonar-400 hover:underline"
+              onClick={(e) => {
+                e.preventDefault();
+                setTab("details");
+              }}
+            >
               Back to Details
             </Link>
           </p>

@@ -261,6 +261,18 @@ func (s *Server) ingestMetrics(ctx context.Context, agentID uuid.UUID, f metrics
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	var siteID uuid.UUID
+	var crit string
+	var hostname string
+	var prevLastSeen *time.Time
+	var groupID *uuid.UUID
+	if err := tx.QueryRow(ctx, `
+		SELECT site_id, COALESCE(criticality, 'normal'), hostname, last_seen_at, group_id
+		  FROM agents WHERE id = $1`,
+		agentID).Scan(&siteID, &crit, &hostname, &prevLastSeen, &groupID); err != nil {
+		return fmt.Errorf("read agent row: %w", err)
+	}
+
 	_, err = tx.Exec(ctx, `
 		UPDATE agents
 		   SET last_metrics          = $2::jsonb,
@@ -386,38 +398,12 @@ func (s *Server) ingestMetrics(ctx context.Context, agentID uuid.UUID, f metrics
 		}
 	}
 
-	var siteID uuid.UUID
-	var crit string
-	var hostname string
-	if err := tx.QueryRow(ctx, `
-		SELECT site_id, COALESCE(criticality, 'normal'), hostname FROM agents WHERE id = $1`,
-		agentID).Scan(&siteID, &crit, &hostname); err != nil {
-		return fmt.Errorf("read agent row: %w", err)
-	}
-
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit: %w", err)
 	}
 
-	memRatio := 0.0
-	if ps.Memory.TotalBytes > 0 {
-		memRatio = float64(ps.Memory.UsedBytes) / float64(ps.Memory.TotalBytes)
-	}
-	if s.nats != nil && s.nats.IsConnected() {
-		payload := map[string]any{
-			"agentId":      agentID.String(),
-			"siteId":       siteID.String(),
-			"cpuPct":       ps.CPU.UsagePct,
-			"memUsedRatio": memRatio,
-			"criticality":  crit,
-			"vendor":       hostname,
-		}
-		if b, err := json.Marshal(payload); err == nil {
-			if err := s.nats.Publish("metrics.agent", b); err != nil {
-				s.log.Debug("metrics.agent publish failed", "err", err, "agent_id", agentID)
-			}
-		}
-	}
+	// DEX history, enriched NATS metrics.agent, compliance — best-effort.
+	s.enrichAfterMetricsIngest(ctx, agentID, siteID, f.Snapshot, sentAt, hostname, crit, prevLastSeen, groupID)
 	return nil
 }
 
@@ -667,6 +653,14 @@ type agentDetailView struct {
 	GeoOrg             *string         `json:"geoOrg,omitempty"`
 	LastMetricsAt      *time.Time      `json:"lastMetricsAt,omitempty"`
 	LastMetrics        json.RawMessage `json:"lastMetrics,omitempty"`
+	GroupID            *string         `json:"groupId,omitempty"`
+	GroupName          *string         `json:"groupName,omitempty"`
+	ComplianceScore    *float64        `json:"complianceScore,omitempty"`
+	ComplianceSeverity *string         `json:"complianceSeverity,omitempty"`
+	ComplianceIssues   int             `json:"complianceIssuesCount"`
+	BatteryWearPct     *float64        `json:"batteryWearPct,omitempty"`
+	BootDurationMs     *int64          `json:"bootDurationMs,omitempty"`
+	GPUName            *string         `json:"gpuName,omitempty"`
 }
 
 func (s *Server) handleGetAgent(w http.ResponseWriter, r *http.Request) {
@@ -677,20 +671,25 @@ func (s *Server) handleGetAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	const q = `
-		SELECT id, site_id, hostname, fingerprint, os, os_version, agent_version,
-		       enrolled_at, last_seen_at, is_active, tags, created_at,
-		       cpu_pct, mem_used_bytes, mem_total_bytes,
-		       root_disk_used_bytes, root_disk_total_bytes,
-		       uptime_seconds, pending_reboot, host(primary_ip), host(public_ip),
-		       geo_country_iso, geo_country_name, geo_subdivision, geo_city,
-		       geo_lat, geo_lon, geo_asn, geo_org,
-		       last_metrics_at, last_metrics
-		  FROM agents
-		 WHERE id = $1
+		SELECT a.id, a.site_id, a.hostname, a.fingerprint, a.os, a.os_version, a.agent_version,
+		       a.enrolled_at, a.last_seen_at, a.is_active, a.tags, a.created_at,
+		       a.cpu_pct, a.mem_used_bytes, a.mem_total_bytes,
+		       a.root_disk_used_bytes, a.root_disk_total_bytes,
+		       a.uptime_seconds, a.pending_reboot, host(a.primary_ip), host(a.public_ip),
+		       a.geo_country_iso, a.geo_country_name, a.geo_subdivision, a.geo_city,
+		       a.geo_lat, a.geo_lon, a.geo_asn, a.geo_org,
+		       a.last_metrics_at, a.last_metrics,
+		       a.group_id::text, COALESCE(g.name,''),
+		       a.compliance_score, a.compliance_severity, a.compliance_issues_count,
+		       a.battery_wear_pct, a.boot_duration_ms, a.gpu_name
+		  FROM agents a
+		  LEFT JOIN device_groups g ON g.id = a.group_id
+		 WHERE a.id = $1
 	`
 	var v agentDetailView
 	var lastMetrics []byte
 	var primaryIP, publicIP *string
+	var groupName string
 	err = s.pool.QueryRow(r.Context(), q, id).Scan(
 		&v.ID, &v.SiteID, &v.Hostname, &v.Fingerprint, &v.OS, &v.OSVersion, &v.AgentVersion,
 		&v.EnrolledAt, &v.LastSeenAt, &v.IsActive, &v.Tags, &v.CreatedAt,
@@ -700,6 +699,9 @@ func (s *Server) handleGetAgent(w http.ResponseWriter, r *http.Request) {
 		&v.GeoCountryISO, &v.GeoCountryName, &v.GeoSubdivision, &v.GeoCity,
 		&v.GeoLat, &v.GeoLon, &v.GeoASN, &v.GeoOrg,
 		&v.LastMetricsAt, &lastMetrics,
+		&v.GroupID, &groupName,
+		&v.ComplianceScore, &v.ComplianceSeverity, &v.ComplianceIssues,
+		&v.BatteryWearPct, &v.BootDurationMs, &v.GPUName,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeErr(w, http.StatusNotFound, "not_found", "agent not found")
@@ -711,6 +713,9 @@ func (s *Server) handleGetAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	v.PrimaryIP = primaryIP
 	v.PublicIP = publicIP
+	if groupName != "" {
+		v.GroupName = &groupName
+	}
 	if len(lastMetrics) > 0 {
 		v.LastMetrics = json.RawMessage(lastMetrics)
 	}

@@ -31,6 +31,7 @@ type DeviceTab =
   | "storage"
   | "apps"
   | "patches"
+  | "compliance"
   | "stopped"
   | "services"
   | "sessions"
@@ -47,6 +48,7 @@ const TABS: { id: DeviceTab; label: string }[] = [
   { id: "storage", label: "Storage" },
   { id: "apps", label: "Installed Applications" },
   { id: "patches", label: "Missing Patches" },
+  { id: "compliance", label: "Compliance" },
   { id: "stopped", label: "Stopped Processes" },
   { id: "services", label: "Services" },
   { id: "sessions", label: "Sessions" },
@@ -102,6 +104,44 @@ export default function AgentDetailPage() {
     queryFn: () => api.get<NetworkSeries>(`/agents/${id}/network?range=24h`),
     refetchInterval: paused ? false : 60_000,
     enabled: !!id,
+  });
+  const compliance = useQuery({
+    queryKey: ["agent-compliance", id],
+    queryFn: () =>
+      api.get<{
+        complianceScore?: number;
+        complianceSeverity?: string;
+        issuesCount?: number;
+        issues: {
+          id: string;
+          category: string;
+          severity: string;
+          title: string;
+          detail: string;
+          clearedAt?: string | null;
+        }[];
+        vulnerabilities: {
+          id: string;
+          cveId: string;
+          severity: string;
+          product: string;
+          clearedAt?: string | null;
+        }[];
+      }>(`/agents/${id}/compliance`),
+    refetchInterval: refreshMs,
+    enabled: !!id,
+  });
+  const groups = useQuery({
+    queryKey: ["device-groups"],
+    queryFn: () =>
+      api.get<{ id: string; name: string; siteId: string }[]>("/device-groups"),
+  });
+  const setGroup = useMutation({
+    mutationFn: (groupId: string) => api.patch(`/agents/${id}`, { groupId }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["agent", id] });
+      void qc.invalidateQueries({ queryKey: ["agents"] });
+    },
   });
   const sites = useQuery({ queryKey: ["sites"], queryFn: () => api.get<Site[]>("/sites") });
   const allAgents = useQuery({
@@ -191,6 +231,23 @@ export default function AgentDetailPage() {
             }
             onChange={(next) => updateTags.mutate(next)}
           />
+          <label className="mt-2 flex items-center gap-2 text-xs text-slate-400">
+            Group
+            <select
+              className="rounded border border-ink-700 bg-ink-900 px-2 py-1 text-sm text-slate-100"
+              value={(a as AgentDetail & { groupId?: string }).groupId ?? ""}
+              onChange={(e) => setGroup.mutate(e.target.value)}
+            >
+              <option value="">— none —</option>
+              {(groups.data ?? [])
+                .filter((g) => g.siteId === a.siteId)
+                .map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+            </select>
+          </label>
         </div>
         <div className="flex items-center gap-2">
           <span
@@ -270,6 +327,13 @@ export default function AgentDetailPage() {
       {snap && tab === "services" && <ServicesTab snap={snap} />}
       {snap && tab === "sessions" && <SessionsTab snap={snap} />}
       {snap && tab === "patches" && <PatchesTab snap={snap} />}
+      {tab === "compliance" && (
+        <ComplianceTab
+          data={compliance.data}
+          loading={compliance.isLoading}
+          error={compliance.isError}
+        />
+      )}
       {snap && tab === "apps" && <InstalledAppsTab snap={snap} />}
       {snap && tab === "stopped" && <StoppedProcessesTab snap={snap} />}
       {snap && tab === "topapps" && <TopAppsTab snap={snap} />}
@@ -1063,6 +1127,114 @@ function SessionsTab({ snap }: { snap: Snapshot }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function ComplianceTab({
+  data,
+  loading,
+  error,
+}: {
+  data?: {
+    complianceScore?: number;
+    complianceSeverity?: string;
+    issuesCount?: number;
+    issues: {
+      id: string;
+      category: string;
+      severity: string;
+      title: string;
+      detail: string;
+      clearedAt?: string | null;
+    }[];
+    vulnerabilities: {
+      id: string;
+      cveId: string;
+      severity: string;
+      product: string;
+      clearedAt?: string | null;
+    }[];
+  };
+  loading: boolean;
+  error: boolean;
+}) {
+  if (loading) return <p className="text-sm text-slate-500">Loading compliance…</p>;
+  if (error || !data) return <p className="text-sm text-rose-400">Failed to load compliance.</p>;
+  const openIssues = (data.issues ?? []).filter((i) => !i.clearedAt);
+  const openCVEs = (data.vulnerabilities ?? []).filter((v) => !v.clearedAt);
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-3 text-sm">
+        <span className="rounded bg-ink-800 px-2 py-1 text-slate-300">
+          Score:{" "}
+          <strong className="text-slate-100">
+            {data.complianceScore != null ? Number(data.complianceScore).toFixed(1) : "—"}
+          </strong>
+        </span>
+        <span className="rounded bg-ink-800 px-2 py-1 text-slate-300">
+          Severity: <strong className="text-slate-100">{data.complianceSeverity || "—"}</strong>
+        </span>
+        <span className="rounded bg-ink-800 px-2 py-1 text-slate-300">
+          Open issues: <strong className="text-slate-100">{openIssues.length}</strong>
+        </span>
+      </div>
+      <div className="overflow-auto rounded-xl border border-ink-800">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-ink-800/80 text-xs uppercase text-slate-400">
+            <tr>
+              <th className="px-3 py-2">Severity</th>
+              <th className="px-3 py-2">Category</th>
+              <th className="px-3 py-2">Title</th>
+              <th className="px-3 py-2">Detail</th>
+            </tr>
+          </thead>
+          <tbody>
+            {openIssues.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-3 py-6 text-center text-slate-500">
+                  No open compliance issues
+                </td>
+              </tr>
+            )}
+            {openIssues.map((i) => (
+              <tr key={i.id} className="border-t border-ink-800/70">
+                <td className="px-3 py-2">{i.severity}</td>
+                <td className="px-3 py-2 text-slate-400">{i.category}</td>
+                <td className="px-3 py-2 text-slate-200">{i.title}</td>
+                <td className="px-3 py-2 text-slate-400">{i.detail}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="overflow-auto rounded-xl border border-ink-800">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-ink-800/80 text-xs uppercase text-slate-400">
+            <tr>
+              <th className="px-3 py-2">CVE</th>
+              <th className="px-3 py-2">Severity</th>
+              <th className="px-3 py-2">Product</th>
+            </tr>
+          </thead>
+          <tbody>
+            {openCVEs.length === 0 && (
+              <tr>
+                <td colSpan={3} className="px-3 py-6 text-center text-slate-500">
+                  No open CVE-lite hits
+                </td>
+              </tr>
+            )}
+            {openCVEs.map((v) => (
+              <tr key={v.id} className="border-t border-ink-800/70">
+                <td className="px-3 py-2 font-mono text-slate-200">{v.cveId}</td>
+                <td className="px-3 py-2">{v.severity}</td>
+                <td className="px-3 py-2 text-slate-400">{v.product}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

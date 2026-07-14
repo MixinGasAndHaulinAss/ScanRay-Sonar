@@ -1,0 +1,39 @@
+{
+  "products": [
+    {
+      "match": "Chrome",
+      "cves": [
+        {"id": "CVE-2024-4058", "severity": "high", "minVersion": "0", "maxVersion": "124.0.6367.60"}
+      ]
+    },
+    {
+      "match": "Microsoft Edge",
+      "cves": [
+        {"id": "CVE-2024-38085", "severity": "high", "minVersion": "0", "maxVersion": "126.0.2592.56"}
+      ]
+    },
+    {
+      "match": "Firefox",
+      "cves": [
+        {"id": "CVE-2024-4367", "severity": "critical", "minVersion": "0", "maxVersion": "125.0.2"}
+      ]
+    },
+    {
+      "match": "Adobe Acrobat",
+      "cves": [
+        {"id": "CVE-2024-41869", "severity": "critical", "minVersion": "0", "maxVersion": "24.002.20964"}
+      ]
+    },
+    {
+      "match": "Zoom",
+      "cves": [
+        {"id": "CVE-2024-24697", "severity": "high", "minVersion": "0", "maxVersion": "5.17.10"}
+      ]
+    }
+  ],
+  "kbs": [
+    {"kb": "KB5039211", "cve": "CVE-2024-30080", "severity": "critical", "product": "Windows"},
+    {"kb": "KB5037768", "cve": "CVE-2024-30078", "severity": "high", "product": "Windows"},
+    {"kb": "KB5036893", "cve": "CVE-2024-21338", "severity": "high", "product": "Windows"}
+  ]
+}

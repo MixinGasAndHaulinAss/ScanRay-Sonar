@@ -21,6 +21,10 @@ package probe
 // every 5 minutes by extras.runHealthLoop.
 type HealthSignals struct {
 	BatteryHealthPct        *float64 `json:"batteryHealthPct,omitempty"`
+	BatteryCycleCount       *int     `json:"batteryCycleCount,omitempty"`
+	BatteryDesignedMWh      *int     `json:"batteryDesignedMWh,omitempty"`
+	BatteryFullChargeMWh    *int     `json:"batteryFullChargeMWh,omitempty"`
+	BatteryWearPct          *float64 `json:"batteryWearPct,omitempty"`
 	BSODCount24h            *int     `json:"bsodCount24h,omitempty"`
 	UserRebootCount24h      *int     `json:"userRebootCount24h,omitempty"`
 	AppCrashCount24h        *int     `json:"appCrashCount24h,omitempty"`
@@ -37,6 +41,8 @@ type HealthSignals struct {
 	// over the past 7 days. Linux/macOS leave these nil.
 	LogonAvgMs *float64 `json:"logonAvgMs,omitempty"`
 	LogonMaxMs *float64 `json:"logonMaxMs,omitempty"`
+	// BootDurationMs is last cold-boot duration when Windows exposes it.
+	BootDurationMs *int64 `json:"bootDurationMs,omitempty"`
 	// AppLaunchMaxMs / InputDelayAvgMs — Windows Diagnostics-Performance /
 	// Shell-Core where available; nil on other platforms.
 	AppLaunchMaxMs  *float64 `json:"appLaunchMaxMs,omitempty"`

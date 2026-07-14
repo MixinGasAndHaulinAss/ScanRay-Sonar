@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.7.14.9"
+  version: "2026.7.14.10"
   license:
     name: MIT
 servers:
@@ -518,6 +518,139 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/Agent" }
+
+  /agents/data:
+    get:
+      summary: List DEX historical data indices
+      responses:
+        "200":
+          description: Index catalog
+  /agents/data/{index}:
+    get:
+      summary: Query a DEX historical index (optional CSV via export=1)
+      parameters:
+        - in: path
+          name: index
+          required: true
+          schema: { type: string }
+        - in: query
+          name: siteId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: agentId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: groupId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: since
+          schema: { type: string, format: date-time }
+        - in: query
+          name: until
+          schema: { type: string, format: date-time }
+        - in: query
+          name: export
+          schema: { type: string, enum: ["1"] }
+      responses:
+        "200":
+          description: Rows or CSV
+  /agents/events:
+    get:
+      summary: Agent system events timeline
+      parameters:
+        - in: query
+          name: siteId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: agentId
+          schema: { type: string, format: uuid }
+        - in: query
+          name: kind
+          schema: { type: string }
+        - in: query
+          name: severity
+          schema: { type: string }
+      responses:
+        "200":
+          description: Event list
+  /agents/compliance:
+    get:
+      summary: Fleet compliance summary
+      parameters:
+        - in: query
+          name: siteId
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Fleet compliance
+  /agents/{id}/compliance:
+    get:
+      summary: Per-agent compliance detail
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Issues and CVE-lite hits
+  /device-groups:
+    get:
+      summary: List device groups
+      parameters:
+        - in: query
+          name: siteId
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Groups
+    post:
+      summary: Create device group (siteadmin)
+      responses:
+        "201":
+          description: Created
+  /device-groups/{id}:
+    patch:
+      summary: Update device group (siteadmin)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Updated
+    delete:
+      summary: Delete device group (siteadmin)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Deleted
+  /device-groups/{id}/members:
+    post:
+      summary: Assign agents to group (exclusive 1:1)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Updated count
+    delete:
+      summary: Clear group membership for agents
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Updated count
 
   /users/{id}:
     patch:

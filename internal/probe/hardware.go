@@ -94,7 +94,9 @@ type HardwareDisk struct {
 	// Rotational is a tristate disguised as a *bool: nil = unknown,
 	// true = HDD, false = SSD/NVMe. We use a pointer so the JSON
 	// output omits it on unknown rather than lying with `false`.
-	Rotational *bool `json:"rotational,omitempty"`
+	Rotational *bool    `json:"rotational,omitempty"`
+	TempC      *float64 `json:"tempC,omitempty"`
+	WearPct    *float64 `json:"wearPct,omitempty"`
 }
 
 type HardwareNICInfo struct {
@@ -112,6 +114,7 @@ type HardwareGPU struct {
 	Product string `json:"product,omitempty"`
 	Driver  string `json:"driver,omitempty"`
 	BusInfo string `json:"busInfo,omitempty"`
+	VRAMMB  *int   `json:"vramMb,omitempty"`
 }
 
 // hardwareCache holds the once-collected inventory plus the time of

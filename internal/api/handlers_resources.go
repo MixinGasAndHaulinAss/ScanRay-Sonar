@@ -520,21 +520,25 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	// for scanning into *string. We deliberately do NOT pull
 	// last_metrics here (it's 10–50 KB per row); the detail endpoint
 	// covers anyone who needs the full payload.
-	q := `SELECT id, site_id, hostname, fingerprint, os, os_version, agent_version,
-	             enrolled_at, last_seen_at, is_active, tags, created_at,
-	             cpu_pct, mem_used_bytes, mem_total_bytes,
-	             root_disk_used_bytes, root_disk_total_bytes,
-	             uptime_seconds, pending_reboot, host(primary_ip), host(public_ip),
-	             geo_country_iso, geo_country_name, geo_subdivision, geo_city,
-	             geo_lat, geo_lon, geo_asn, geo_org,
-	             last_metrics_at
-	      FROM agents`
+	q := `SELECT a.id, a.site_id, a.hostname, a.fingerprint, a.os, a.os_version, a.agent_version,
+	             a.enrolled_at, a.last_seen_at, a.is_active, a.tags, a.created_at,
+	             a.cpu_pct, a.mem_used_bytes, a.mem_total_bytes,
+	             a.root_disk_used_bytes, a.root_disk_total_bytes,
+	             a.uptime_seconds, a.pending_reboot, host(a.primary_ip), host(a.public_ip),
+	             a.geo_country_iso, a.geo_country_name, a.geo_subdivision, a.geo_city,
+	             a.geo_lat, a.geo_lon, a.geo_asn, a.geo_org,
+	             a.last_metrics_at,
+	             a.group_id::text, COALESCE(g.name,''),
+	             a.compliance_score, COALESCE(a.compliance_severity,''), a.compliance_issues_count,
+	             a.battery_wear_pct, a.boot_duration_ms, COALESCE(a.gpu_name,'')
+	      FROM agents a
+	      LEFT JOIN device_groups g ON g.id = a.group_id`
 	args := []any{}
 	if siteID != "" {
-		q += ` WHERE site_id = $1`
+		q += ` WHERE a.site_id = $1`
 		args = append(args, siteID)
 	}
-	q += ` ORDER BY hostname`
+	q += ` ORDER BY a.hostname`
 
 	rows, err := s.pool.Query(r.Context(), q, args...)
 	if err != nil {
@@ -564,6 +568,14 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 			geoASN                       *int
 			geoOrg                       *string
 			lastMetricsAt                *time.Time
+			groupID                      *string
+			groupName                    string
+			complianceScore              *float64
+			complianceSev                string
+			complianceIssues             int
+			batteryWear                  *float64
+			bootDuration                 *int64
+			gpuName                      string
 		)
 		if err := rows.Scan(&id, &sid, &host, &fp, &os, &osver, &av,
 			&enrolled, &last, &active, &tags, &created,
@@ -572,11 +584,14 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 			&uptimeS, &pendingReboot, &primaryIP, &publicIP,
 			&geoCountryIso, &geoCountry, &geoSubdivision, &geoCity,
 			&geoLat, &geoLon, &geoASN, &geoOrg,
-			&lastMetricsAt); err != nil {
+			&lastMetricsAt,
+			&groupID, &groupName,
+			&complianceScore, &complianceSev, &complianceIssues,
+			&batteryWear, &bootDuration, &gpuName); err != nil {
 			writeErr(w, http.StatusInternalServerError, "server_error", "scan failed")
 			return
 		}
-		out = append(out, map[string]any{
+		row := map[string]any{
 			"id":                 id,
 			"siteId":             sid,
 			"hostname":           host,
@@ -607,7 +622,18 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 			"geoAsn":             geoASN,
 			"geoOrg":             geoOrg,
 			"lastMetricsAt":      lastMetricsAt,
-		})
+			"complianceScore":    complianceScore,
+			"complianceSeverity": complianceSev,
+			"complianceIssuesCount": complianceIssues,
+			"batteryWearPct":     batteryWear,
+			"bootDurationMs":     bootDuration,
+			"gpuName":            nullIfEmpty(gpuName),
+		}
+		if groupID != nil && *groupID != "" {
+			row["groupId"] = *groupID
+			row["groupName"] = groupName
+		}
+		out = append(out, row)
 	}
 	writeJSON(w, http.StatusOK, out)
 }

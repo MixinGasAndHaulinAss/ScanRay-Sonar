@@ -60,6 +60,16 @@ export interface Agent {
   geoLon?: number | null;
   geoAsn?: number | null;
   geoOrg?: string | null;
+
+  // DEX platform (0027+)
+  groupId?: string | null;
+  groupName?: string | null;
+  complianceScore?: number | null;
+  complianceSeverity?: string | null;
+  complianceIssuesCount?: number;
+  batteryWearPct?: number | null;
+  bootDurationMs?: number | null;
+  gpuName?: string | null;
 }
 
 // AgentDetail is the /agents/{id} response — same as Agent plus the

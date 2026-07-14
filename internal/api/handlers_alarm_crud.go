@@ -18,6 +18,7 @@ func (s *Server) handleCreateAlarmRule(w http.ResponseWriter, r *http.Request) {
 		Enabled         *bool    `json:"enabled"`
 		ForSeconds      *int     `json:"forSeconds,omitempty"`
 		ClearForSeconds *int     `json:"clearForSeconds,omitempty"`
+		TargetKind      string   `json:"targetKind,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" || req.Expression == "" || req.Severity == "" {
 		writeErr(w, http.StatusBadRequest, "bad_request", "name, severity, expression required")
@@ -54,11 +55,19 @@ func (s *Server) handleCreateAlarmRule(w http.ResponseWriter, r *http.Request) {
 	if req.ClearForSeconds != nil && *req.ClearForSeconds >= 0 {
 		clearSec = *req.ClearForSeconds
 	}
+	targetKind := req.TargetKind
+	if targetKind == "" {
+		targetKind = "any"
+	}
+	if targetKind != "any" && targetKind != "agent" && targetKind != "appliance" {
+		writeErr(w, http.StatusBadRequest, "bad_request", "targetKind must be any|agent|appliance")
+		return
+	}
 	var id uuid.UUID
 	err := s.pool.QueryRow(r.Context(), `
-		INSERT INTO alarm_rules (site_id, name, severity, expression, channel_ids, enabled, created_by, for_seconds, clear_for_seconds)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-		sitePtr, req.Name, req.Severity, req.Expression, chIDs, enabled, nullableUID(uid), forSec, clearSec).Scan(&id)
+		INSERT INTO alarm_rules (site_id, name, severity, expression, channel_ids, enabled, created_by, for_seconds, clear_for_seconds, target_kind)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+		sitePtr, req.Name, req.Severity, req.Expression, chIDs, enabled, nullableUID(uid), forSec, clearSec, targetKind).Scan(&id)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", "insert failed")
 		return
@@ -82,6 +91,7 @@ func (s *Server) handlePatchAlarmRule(w http.ResponseWriter, r *http.Request) {
 		ClearForSeconds *int     `json:"clearForSeconds,omitempty"`
 		ChannelIDs      []string `json:"channelIds,omitempty"`
 		SiteID          *string  `json:"siteId,omitempty"`
+		TargetKind      *string  `json:"targetKind,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", "invalid JSON")
@@ -134,6 +144,14 @@ func (s *Server) handlePatchAlarmRule(w http.ResponseWriter, r *http.Request) {
 			}
 			add("site_id", sid)
 		}
+	}
+	if req.TargetKind != nil {
+		tk := *req.TargetKind
+		if tk != "any" && tk != "agent" && tk != "appliance" {
+			writeErr(w, http.StatusBadRequest, "bad_request", "targetKind must be any|agent|appliance")
+			return
+		}
+		add("target_kind", tk)
 	}
 	if len(sets) == 0 {
 		writeErr(w, http.StatusBadRequest, "bad_request", "no fields")

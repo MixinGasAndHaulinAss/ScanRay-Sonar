@@ -124,11 +124,16 @@ foreach ($n in $na) {
 }
 $vc = Try-Cim 'gpus' 'Win32_VideoController'
 foreach ($g in $vc) {
+  $vram = $null
+  if ($g.AdapterRAM -and [int64]$g.AdapterRAM -gt 0) {
+    $vram = [int]([uint64]$g.AdapterRAM / 1MB)
+  }
   $out.gpus += [ordered]@{
     vendor  = $g.AdapterCompatibility
     product = $g.Name
     driver  = $g.DriverVersion
     busInfo = $g.PNPDeviceID
+    vramMb  = $vram
   }
 }
 $out | ConvertTo-Json -Depth 6 -Compress
@@ -192,6 +197,7 @@ type pswHardware struct {
 		Product string `json:"product"`
 		Driver  string `json:"driver"`
 		BusInfo string `json:"busInfo"`
+		VRAMMB  *int   `json:"vramMb"`
 	} `json:"gpus"`
 	Warnings []string `json:"warnings"`
 }
@@ -289,6 +295,7 @@ func mapPSWHardware(raw *pswHardware) *Hardware {
 			Product: strings.TrimSpace(g.Product),
 			Driver:  strings.TrimSpace(g.Driver),
 			BusInfo: strings.TrimSpace(g.BusInfo),
+			VRAMMB:  g.VRAMMB,
 		})
 	}
 	hw.CollectionWarnings = raw.Warnings

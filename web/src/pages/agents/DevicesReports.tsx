@@ -1,6 +1,7 @@
-// DevicesReports — canned historical/fleet lists (ControlUp Reports tab).
+// DevicesReports — canned historical/fleet lists + agent Markdown report generate.
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 import type {
@@ -8,11 +9,31 @@ import type {
   OverviewDevicesAveragesResponse,
   OverviewDevicesPerformanceResponse,
   OverviewUserExperienceResponse,
+  Site,
 } from "../../api/types";
 import { formatRelative } from "../../lib/format";
 import { Card, EmptyHint, ErrorHint } from "./common";
 
+const AGENT_TEMPLATES = [
+  { slug: "agent-fleet-summary", title: "Agent fleet summary" },
+  { slug: "agent-compliance", title: "Agent compliance posture" },
+  { slug: "agent-patches", title: "Missing patches by severity" },
+];
+
 export default function DevicesReports() {
+  const qc = useQueryClient();
+  const sites = useQuery({ queryKey: ["sites"], queryFn: () => api.get<Site[]>("/sites") });
+  const [reportSite, setReportSite] = useState("");
+  const [reportSlug, setReportSlug] = useState("agent-compliance");
+  const generate = useMutation({
+    mutationFn: () =>
+      api.post<{ id: number }>("/reports", { templateSlug: reportSlug, siteId: reportSite }),
+    onSuccess: async (r) => {
+      await qc.invalidateQueries({ queryKey: ["reports"] });
+      window.open(`/api/v1/reports/${r.id}/download`, "_blank");
+    },
+  });
+
   const agents = useQuery({
     queryKey: ["agents"],
     queryFn: () => api.get<Agent[]>("/agents"),
@@ -59,16 +80,6 @@ export default function DevicesReports() {
 
   const pendingReboot = list.filter((a) => a.pendingReboot).slice(0, 25);
 
-  const currentVersion = list
-    .map((a) => a.agentVersion)
-    .filter((v): v is string => !!v && v !== "unknown")
-    .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))[0];
-
-  const outdated = currentVersion
-    ? list.filter((a) => a.agentVersion && a.agentVersion !== currentVersion && a.agentVersion < currentVersion)
-    : [];
-  // Prefer CalVer-aware sort: treat highest lexical CalVer among fleet as "current"
-  // when API version is unavailable client-side.
   const maxVer = versionRows[0]?.[0];
   const behind =
     maxVer && maxVer !== "unknown"
@@ -76,154 +87,125 @@ export default function DevicesReports() {
           const v = a.agentVersion || "unknown";
           return v !== "unknown" && v !== maxVer;
         })
-      : outdated;
+      : [];
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <ReportCard title="Probe versions">
-        <div className="mb-3 flex flex-wrap gap-3 text-sm">
-          <span className="rounded bg-ink-800 px-2 py-1 text-slate-300">
-            Fleet versions: <strong className="text-slate-100">{byVersion.size}</strong>
-          </span>
-          <span className="rounded bg-ink-800 px-2 py-1 text-slate-300">
-            Behind latest in fleet:{" "}
-            <strong className={behind.length ? "text-amber-300" : "text-emerald-300"}>
-              {behind.length}
-            </strong>
-          </span>
-          {maxVer ? (
-            <span className="rounded bg-ink-800 px-2 py-1 text-slate-300">
-              Top version: <strong className="font-mono text-slate-100">{maxVer}</strong>
-            </span>
-          ) : null}
+    <div className="space-y-4">
+      <Card title="Generate agent report">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-xs text-slate-400">
+            Site
+            <select
+              className="mt-1 block rounded border border-ink-700 bg-ink-900 px-2 py-1.5 text-sm text-slate-100"
+              value={reportSite}
+              onChange={(e) => setReportSite(e.target.value)}
+            >
+              <option value="">Select site…</option>
+              {(sites.data ?? []).map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-slate-400">
+            Template
+            <select
+              className="mt-1 block rounded border border-ink-700 bg-ink-900 px-2 py-1.5 text-sm text-slate-100"
+              value={reportSlug}
+              onChange={(e) => setReportSlug(e.target.value)}
+            >
+              {AGENT_TEMPLATES.map((t) => (
+                <option key={t.slug} value={t.slug}>
+                  {t.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            disabled={!reportSite || generate.isPending}
+            onClick={() => generate.mutate()}
+            className="rounded bg-sonar-600 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+          >
+            {generate.isPending ? "Generating…" : "Generate & download"}
+          </button>
+          <Link to="/reports" className="text-xs text-sonar-400 hover:underline">
+            All report templates
+          </Link>
         </div>
-        <SimpleTable
-          headers={["Version", "Devices"]}
-          rows={versionRows.map(([v, n]) => [v, String(n)])}
-        />
-        {behind.length > 0 ? (
-          <div className="mt-3">
-            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
-              Devices behind top fleet version
-            </p>
-            <HostTable
-              rows={behind.slice(0, 25).map((a) => ({
-                id: a.id,
-                hostname: a.hostname,
-                detail: a.agentVersion || "unknown",
-              }))}
-            />
-          </div>
-        ) : null}
-      </ReportCard>
+        {generate.isError && <p className="mt-2 text-xs text-rose-400">Generate failed.</p>}
+      </Card>
 
-      <ReportCard title="Offline / stale devices">
-        {offline.length === 0 ? (
-          <p className="text-sm text-slate-500">All devices seen in the last 5 minutes.</p>
-        ) : (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ReportCard title="Probe versions">
+          <div className="mb-3 flex flex-wrap gap-3 text-sm">
+            <span className="rounded bg-ink-800 px-2 py-1 text-slate-300">
+              Fleet versions: <strong className="text-slate-100">{byVersion.size}</strong>
+            </span>
+            <span className="rounded bg-ink-800 px-2 py-1 text-slate-300">
+              Behind latest in fleet:{" "}
+              <strong className={behind.length ? "text-amber-300" : "text-emerald-300"}>
+                {behind.length}
+              </strong>
+            </span>
+            {maxVer ? (
+              <span className="rounded bg-ink-800 px-2 py-1 text-slate-300">
+                Top version: <strong className="font-mono text-slate-100">{maxVer}</strong>
+              </span>
+            ) : null}
+          </div>
+          <SimpleTable
+            headers={["Version", "Count"]}
+            rows={versionRows.map(([v, n]) => [v, String(n)])}
+          />
+        </ReportCard>
+
+        <ReportCard title="Offline / stale (>5m)">
           <HostTable
             rows={offline.map((a) => ({
               id: a.id,
               hostname: a.hostname,
-              detail: formatRelative(a.lastSeenAt),
+              detail: a.lastSeenAt ? formatRelative(a.lastSeenAt) : "never",
             }))}
           />
-        )}
-      </ReportCard>
+        </ReportCard>
 
-      <ReportCard title="Pending reboot">
-        {pendingReboot.length === 0 ? (
-          <p className="text-sm text-slate-500">No devices reporting a pending reboot.</p>
-        ) : (
+        <ReportCard title="Pending reboot">
           <HostTable
             rows={pendingReboot.map((a) => ({
               id: a.id,
               hostname: a.hostname,
-              detail: a.os,
+              detail: a.lastSeenAt ? formatRelative(a.lastSeenAt) : "—",
             }))}
           />
-        )}
-      </ReportCard>
+        </ReportCard>
 
-      <ReportCard title="Most BSODs (24h)">
-        {avg.isError && <ErrorHint>Failed to load averages.</ErrorHint>}
-        <HostTable
-          rows={(avg.data?.top.mostBSODs ?? []).map((r) => ({
-            id: r.id,
-            hostname: r.hostname,
-            detail: String(r.value),
-          }))}
-        />
-      </ReportCard>
-
-      <ReportCard title="Most app crashes (24h)">
-        <HostTable
-          rows={(avg.data?.top.mostAppCrashes ?? []).map((r) => ({
-            id: r.id,
-            hostname: r.hostname,
-            detail: String(r.value),
-          }))}
-        />
-      </ReportCard>
-
-      <ReportCard title="Most missing patches">
-        <HostTable
-          rows={(avg.data?.top.mostMissingPatches ?? []).map((r) => ({
-            id: r.id,
-            hostname: r.hostname,
-            detail: String(r.value),
-          }))}
-        />
-      </ReportCard>
-
-      <ReportCard title="Lowest experience score">
-        <HostTable
-          rows={(ux.data?.worst ?? []).slice(0, 15).map((r) => ({
-            id: r.id,
-            hostname: r.hostname,
-            detail: r.score != null ? r.score.toFixed(1) : "—",
-          }))}
-        />
-      </ReportCard>
-
-      <ReportCard title="Bottom device models (score)">
-        <SimpleTable
-          headers={["Model", "Count", "Score"]}
-          rows={(perf.data?.bottom5Models ?? []).map((r) => [
-            r.model,
-            String(r.count),
-            r.score != null ? r.score.toFixed(1) : "—",
-          ])}
-        />
-      </ReportCard>
+        <ReportCard title="Overview snapshots">
+          <ul className="space-y-1 text-sm text-slate-300">
+            <li>Devices averages: {avg.data ? "loaded" : avg.isError ? "error" : "…"}</li>
+            <li>Devices performance: {perf.data ? "loaded" : perf.isError ? "error" : "…"}</li>
+            <li>User experience: {ux.data ? "loaded" : ux.isError ? "error" : "…"}</li>
+          </ul>
+        </ReportCard>
+      </div>
     </div>
   );
 }
 
 function ReportCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <Card>
-      <h3 className="mb-3 text-sm font-semibold text-slate-200">{title}</h3>
-      {children}
-    </Card>
-  );
+  return <Card title={title}>{children}</Card>;
 }
 
-function HostTable({
-  rows,
-}: {
-  rows: { id: string; hostname: string; detail: string }[];
-}) {
-  if (rows.length === 0) {
-    return <p className="text-sm text-slate-500">No data yet.</p>;
-  }
+function HostTable({ rows }: { rows: { id: string; hostname: string; detail: string }[] }) {
+  if (rows.length === 0) return <p className="text-sm text-slate-500">None.</p>;
   return (
     <table className="w-full text-left text-sm">
       <tbody>
         {rows.map((r) => (
-          <tr key={r.id + r.hostname} className="border-t border-ink-800/80">
-            <td className="py-1.5 pr-2">
-              <Link to={`/agents/${r.id}`} className="text-sonar-300 hover:underline">
+          <tr key={r.id} className="border-t border-ink-800/80">
+            <td className="py-1.5">
+              <Link className="text-sonar-300 hover:underline" to={`/agents/${r.id}`}>
                 {r.hostname}
               </Link>
             </td>
@@ -254,7 +236,10 @@ function SimpleTable({ headers, rows }: { headers: string[]; rows: string[][] })
             {row.map((cell, j) => (
               <td
                 key={j}
-                className={"py-1.5 " + (j === row.length - 1 ? "text-right tabular-nums text-slate-400" : "text-slate-200")}
+                className={
+                  "py-1.5 " +
+                  (j === row.length - 1 ? "text-right tabular-nums text-slate-400" : "text-slate-200")
+                }
               >
                 {cell}
               </td>

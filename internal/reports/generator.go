@@ -77,13 +77,48 @@ type AlarmLine struct {
 	OpenedAt string
 }
 
+// AgentLine is one endpoint row for agent report templates.
+type AgentLine struct {
+	Hostname            string
+	GroupName           string
+	Score               string
+	ComplianceScore     string
+	ComplianceSeverity  string
+	IssuesCount         int
+	PatchCount          int
+	PendingReboot       string
+	Status              string
+}
+
+// ComplianceIssueLine is a fleet compliance issue row.
+type ComplianceIssueLine struct {
+	Severity string
+	Category string
+	Title    string
+	Hostname string
+}
+
+// ComplianceSummary aggregates fleet posture for templates.
+type ComplianceSummary struct {
+	AgentCount          int
+	AvgScore            string
+	OpenIssues          int
+	OpenCVEs            int
+	HighPatchIssues     int
+	PendingRebootCount  int
+}
+
 // Context is the root template object.
 type Context struct {
-	Site            SiteContext
-	Now             time.Time
-	Appliances      []ApplianceLine
-	OpenAlarms      []AlarmLine
-	DiscoveredCount int
+	Site              SiteContext
+	Now               time.Time
+	Appliances        []ApplianceLine
+	OpenAlarms        []AlarmLine
+	OpenAgentAlarms   []AlarmLine
+	DiscoveredCount   int
+	Agents            []AgentLine
+	Compliance        ComplianceSummary
+	ComplianceIssues  []ComplianceIssueLine
 }
 
 // Generated is what Generate returns: the rendered body plus the
@@ -211,6 +246,96 @@ func buildContext(ctx context.Context, pool *pgxpool.Pool, siteID uuid.UUID) (*C
 	_ = pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM passive_snmp_inventory
 		 WHERE site_id = $1 AND status = 'active'`, siteID).Scan(&c.DiscoveredCount)
+
+	// Agent fleet + compliance context for agent-* templates.
+	agentRows, err := pool.Query(ctx, `
+		SELECT a.hostname, COALESCE(g.name,''),
+		       COALESCE(a.compliance_score,0), COALESCE(a.compliance_severity,''),
+		       a.compliance_issues_count, a.pending_reboot,
+		       CASE WHEN a.last_seen_at > NOW() - INTERVAL '5 minutes' THEN 'online' ELSE 'offline' END,
+		       COALESCE((a.last_metrics->'health'->>'missingPatchCount')::int, 0)
+		  FROM agents a
+		  LEFT JOIN device_groups g ON g.id = a.group_id
+		 WHERE a.site_id = $1 AND a.is_active
+		 ORDER BY a.hostname`, siteID)
+	if err == nil {
+		defer agentRows.Close()
+		var sumScore float64
+		for agentRows.Next() {
+			var line AgentLine
+			var score float64
+			var reboot bool
+			var patchCount int
+			if agentRows.Scan(&line.Hostname, &line.GroupName, &score, &line.ComplianceSeverity,
+				&line.IssuesCount, &reboot, &line.Status, &patchCount) != nil {
+				continue
+			}
+			line.ComplianceScore = strconv.FormatFloat(score, 'f', 1, 64)
+			line.Score = line.ComplianceScore // UX score not stored; show compliance as proxy in summary
+			line.PatchCount = patchCount
+			if reboot {
+				line.PendingReboot = "yes"
+				c.Compliance.PendingRebootCount++
+			} else {
+				line.PendingReboot = "no"
+			}
+			sumScore += score
+			c.Agents = append(c.Agents, line)
+		}
+		c.Compliance.AgentCount = len(c.Agents)
+		if len(c.Agents) > 0 {
+			c.Compliance.AvgScore = strconv.FormatFloat(sumScore/float64(len(c.Agents)), 'f', 1, 64)
+		} else {
+			c.Compliance.AvgScore = "—"
+		}
+	}
+	_ = pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM agent_compliance_issues i
+		  JOIN agents a ON a.id = i.agent_id
+		 WHERE a.site_id = $1 AND i.cleared_at IS NULL`, siteID).Scan(&c.Compliance.OpenIssues)
+	_ = pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM agent_vulnerabilities v
+		  JOIN agents a ON a.id = v.agent_id
+		 WHERE a.site_id = $1 AND v.cleared_at IS NULL`, siteID).Scan(&c.Compliance.OpenCVEs)
+	_ = pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM agent_compliance_issues i
+		  JOIN agents a ON a.id = i.agent_id
+		 WHERE a.site_id = $1 AND i.cleared_at IS NULL
+		   AND i.category = 'patch' AND i.severity IN ('critical','high')`, siteID).
+		Scan(&c.Compliance.HighPatchIssues)
+
+	issRows, _ := pool.Query(ctx, `
+		SELECT i.severity, i.category, i.title, a.hostname
+		  FROM agent_compliance_issues i
+		  JOIN agents a ON a.id = i.agent_id
+		 WHERE a.site_id = $1 AND i.cleared_at IS NULL
+		 ORDER BY CASE i.severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+		          i.detected_at DESC
+		 LIMIT 50`, siteID)
+	if issRows != nil {
+		defer issRows.Close()
+		for issRows.Next() {
+			var line ComplianceIssueLine
+			if issRows.Scan(&line.Severity, &line.Category, &line.Title, &line.Hostname) == nil {
+				c.ComplianceIssues = append(c.ComplianceIssues, line)
+			}
+		}
+	}
+
+	agentAlarmRows, _ := pool.Query(ctx, `
+		SELECT severity, title, opened_at::text
+		  FROM alarms
+		 WHERE site_id = $1 AND cleared_at IS NULL AND target_kind = 'agent'
+		 ORDER BY opened_at DESC LIMIT 100`, siteID)
+	if agentAlarmRows != nil {
+		defer agentAlarmRows.Close()
+		for agentAlarmRows.Next() {
+			var a AlarmLine
+			if agentAlarmRows.Scan(&a.Severity, &a.Title, &a.OpenedAt) == nil {
+				c.OpenAgentAlarms = append(c.OpenAgentAlarms, a)
+			}
+		}
+	}
 
 	return c, nil
 }

@@ -6,7 +6,10 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/NCLGISA/ScanRay-Sonar/internal/agentevents"
 )
 
 // handleAckAlarm marks an open alarm as acknowledged without closing it.
@@ -28,7 +31,6 @@ func (s *Server) handleAckAlarm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if tag.RowsAffected() == 0 {
-		// Either the row doesn't exist or it's already cleared. Distinguish for the operator.
 		var cleared *string
 		qerr := s.pool.QueryRow(r.Context(), `SELECT cleared_at::text FROM alarms WHERE id = $1`, id).Scan(&cleared)
 		if errors.Is(qerr, pgx.ErrNoRows) {
@@ -38,13 +40,12 @@ func (s *Server) handleAckAlarm(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, "already_cleared", "alarm already cleared")
 		return
 	}
+	s.emitAlarmSystemEvent(r, id, agentevents.KindAlarmAcked, "info", "acked")
 	s.store.Audit(r.Context(), "user", "alarm.ack", &uid, clientIP(r), map[string]any{"alarmId": id})
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// handleClearAlarm closes an open alarm. Operators use this to silence flaps
-// the engine wouldn't auto-clear (e.g. a removed device whose last truthy
-// metric will never be followed by a falsy one).
+// handleClearAlarm closes an open alarm.
 func (s *Server) handleClearAlarm(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -67,6 +68,23 @@ func (s *Server) handleClearAlarm(w http.ResponseWriter, r *http.Request) {
 	if s.nats != nil && s.nats.IsConnected() {
 		_ = s.nats.Publish("alarm.cleared", []byte(`{"alarmId":`+strconv.FormatInt(id, 10)+`,"manual":true}`))
 	}
+	s.emitAlarmSystemEvent(r, id, agentevents.KindAlarmCleared, "info", "cleared")
 	s.store.Audit(r.Context(), "user", "alarm.clear", &uid, clientIP(r), map[string]any{"alarmId": id})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) emitAlarmSystemEvent(r *http.Request, alarmID int64, kind, severity, verb string) {
+	var siteID uuid.UUID
+	var targetKind string
+	var targetID uuid.UUID
+	var title string
+	err := s.pool.QueryRow(r.Context(), `
+		SELECT site_id, target_kind, target_id, title FROM alarms WHERE id = $1`, alarmID).
+		Scan(&siteID, &targetKind, &targetID, &title)
+	if err != nil || targetKind != "agent" {
+		return
+	}
+	aid := targetID
+	_ = agentevents.Emit(r.Context(), s.pool, siteID, &aid, kind, severity,
+		title+" "+verb, "", map[string]any{"alarmId": alarmID})
 }

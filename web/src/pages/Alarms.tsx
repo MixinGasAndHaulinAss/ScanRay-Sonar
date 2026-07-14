@@ -16,6 +16,7 @@ type AlarmRule = {
   forSeconds?: number;
   clearForSeconds?: number;
   enabled?: boolean;
+  targetKind?: string;
 };
 
 export default function Alarms() {
@@ -48,8 +49,10 @@ export default function Alarms() {
   const [ruleChannels, setRuleChannels] = useState<string[]>([]);
   const [ruleForSec, setRuleForSec] = useState("0");
   const [ruleClearSec, setRuleClearSec] = useState("0");
+  const [ruleTargetKind, setRuleTargetKind] = useState("any");
   const [ruleErr, setRuleErr] = useState<string | null>(null);
   const [editingRule, setEditingRule] = useState<AlarmRule | null>(null);
+  const [alarmTargetFilter, setAlarmTargetFilter] = useState<"all" | "agent" | "appliance">("all");
 
   const resetRuleForm = () => {
     setRuleName("");
@@ -59,6 +62,7 @@ export default function Alarms() {
     setRuleChannels([]);
     setRuleForSec("0");
     setRuleClearSec("0");
+    setRuleTargetKind("any");
     setEditingRule(null);
     setRuleErr(null);
   };
@@ -73,6 +77,7 @@ export default function Alarms() {
         channelIds: ruleChannels,
         forSeconds: parseInt(ruleForSec, 10) || 0,
         clearForSeconds: parseInt(ruleClearSec, 10) || 0,
+        targetKind: ruleTargetKind,
       }),
     onSuccess: async () => {
       resetRuleForm();
@@ -92,6 +97,7 @@ export default function Alarms() {
         channelIds: ruleChannels,
         forSeconds: parseInt(ruleForSec, 10) || 0,
         clearForSeconds: parseInt(ruleClearSec, 10) || 0,
+        targetKind: ruleTargetKind,
       }),
     onSuccess: async () => {
       resetRuleForm();
@@ -156,6 +162,7 @@ export default function Alarms() {
     setRuleChannels(r.channelIds ?? []);
     setRuleForSec(String(r.forSeconds ?? 0));
     setRuleClearSec(String(r.clearForSeconds ?? 0));
+    setRuleTargetKind(String(r.targetKind ?? "any"));
     setRuleErr(null);
   }
 
@@ -188,6 +195,24 @@ export default function Alarms() {
       </div>
 
       {tab === "alarms" && (
+        <div className="space-y-3">
+          <div className="flex gap-2 text-xs">
+            {(["all", "agent", "appliance"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setAlarmTargetFilter(f)}
+                className={
+                  "rounded-full px-3 py-1 " +
+                  (alarmTargetFilter === f
+                    ? "bg-sonar-500/20 text-sonar-200"
+                    : "bg-ink-800 text-slate-400 hover:text-slate-200")
+                }
+              >
+                {f === "all" ? "All targets" : f}
+              </button>
+            ))}
+          </div>
         <div className="overflow-hidden rounded-xl border border-ink-800 bg-ink-900">
           <table className="w-full text-left text-sm">
             <thead className="bg-ink-800/60 text-xs uppercase text-slate-400">
@@ -201,7 +226,13 @@ export default function Alarms() {
               </tr>
             </thead>
             <tbody>
-              {alarms.data?.map((a) => {
+              {alarms.data
+                ?.filter(
+                  (a) =>
+                    alarmTargetFilter === "all" ||
+                    String(a.targetKind ?? "") === alarmTargetFilter,
+                )
+                .map((a) => {
                 const cleared = a.clearedAt as string | null | undefined;
                 const acked = a.ackedAt as string | null | undefined;
                 const auto = a.autoCleared as boolean | undefined;
@@ -250,6 +281,7 @@ export default function Alarms() {
             <div className="px-4 py-8 text-center text-sm text-slate-500">No alarms recorded.</div>
           )}
         </div>
+        </div>
       )}
 
       {tab === "rules" && (
@@ -296,6 +328,16 @@ export default function Alarms() {
                     </option>
                   ))}
                 </select>
+                <select
+                  className="rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm"
+                  value={ruleTargetKind}
+                  onChange={(e) => setRuleTargetKind(e.target.value)}
+                  title="Limit rule to appliances, agents, or both"
+                >
+                  <option value="any">any target</option>
+                  <option value="agent">agent only</option>
+                  <option value="appliance">appliance only</option>
+                </select>
                 <input
                   type="number"
                   min={0}
@@ -338,6 +380,11 @@ export default function Alarms() {
                 value={ruleExpr}
                 onChange={(e) => setRuleExpr(e.target.value)}
               />
+              <p className="text-[11px] text-slate-500">
+                Agent fields: cpuPct, memUsedRatio, diskUsedRatio, score, bsod24h, missingPatchCount,
+                pendingReboot, batteryHealthPct, wifiRssi, uptimeSec. Example:{" "}
+                <code className="text-slate-400">device.score &lt; 5</code>
+              </p>
               <div className="flex gap-2">
                 <button
                   type="submit"
@@ -367,6 +414,7 @@ export default function Alarms() {
                 <tr>
                   <th className="px-3 py-2">Name</th>
                   <th className="px-3 py-2">Severity</th>
+                  <th className="px-3 py-2">Target</th>
                   <th className="px-3 py-2">For / Clear</th>
                   <th className="px-3 py-2">Expression</th>
                   <th className="px-3 py-2 text-right">Actions</th>
@@ -377,6 +425,7 @@ export default function Alarms() {
                   <tr key={String(r.id)} className="border-t border-ink-800 align-top">
                     <td className="px-3 py-2">{String(r.name ?? "")}</td>
                     <td className="px-3 py-2">{String(r.severity ?? "")}</td>
+                    <td className="px-3 py-2 text-slate-400">{String(r.targetKind ?? "any")}</td>
                     <td className="px-3 py-2 font-mono text-[11px] text-slate-400">
                       {r.forSeconds ?? 0}s / {r.clearForSeconds ?? 0}s
                     </td>

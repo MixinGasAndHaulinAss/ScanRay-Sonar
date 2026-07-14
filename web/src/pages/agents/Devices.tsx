@@ -60,6 +60,7 @@ export default function Devices() {
   const [tagFilter, setTagFilter] = useState<string[]>(loadTagFilter);
   useEffect(() => saveTagFilter(tagFilter), [tagFilter]);
   const [search, setSearch] = useState("");
+  const [groupFilter, setGroupFilter] = useState("");
   const [groupBySite, setGroupBySite] = useState(() => {
     try {
       return localStorage.getItem(GROUP_KEY) === "site";
@@ -92,18 +93,27 @@ export default function Devices() {
     return Array.from(set).sort();
   }, [agents.data]);
 
+  const allGroups = useMemo(() => {
+    const map = new Map<string, string>();
+    agents.data?.forEach((a) => {
+      if (a.groupId && a.groupName) map.set(a.groupId, a.groupName);
+    });
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [agents.data]);
+
   const siteName = (id: string) => sites.data?.find((s) => s.id === id)?.name ?? id.slice(0, 8);
 
   const visibleAgents = useMemo(() => {
     const list = agents.data ?? [];
     const q = search.trim().toLowerCase();
     let filtered = list.filter((a) => {
+      if (groupFilter && a.groupId !== groupFilter) return false;
       if (tagFilter.length > 0) {
         const tags = new Set(a.tags ?? []);
         for (const t of tagFilter) if (!tags.has(t)) return false;
       }
       if (q) {
-        const hay = `${a.hostname} ${a.os} ${a.osVersion} ${a.primaryIp ?? ""} ${a.publicIp ?? ""} ${(a.tags ?? []).join(" ")} ${siteName(a.siteId)}`;
+        const hay = `${a.hostname} ${a.os} ${a.osVersion} ${a.primaryIp ?? ""} ${a.publicIp ?? ""} ${(a.tags ?? []).join(" ")} ${siteName(a.siteId)} ${a.groupName ?? ""}`;
         if (!hay.toLowerCase().includes(q)) return false;
       }
       return true;
@@ -138,7 +148,7 @@ export default function Devices() {
       }
     });
     return filtered;
-  }, [agents.data, tagFilter, search, sort, sites.data]);
+  }, [agents.data, tagFilter, search, sort, sites.data, groupFilter]);
 
   const groups = useMemo(() => {
     if (!groupBySite) return [{ key: "", label: "", rows: visibleAgents }];
@@ -234,6 +244,18 @@ export default function Devices() {
             onChange={setTagFilter}
             mode="and"
           />
+          <select
+            value={groupFilter}
+            onChange={(e) => setGroupFilter(e.target.value)}
+            className="h-8 rounded-md border border-ink-700 bg-ink-950 px-2 text-xs text-slate-100"
+          >
+            <option value="">All groups</option>
+            {allGroups.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
           <label className="flex items-center gap-1.5 text-xs text-slate-400">
             <input
               type="checkbox"
@@ -266,6 +288,7 @@ export default function Devices() {
             <tr>
               <SortTh k="hostname">Hostname</SortTh>
               <th className="px-3 py-2">Site</th>
+              <th className="px-3 py-2">Group</th>
               <th className="px-3 py-2">Tags</th>
               <th className="px-3 py-2">OS</th>
               <SortTh k="cpu">CPU</SortTh>
@@ -280,14 +303,14 @@ export default function Devices() {
           <tbody>
             {agents.isLoading && (
               <tr>
-                <td colSpan={11} className="px-4 py-6 text-center text-slate-500">
+                <td colSpan={12} className="px-4 py-6 text-center text-slate-500">
                   Loading…
                 </td>
               </tr>
             )}
             {!agents.isLoading && visibleAgents.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-6 text-center text-slate-500">
+                <td colSpan={12} className="px-4 py-6 text-center text-slate-500">
                   {agents.data?.length === 0
                     ? "No agents enrolled yet. Open Enrollment tokens to issue an install one-liner."
                     : "No agents match the current filter."}
@@ -298,7 +321,7 @@ export default function Devices() {
               <Fragment key={g.key || "all"}>
                 {groupBySite && (
                   <tr className="bg-ink-950/80">
-                    <td colSpan={11} className="px-3 py-1.5 text-xs font-semibold text-slate-300">
+                    <td colSpan={12} className="px-3 py-1.5 text-xs font-semibold text-slate-300">
                       {g.label}{" "}
                       <span className="font-normal text-slate-500">({g.rows.length})</span>
                     </td>
@@ -324,6 +347,7 @@ export default function Devices() {
                         )}
                       </td>
                       <td className="px-3 py-2 text-slate-400">{siteName(a.siteId)}</td>
+                      <td className="px-3 py-2 text-slate-400">{a.groupName || "—"}</td>
                       <td className="px-3 py-2">
                         {a.tags && a.tags.length > 0 ? (
                           <div className="flex max-w-[12rem] flex-wrap gap-1">

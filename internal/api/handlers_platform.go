@@ -426,7 +426,7 @@ func (s *Server) handleDeleteWebhook(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListAlarmRules(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.pool.Query(r.Context(), `
 		SELECT id, COALESCE(site_id::text,''), name, severity, expression, enabled,
-		       channel_ids, for_seconds, clear_for_seconds, created_at
+		       channel_ids, for_seconds, clear_for_seconds, COALESCE(target_kind,'any'), created_at
 		  FROM alarm_rules ORDER BY created_at DESC`)
 	if err != nil {
 		writeJSON(w, http.StatusOK, []any{})
@@ -436,12 +436,12 @@ func (s *Server) handleListAlarmRules(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for rows.Next() {
 		var id uuid.UUID
-		var siteID, name, sev, expr string
+		var siteID, name, sev, expr, targetKind string
 		var enabled bool
 		var channelIDs []uuid.UUID
 		var forSec, clearSec int
 		var created time.Time
-		if err := rows.Scan(&id, &siteID, &name, &sev, &expr, &enabled, &channelIDs, &forSec, &clearSec, &created); err != nil {
+		if err := rows.Scan(&id, &siteID, &name, &sev, &expr, &enabled, &channelIDs, &forSec, &clearSec, &targetKind, &created); err != nil {
 			continue
 		}
 		chStr := make([]string, 0, len(channelIDs))
@@ -452,7 +452,7 @@ func (s *Server) handleListAlarmRules(w http.ResponseWriter, r *http.Request) {
 			"id": id.String(), "siteId": nullIfEmpty(siteID), "name": name,
 			"severity": sev, "expression": expr, "enabled": enabled,
 			"channelIds": chStr, "forSeconds": forSec, "clearForSeconds": clearSec,
-			"createdAt": created,
+			"targetKind": targetKind, "createdAt": created,
 		})
 	}
 	writeJSON(w, http.StatusOK, out)

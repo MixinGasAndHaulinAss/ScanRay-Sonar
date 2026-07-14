@@ -35,3 +35,27 @@ Enrollment tokens are single-use (or short-lived) secrets. Revoke unused tokens.
 ## Rename, update, delete
 
 Siteadmins can patch metadata or remove an agent from inventory. Deleting removes Sonar’s record; uninstall the probe on the host separately if you no longer want it reporting.
+
+## Device groups
+
+**Devices → Groups** manages named groups per site. Membership is **1:1** (each agent has at most one `groupId`). Assign/remove members from the Groups tab or the group picker on a device detail page. Details grid has a Group column and filter chip.
+
+## Data explorer
+
+**Devices → Data** queries historical DEX indices (not full snapshot blobs): `devices`, `scores`, `health`, `processes`, `apps`, `patches`, `compliance_issues`, `vulnerabilities`. Filter by site/group/time and export CSV.
+
+## System events
+
+**Devices → Events** is a timeline of `alarm.*`, `group.changed`, `agent.online`/`offline`, and `compliance.changed` signals. Also available via `GET /agents/events`.
+
+## Compliance
+
+**Devices → Compliance** shows fleet posture (0–100 score distinct from UX 0–10). Issues cover missing patches, pending reboot, Win11 readiness, Secure Boot, EDR absence, stale agents, and **CVE-lite** heuristics from a static in-repo map (`internal/compliance/cve_map.json`) — not a live NVD scanner. Per-device **Compliance** tab lists open issues and CVEs.
+
+## Agent alerts
+
+Alarm rules can set `targetKind` to `agent`, `appliance`, or `any`. Seeded agent rules cover high CPU/memory, low UX score, missing patches, BSOD, and pending reboot. Follow-ups are **notification channels only** (no remote scripts).
+
+## Agent reports
+
+**Devices → Reports** can generate Markdown downloads for `agent-fleet-summary`, `agent-compliance`, and `agent-patches` (same `/report-templates` + `/reports` API as appliance reports).

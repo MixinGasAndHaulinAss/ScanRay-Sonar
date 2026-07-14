@@ -19,6 +19,7 @@ import (
 const winDEXScript = `
 $out = [ordered]@{
   installedApps = @()
+  installedExtensions = @()
   missingPatches = @()
   eventLog = @()
   powerEvents = @()
@@ -180,15 +181,46 @@ try {
   }
 } catch {}
 
+# Chrome / Edge extension inventory (best-effort, first profile).
+try {
+  $extRoots = @(
+    @{ browser = 'Chrome'; path = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Extensions" },
+    @{ browser = 'Edge'; path = "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Extensions" }
+  )
+  foreach ($root in $extRoots) {
+    if (-not (Test-Path $root.path)) { continue }
+    Get-ChildItem $root.path -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+      $extId = $_.Name
+      $verDir = Get-ChildItem $_.FullName -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+      if (-not $verDir) { return }
+      $manifest = Join-Path $verDir.FullName 'manifest.json'
+      if (-not (Test-Path $manifest)) { return }
+      try {
+        $m = Get-Content $manifest -Raw -ErrorAction Stop | ConvertFrom-Json
+        $name = [string]$m.name
+        if ($name -match '^__MSG_') { $name = $extId }
+        $out.installedExtensions += [ordered]@{
+          browser = $root.browser
+          name = $name
+          version = [string]$m.version
+          id = $extId
+        }
+      } catch {}
+      if ($out.installedExtensions.Count -ge 100) { break }
+    }
+  }
+} catch {}
+
 $out | ConvertTo-Json -Compress -Depth 6
 `
 
 type winDEXResult struct {
-	InstalledApps  []InstalledApp  `json:"installedApps"`
-	MissingPatches []MissingPatch  `json:"missingPatches"`
-	Win11Readiness *Win11Readiness `json:"win11Readiness"`
-	EventLog       []EventLogRow   `json:"eventLog"`
-	PowerEvents    []PowerEvent    `json:"powerEvents"`
+	InstalledApps       []InstalledApp     `json:"installedApps"`
+	InstalledExtensions []BrowserExtension `json:"installedExtensions"`
+	MissingPatches      []MissingPatch     `json:"missingPatches"`
+	Win11Readiness      *Win11Readiness    `json:"win11Readiness"`
+	EventLog            []EventLogRow      `json:"eventLog"`
+	PowerEvents         []PowerEvent       `json:"powerEvents"`
 }
 
 func collectDEXInventoryOS(ctx context.Context) *DexInventory {
@@ -209,12 +241,13 @@ func collectDEXInventoryOS(ctx context.Context) *DexInventory {
 		return &DexInventory{CollectedAt: time.Now().UTC().Format(time.RFC3339)}
 	}
 	return &DexInventory{
-		InstalledApps:  r.InstalledApps,
-		MissingPatches: r.MissingPatches,
-		Win11Readiness: r.Win11Readiness,
-		EventLog:       r.EventLog,
-		PowerEvents:    r.PowerEvents,
-		CollectedAt:    time.Now().UTC().Format(time.RFC3339),
+		InstalledApps:       r.InstalledApps,
+		InstalledExtensions: r.InstalledExtensions,
+		MissingPatches:      r.MissingPatches,
+		Win11Readiness:      r.Win11Readiness,
+		EventLog:            r.EventLog,
+		PowerEvents:         r.PowerEvents,
+		CollectedAt:         time.Now().UTC().Format(time.RFC3339),
 	}
 }
 

@@ -196,6 +196,12 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/agents/overview/network-performance", s.handleOverviewNetworkPerformance)
 			r.Get("/agents/overview/applications-performance", s.handleOverviewApplicationsPerformance)
 			r.Get("/agents/overview/user-experience", s.handleOverviewUserExperience)
+			// DEX platform routes — static segments before /agents/{id}.
+			r.Get("/agents/data", s.handleListAgentDataIndices)
+			r.Get("/agents/data/{index}", s.handleQueryAgentDataIndex)
+			r.Get("/agents/events", s.handleListAgentEvents)
+			r.Get("/agents/compliance", s.handleAgentsComplianceSummary)
+			r.Get("/agents/{id}/compliance", s.handleAgentComplianceDetail)
 			// chi matches static segments before wildcards, so the
 			// enrollment-tokens routes below win over /agents/{id}
 			// even though both look like "/agents/<something>".
@@ -255,6 +261,13 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/alarms", s.handleListAlarms)
 			r.With(requireRole(auth.RoleSiteAdmin)).Post("/alarms/{id}/ack", s.handleAckAlarm)
 			r.With(requireRole(auth.RoleSiteAdmin)).Post("/alarms/{id}/clear", s.handleClearAlarm)
+
+			r.Get("/device-groups", s.handleListDeviceGroups)
+			r.With(requireRole(auth.RoleSiteAdmin)).Post("/device-groups", s.handleCreateDeviceGroup)
+			r.With(requireRole(auth.RoleSiteAdmin)).Patch("/device-groups/{id}", s.handlePatchDeviceGroup)
+			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/device-groups/{id}", s.handleDeleteDeviceGroup)
+			r.With(requireRole(auth.RoleSiteAdmin)).Post("/device-groups/{id}/members", s.handleAddDeviceGroupMembers)
+			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/device-groups/{id}/members", s.handleRemoveDeviceGroupMembers)
 
 			r.Get("/documents", s.handleListDocuments)
 			r.Get("/documents/{id}/download", s.handleDownloadDocument)
@@ -427,6 +440,7 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		eng := alarms.NewEngine(s.pool, s.log.With(slog.String("component", "alarms")), s.nats, s.sealer, s.store, smtpFB)
 		go eng.Run(ctx)
 	}
+	go s.runAgentPresenceWatcher(ctx)
 	go retention.Runner(ctx, s.pool, s.log.With(slog.String("component", "retention")))
 	go func() {
 		s.log.Info("listening", "addr", s.cfg.BindAddr, "env", s.cfg.Env)

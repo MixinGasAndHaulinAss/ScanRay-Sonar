@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
 
+	"github.com/NCLGISA/ScanRay-Sonar/internal/agentevents"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/crypto"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/db"
 	"github.com/NCLGISA/ScanRay-Sonar/internal/notify"
@@ -27,6 +28,7 @@ type ruleRow struct {
 	ChannelIDs      []uuid.UUID
 	ForSeconds      int
 	ClearForSeconds int
+	TargetKind      string // appliance | agent | any
 }
 
 // metricEval bundles NATS metric payload fields shared by appliance + agent streams.
@@ -103,7 +105,8 @@ func (e *Engine) refreshRules(ctx context.Context) {
 	rows, err := e.pool.Query(ctx, `
 		SELECT id, COALESCE(site_id::text,''), name, severity, expression,
 		       COALESCE(channel_ids, '{}'),
-		       COALESCE(for_seconds, 0), COALESCE(clear_for_seconds, 0)
+		       COALESCE(for_seconds, 0), COALESCE(clear_for_seconds, 0),
+		       COALESCE(target_kind, 'any')
 		  FROM alarm_rules WHERE enabled ORDER BY created_at DESC`)
 	if err != nil {
 		e.log.Warn("alarm rules refresh failed", "err", err)
@@ -114,8 +117,11 @@ func (e *Engine) refreshRules(ctx context.Context) {
 	for rows.Next() {
 		var r ruleRow
 		var siteTxt string
-		if rows.Scan(&r.ID, &siteTxt, &r.Name, &r.Severity, &r.Expression, &r.ChannelIDs, &r.ForSeconds, &r.ClearForSeconds) != nil {
+		if rows.Scan(&r.ID, &siteTxt, &r.Name, &r.Severity, &r.Expression, &r.ChannelIDs, &r.ForSeconds, &r.ClearForSeconds, &r.TargetKind) != nil {
 			continue
+		}
+		if r.TargetKind == "" {
+			r.TargetKind = "any"
 		}
 		if siteTxt != "" {
 			if u, err := uuid.Parse(siteTxt); err == nil {
@@ -247,6 +253,9 @@ func (e *Engine) evaluate(m metricEval) {
 		if rl.SiteID != nil && *rl.SiteID != m.siteID {
 			continue
 		}
+		if rl.TargetKind != "" && rl.TargetKind != "any" && rl.TargetKind != m.targetKind {
+			continue
+		}
 		truthy, err := EvalMini(rl.Expression, m.env)
 		if err != nil {
 			continue
@@ -310,6 +319,13 @@ func (e *Engine) maybeOpen(m metricEval, rl ruleRow, dedup string) {
 		return
 	}
 
+	if m.targetKind == "agent" {
+		aid := m.targetUUID
+		_ = agentevents.Emit(context.Background(), e.pool, m.siteID, &aid,
+			agentevents.KindAlarmOpened, rl.Severity, title, rl.Expression,
+			map[string]any{"alarmId": alarmID, "ruleId": rl.ID.String()})
+	}
+
 	pub := map[string]any{"ruleId": rl.ID.String(), "alarmId": alarmID}
 	switch m.targetKind {
 	case "appliance":
@@ -334,6 +350,12 @@ func (e *Engine) maybeAutoClear(m metricEval, rl ruleRow, dedup string) {
 	if err != nil {
 		// No row to clear (most common path) — silent.
 		return
+	}
+	if m.targetKind == "agent" {
+		aid := m.targetUUID
+		_ = agentevents.Emit(context.Background(), e.pool, m.siteID, &aid,
+			agentevents.KindAlarmCleared, "info", title+" cleared", rl.Expression,
+			map[string]any{"alarmId": alarmID, "ruleId": rl.ID.String(), "auto": true})
 	}
 	if e.nc != nil && e.nc.IsConnected() {
 		_ = e.nc.Publish("alarm.cleared", []byte(`{"alarmId":`+strconv.FormatInt(alarmID, 10)+`,"auto":true}`))

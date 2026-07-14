@@ -33,9 +33,26 @@ try {
   if ($b) {
     $stat = Get-CimInstance -Namespace root\wmi -ClassName BatteryStaticData -ErrorAction SilentlyContinue | Select-Object -First 1
     $full = Get-CimInstance -Namespace root\wmi -ClassName BatteryFullChargedCapacity -ErrorAction SilentlyContinue | Select-Object -First 1
+    $cycle = Get-CimInstance -Namespace root\wmi -ClassName BatteryCycleCount -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($stat -and $full -and $stat.DesignedCapacity -gt 0) {
       $out.batteryHealthPct = [math]::Round(($full.FullChargedCapacity / $stat.DesignedCapacity) * 100, 1)
+      $out.batteryDesignedMWh = [int]$stat.DesignedCapacity
+      $out.batteryFullChargeMWh = [int]$full.FullChargedCapacity
+      $out.batteryWearPct = [math]::Round(100 - $out.batteryHealthPct, 1)
     }
+    if ($cycle -and $cycle.CycleCount -ne $null) {
+      $out.batteryCycleCount = [int]$cycle.CycleCount
+    }
+  }
+} catch {}
+
+# Last cold-boot duration from Diagnostics-Performance Event ID 100 (BootPerformance)
+try {
+  $boot = Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Diagnostics-Performance/Operational'; Id=100} -MaxEvents 1 -ErrorAction Stop
+  if ($boot) {
+    $xml = [xml]$boot.ToXml()
+    $bd = $xml.Event.EventData.Data | Where-Object { $_.Name -eq 'BootTime' } | Select-Object -First 1
+    if ($bd -and $bd.'#text') { $out.bootDurationMs = [int64]$bd.'#text' }
   }
 } catch {}
 
@@ -193,6 +210,11 @@ $out | ConvertTo-Json -Compress
 // keys decode as zero values; we treat the zero value as "absent".
 type winPSResult struct {
 	BatteryHealthPct        *float64            `json:"batteryHealthPct,omitempty"`
+	BatteryCycleCount       *int                `json:"batteryCycleCount,omitempty"`
+	BatteryDesignedMWh      *int                `json:"batteryDesignedMWh,omitempty"`
+	BatteryFullChargeMWh    *int                `json:"batteryFullChargeMWh,omitempty"`
+	BatteryWearPct          *float64            `json:"batteryWearPct,omitempty"`
+	BootDurationMs          *int64              `json:"bootDurationMs,omitempty"`
 	MissingPatchCount       *int                `json:"missingPatchCount,omitempty"`
 	BSODCount24h            *int                `json:"bsodCount24h,omitempty"`
 	UserRebootCount24h      *int                `json:"userRebootCount24h,omitempty"`
@@ -230,6 +252,21 @@ func winRunPSBatch(ctx context.Context, h *HealthSignals) {
 	}
 	if r.BatteryHealthPct != nil {
 		h.BatteryHealthPct = r.BatteryHealthPct
+	}
+	if r.BatteryCycleCount != nil {
+		h.BatteryCycleCount = r.BatteryCycleCount
+	}
+	if r.BatteryDesignedMWh != nil {
+		h.BatteryDesignedMWh = r.BatteryDesignedMWh
+	}
+	if r.BatteryFullChargeMWh != nil {
+		h.BatteryFullChargeMWh = r.BatteryFullChargeMWh
+	}
+	if r.BatteryWearPct != nil {
+		h.BatteryWearPct = r.BatteryWearPct
+	}
+	if r.BootDurationMs != nil {
+		h.BootDurationMs = r.BootDurationMs
 	}
 	if r.MissingPatchCount != nil {
 		h.MissingPatchCount = r.MissingPatchCount

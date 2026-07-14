@@ -455,6 +455,7 @@ type updateAgentReq struct {
 	IsActive    *bool     `json:"isActive,omitempty"`
 	SiteID      *string   `json:"siteId,omitempty"` // move agent between sites
 	Criticality *string   `json:"criticality,omitempty"`
+	GroupID     *string   `json:"groupId,omitempty"` // empty string clears
 }
 
 // handleUpdateAgent applies a partial update to an agent row. Used
@@ -518,6 +519,18 @@ func (s *Server) handleUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		default:
 			writeErr(w, http.StatusBadRequest, "bad_request", "invalid criticality")
 			return
+		}
+	}
+	if req.GroupID != nil {
+		if *req.GroupID == "" {
+			add("group_id", nil)
+		} else {
+			gid, err := uuid.Parse(*req.GroupID)
+			if err != nil {
+				writeErr(w, http.StatusBadRequest, "bad_request", "groupId must be a UUID")
+				return
+			}
+			add("group_id", gid)
 		}
 	}
 	if len(sets) == 0 {

@@ -88,6 +88,8 @@ type Snapshot struct {
 	EventLog         []EventLogRow      `json:"eventLog,omitempty"`
 	PowerEvents      []PowerEvent       `json:"powerEvents,omitempty"`
 	StorageIO        []StorageIOEvent   `json:"storageIo,omitempty"`
+	// InstalledExtensions is Chrome/Edge browser extension inventory (Windows).
+	InstalledExtensions []BrowserExtension `json:"installedExtensions,omitempty"`
 
 	// CollectionWarnings collects non-fatal errors (e.g. one disk
 	// counter unavailable, ports enumeration denied) so the UI can
@@ -327,6 +329,7 @@ func CollectSnapshot(ctx context.Context, hostname string) Snapshot {
 	// DEX inventory + live rings.
 	if inv := dex.latestInventory(); inv != nil {
 		s.InstalledApps = inv.InstalledApps
+		s.InstalledExtensions = inv.InstalledExtensions
 		s.MissingPatches = inv.MissingPatches
 		s.Win11Readiness = inv.Win11Readiness
 		s.EventLog = inv.EventLog
