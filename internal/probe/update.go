@@ -71,11 +71,15 @@ func checkAndMaybeUpdate(ctx context.Context, log *slog.Logger, cfg *Config) err
 		return err
 	}
 	local := version.Get().Version
-	if cfg.AgentVersion != "" {
-		local = cfg.AgentVersion
-	}
+	// Prefer the running binary's CalVer over agent.json's enroll-time
+	// stamp. Stale AgentVersion after a successful self-update would
+	// otherwise re-download forever and restart every check interval,
+	// starving the 5-minute health/DEX loop.
 	if !probesign.CompareCalVer(local, man.Version) {
 		log.Debug("probe up to date", "local", local, "remote", man.Version)
+		if cfg.AgentVersion != local {
+			cfg.AgentVersion = local
+		}
 		return nil
 	}
 	if err := probesign.Verify(man.SHA256, man.Sig); err != nil {

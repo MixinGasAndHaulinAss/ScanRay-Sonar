@@ -126,6 +126,15 @@ func cmdRun(args []string) error {
 	if err != nil {
 		return err
 	}
+	// Keep agent.json CalVer in lockstep with the running binary so
+	// self-update does not treat a stale enroll stamp as "outdated"
+	// and restart forever.
+	if v := version.Get().Version; cfg.AgentVersion != v {
+		cfg.AgentVersion = v
+		if err := probe.SaveConfig(*cfgPath, cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "heal agentVersion: %v\n", err)
+		}
+	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
