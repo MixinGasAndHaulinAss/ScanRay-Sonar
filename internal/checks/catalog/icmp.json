@@ -1,0 +1,62 @@
+{
+  "id": "icmp",
+  "title": "ICMP ping",
+  "mechanism": "icmp",
+  "runner": "either",
+  "params": [
+    {
+      "name": "host",
+      "type": "string",
+      "required": true,
+      "label": "Target host"
+    },
+    {
+      "name": "timeoutSec",
+      "type": "number",
+      "required": false,
+      "default": 5,
+      "label": "Timeout (s)"
+    },
+    {
+      "name": "count",
+      "type": "number",
+      "required": false,
+      "default": 4,
+      "label": "Echo count"
+    }
+  ],
+  "channels": [
+    {
+      "key": "response_time_ms",
+      "label": "Response Time",
+      "valueKind": "gauge",
+      "defaultAlarm": {
+        "op": ">",
+        "value": 500,
+        "severity": "warning",
+        "name": "ICMP latency high",
+        "flatField": "icmp_response_time_ms"
+      }
+    },
+    {
+      "key": "packet_loss_pct",
+      "label": "Packet Loss %",
+      "valueKind": "gauge",
+      "defaultAlarm": {
+        "op": ">",
+        "value": 0,
+        "severity": "warning",
+        "name": "ICMP packet loss",
+        "flatField": "icmp_packet_loss_pct"
+      }
+    },
+    {
+      "key": "up",
+      "label": "Up",
+      "valueKind": "gauge"
+    }
+  ],
+  "sourceIds": [
+    "ping"
+  ]
+}

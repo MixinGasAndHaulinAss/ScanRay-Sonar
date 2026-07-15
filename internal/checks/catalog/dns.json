@@ -1,0 +1,61 @@
+{
+  "id": "dns",
+  "title": "DNS query",
+  "mechanism": "dns",
+  "runner": "either",
+  "params": [
+    {
+      "name": "host",
+      "type": "string",
+      "required": true,
+      "label": "Target host"
+    },
+    {
+      "name": "timeoutSec",
+      "type": "number",
+      "required": false,
+      "default": 5,
+      "label": "Timeout (s)"
+    },
+    {
+      "name": "recordType",
+      "type": "string",
+      "required": false,
+      "default": "A",
+      "label": "Record type"
+    },
+    {
+      "name": "resolver",
+      "type": "string",
+      "required": false,
+      "label": "Resolver IP (optional)"
+    }
+  ],
+  "channels": [
+    {
+      "key": "response_time_ms",
+      "label": "Response Time",
+      "valueKind": "gauge"
+    },
+    {
+      "key": "record_count",
+      "label": "Record Count",
+      "valueKind": "gauge"
+    },
+    {
+      "key": "up",
+      "label": "Records Resolved",
+      "valueKind": "gauge",
+      "defaultAlarm": {
+        "op": "!=",
+        "value": 1,
+        "severity": "critical",
+        "name": "DNS resolve failed",
+        "flatField": "dns_up"
+      }
+    }
+  ],
+  "sourceIds": [
+    "dns_v2"
+  ]
+}

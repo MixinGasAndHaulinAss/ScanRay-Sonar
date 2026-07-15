@@ -1,0 +1,49 @@
+{
+  "id": "tcp",
+  "title": "TCP port",
+  "mechanism": "tcp",
+  "runner": "either",
+  "params": [
+    {
+      "name": "host",
+      "type": "string",
+      "required": true,
+      "label": "Target host"
+    },
+    {
+      "name": "timeoutSec",
+      "type": "number",
+      "required": false,
+      "default": 5,
+      "label": "Timeout (s)"
+    },
+    {
+      "name": "port",
+      "type": "number",
+      "required": true,
+      "label": "TCP port"
+    }
+  ],
+  "channels": [
+    {
+      "key": "response_time_ms",
+      "label": "Available",
+      "valueKind": "gauge"
+    },
+    {
+      "key": "up",
+      "label": "Up",
+      "valueKind": "gauge",
+      "defaultAlarm": {
+        "op": "!=",
+        "value": 1,
+        "severity": "critical",
+        "name": "TCP port down",
+        "flatField": "tcp_up"
+      }
+    }
+  ],
+  "sourceIds": [
+    "port_range"
+  ]
+}

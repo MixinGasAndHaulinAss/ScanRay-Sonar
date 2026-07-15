@@ -98,6 +98,7 @@ func (e *Engine) Run(ctx context.Context) {
 
 	_, _ = e.nc.Subscribe("metrics.appliance", e.onApplianceMetric)
 	_, _ = e.nc.Subscribe("metrics.agent", e.onAgentMetric)
+	_, _ = e.nc.Subscribe("metrics.check", e.onCheckMetric)
 	<-ctx.Done()
 }
 
@@ -185,7 +186,7 @@ func (e *Engine) onApplianceMetric(msg *nats.Msg) {
 // handled by the caller.
 func addVendorEnv(env, payload map[string]any) {
 	skip := map[string]struct{}{
-		"applianceId": {}, "siteId": {}, "agentId": {},
+		"applianceId": {}, "siteId": {}, "agentId": {}, "checkId": {},
 		"vendor": {}, "criticality": {},
 		"cpuPct": {}, "memUsedRatio": {},
 	}
@@ -235,6 +236,47 @@ func (e *Engine) onAgentMetric(msg *nats.Msg) {
 		targetKind:  "agent",
 		targetUUID:  agentUUID,
 		targetKey:   agentIDStr,
+		env:         env,
+		payloadJSON: append(json.RawMessage(nil), msg.Data...),
+	})
+}
+
+func (e *Engine) onCheckMetric(msg *nats.Msg) {
+	var payload map[string]any
+	if err := json.Unmarshal(msg.Data, &payload); err != nil {
+		return
+	}
+	checkIDStr, _ := payload["checkId"].(string)
+	siteIDStr, _ := payload["siteId"].(string)
+	if checkIDStr == "" || siteIDStr == "" {
+		return
+	}
+	siteUUID, err := uuid.Parse(siteIDStr)
+	if err != nil {
+		return
+	}
+	checkUUID, err := uuid.Parse(checkIDStr)
+	if err != nil {
+		return
+	}
+	env := map[string]any{
+		"typeId": payload["typeId"],
+		"name":   payload["name"],
+		"runner": payload["runner"],
+	}
+	if ok, okb := payload["ok"].(bool); okb {
+		if ok {
+			env["ok"] = 1.0
+		} else {
+			env["ok"] = 0.0
+		}
+	}
+	addVendorEnv(env, payload)
+	e.evaluate(metricEval{
+		siteID:      siteUUID,
+		targetKind:  "check",
+		targetUUID:  checkUUID,
+		targetKey:   checkIDStr,
 		env:         env,
 		payloadJSON: append(json.RawMessage(nil), msg.Data...),
 	})

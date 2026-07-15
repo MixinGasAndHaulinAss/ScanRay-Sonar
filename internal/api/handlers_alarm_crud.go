@@ -59,8 +59,8 @@ func (s *Server) handleCreateAlarmRule(w http.ResponseWriter, r *http.Request) {
 	if targetKind == "" {
 		targetKind = "any"
 	}
-	if targetKind != "any" && targetKind != "agent" && targetKind != "appliance" {
-		writeErr(w, http.StatusBadRequest, "bad_request", "targetKind must be any|agent|appliance")
+	if targetKind != "any" && targetKind != "agent" && targetKind != "appliance" && targetKind != "check" {
+		writeErr(w, http.StatusBadRequest, "bad_request", "targetKind must be any|agent|appliance|check")
 		return
 	}
 	var id uuid.UUID
@@ -147,8 +147,8 @@ func (s *Server) handlePatchAlarmRule(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.TargetKind != nil {
 		tk := *req.TargetKind
-		if tk != "any" && tk != "agent" && tk != "appliance" {
-			writeErr(w, http.StatusBadRequest, "bad_request", "targetKind must be any|agent|appliance")
+		if tk != "any" && tk != "agent" && tk != "appliance" && tk != "check" {
+			writeErr(w, http.StatusBadRequest, "bad_request", "targetKind must be any|agent|appliance|check")
 			return
 		}
 		add("target_kind", tk)

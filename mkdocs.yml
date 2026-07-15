@@ -56,6 +56,7 @@ nav:
   - World map: world.md
   - Site documents: documents.md
   - Alarms: alarms.md
+  - Checks: checks.md
   - Reports: reports.md
   - Discovered SNMP: passive-snmp.md
   - API keys: api-keys.md

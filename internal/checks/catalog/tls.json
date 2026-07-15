@@ -1,0 +1,68 @@
+{
+  "id": "tls",
+  "title": "TLS certificate",
+  "mechanism": "tls",
+  "runner": "either",
+  "params": [
+    {
+      "name": "host",
+      "type": "string",
+      "required": true,
+      "label": "Target host"
+    },
+    {
+      "name": "timeoutSec",
+      "type": "number",
+      "required": false,
+      "default": 5,
+      "label": "Timeout (s)"
+    },
+    {
+      "name": "port",
+      "type": "number",
+      "required": false,
+      "default": 443,
+      "label": "TLS port"
+    },
+    {
+      "name": "sni",
+      "type": "string",
+      "required": false,
+      "label": "SNI / server name"
+    }
+  ],
+  "channels": [
+    {
+      "key": "days_to_expiration",
+      "label": "Days to Expiration",
+      "valueKind": "gauge",
+      "defaultAlarm": {
+        "op": "<",
+        "value": 7.0,
+        "severity": "critical",
+        "name": "TLS cert expiring soon",
+        "flatField": "tls_days_to_expiration"
+      }
+    },
+    {
+      "key": "cn_match",
+      "label": "Common Name Check",
+      "valueKind": "gauge"
+    },
+    {
+      "key": "up",
+      "label": "Up",
+      "valueKind": "gauge",
+      "defaultAlarm": {
+        "op": "!=",
+        "value": 1,
+        "severity": "critical",
+        "name": "TLS handshake failed",
+        "flatField": "tls_up"
+      }
+    }
+  ],
+  "sourceIds": [
+    "ssl_certificate"
+  ]
+}

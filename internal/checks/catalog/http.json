@@ -1,0 +1,62 @@
+{
+  "id": "http",
+  "title": "HTTP / HTTPS",
+  "mechanism": "http",
+  "runner": "either",
+  "params": [
+    {
+      "name": "url",
+      "type": "string",
+      "required": true,
+      "label": "URL"
+    },
+    {
+      "name": "expectCode",
+      "type": "number",
+      "required": false,
+      "default": 200,
+      "label": "Expected status"
+    },
+    {
+      "name": "timeoutSec",
+      "type": "number",
+      "required": false,
+      "default": 10,
+      "label": "Timeout (s)"
+    }
+  ],
+  "channels": [
+    {
+      "key": "response_time_ms",
+      "label": "Response Time",
+      "valueKind": "gauge",
+      "defaultAlarm": {
+        "op": ">",
+        "value": 5000,
+        "severity": "warning",
+        "name": "HTTP latency high",
+        "flatField": "http_response_time_ms"
+      }
+    },
+    {
+      "key": "status_code",
+      "label": "HTTP Status",
+      "valueKind": "gauge"
+    },
+    {
+      "key": "up",
+      "label": "Up",
+      "valueKind": "gauge",
+      "defaultAlarm": {
+        "op": "!=",
+        "value": 1,
+        "severity": "critical",
+        "name": "HTTP check failed",
+        "flatField": "http_up"
+      }
+    }
+  ],
+  "sourceIds": [
+    "http_advanced"
+  ]
+}

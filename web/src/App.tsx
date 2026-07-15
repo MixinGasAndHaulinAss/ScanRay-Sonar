@@ -22,6 +22,7 @@ import Users from "./pages/Users";
 import Reports from "./pages/Reports";
 import PassiveSnmp from "./pages/PassiveSnmp";
 import Traffic from "./pages/Traffic";
+import Checks from "./pages/Checks";
 import DocsRedirect from "./pages/DocsRedirect";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -142,6 +143,14 @@ export default function App() {
         element={
           <RequireAuth>
             <Alarms />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/checks"
+        element={
+          <RequireAuth>
+            <Checks />
           </RequireAuth>
         }
       />

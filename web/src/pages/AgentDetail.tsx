@@ -216,6 +216,14 @@ export default function AgentDetailPage() {
           <p className="text-sm text-slate-400">
             {siteName} · {a.os} {a.osVersion} · probe {a.agentVersion || "?"}
           </p>
+          <p className="text-xs">
+            <Link
+              className="text-sonar-400 hover:underline"
+              to={`/checks?siteId=${encodeURIComponent(a.siteId)}&agentId=${encodeURIComponent(a.id)}&typeId=icmp&runner=agent`}
+            >
+              Add check (agent runner)
+            </Link>
+          </p>
           <TagEditor
             tags={a.tags ?? []}
             suggestions={Array.from(

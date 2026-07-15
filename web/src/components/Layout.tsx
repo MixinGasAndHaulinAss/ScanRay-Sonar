@@ -23,6 +23,7 @@ import {
   Bars3Icon,
   XMarkIcon,
   ArrowRightOnRectangleIcon,
+  CheckBadgeIcon,
 } from "@heroicons/react/24/outline";
 import type { ComponentType, SVGProps } from "react";
 import { api, tokens } from "../api/client";
@@ -33,7 +34,7 @@ import ThemeToggle from "./ThemeToggle";
 // APP_VERSION is just the static fallback shown if /version hasn't
 // returned yet (or fails). The real source of truth is the Go binary's
 // embedded VERSION, fetched below via useQuery.
-const APP_VERSION = "2026.7.14.11";
+const APP_VERSION = "2026.7.14.12";
 
 type HeroIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -55,6 +56,7 @@ const primaryNav: NavItem[] = [
   { to: "/world", label: "World", icon: MapIcon },
   { to: "/documents", label: "Documents", icon: DocumentTextIcon },
   { to: "/alarms", label: "Alarms", icon: BellAlertIcon },
+  { to: "/checks", label: "Checks", icon: CheckBadgeIcon },
   { to: "/reports", label: "Reports", icon: ChartBarIcon },
   { to: "/passive-snmp", label: "Discovered", icon: MagnifyingGlassCircleIcon },
   { to: "/api-keys", label: "API keys", icon: KeyIcon },

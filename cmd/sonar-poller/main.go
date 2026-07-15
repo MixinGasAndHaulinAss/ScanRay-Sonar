@@ -83,6 +83,7 @@ func run() error {
 	poller.StartMerakiTelemetry(ctx, pool, sealer, log)
 
 	go sched.Run(ctx)
+	sched.StartCheckScheduler(ctx)
 	<-ctx.Done()
 
 	log.Info("shutdown")

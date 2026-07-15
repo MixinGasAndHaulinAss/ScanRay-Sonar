@@ -1,0 +1,34 @@
+{
+  "packs": [
+    {
+      "id": "dns",
+      "title": "DNS query",
+      "file": "dns.json",
+      "channelCount": 3
+    },
+    {
+      "id": "http",
+      "title": "HTTP / HTTPS",
+      "file": "http.json",
+      "channelCount": 3
+    },
+    {
+      "id": "icmp",
+      "title": "ICMP ping",
+      "file": "icmp.json",
+      "channelCount": 3
+    },
+    {
+      "id": "tcp",
+      "title": "TCP port",
+      "file": "tcp.json",
+      "channelCount": 2
+    },
+    {
+      "id": "tls",
+      "title": "TLS certificate",
+      "file": "tls.json",
+      "channelCount": 3
+    }
+  ]
+}

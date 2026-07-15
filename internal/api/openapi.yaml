@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.7.14.11"
+  version: "2026.7.14.12"
   license:
     name: MIT
 servers:
@@ -1778,6 +1778,104 @@ paths:
               schema:
                 type: object
                 properties: { id: { type: string, format: uuid } }
+
+  /check-types:
+    get:
+      summary: List synthetic check type catalog
+      tags: [Checks]
+      responses:
+        "200":
+          description: check types
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+
+  /checks:
+    get:
+      summary: List synthetic checks
+      tags: [Checks]
+      parameters:
+        - in: query
+          name: siteId
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: checks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
+    post:
+      summary: Create a synthetic check
+      tags: [Checks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [siteId, name, typeId]
+              properties:
+                siteId: { type: string, format: uuid }
+                name: { type: string }
+                typeId: { type: string, enum: [icmp, tcp, http, dns, tls] }
+                params: { type: object, additionalProperties: true }
+                intervalSeconds: { type: integer, minimum: 15 }
+                preferredRunner: { type: string, enum: [auto, agent, collector, central] }
+                assignedAgentId: { type: string, format: uuid, nullable: true }
+                applianceId: { type: string, format: uuid, nullable: true }
+                enabled: { type: boolean }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { id: { type: string, format: uuid } }
+
+  /checks/{id}:
+    patch:
+      summary: Update a check
+      tags: [Checks]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: updated }
+    delete:
+      summary: Delete a check
+      tags: [Checks]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: deleted }
+
+  /checks/{id}/samples:
+    get:
+      summary: Recent check channel samples
+      tags: [Checks]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: samples
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: object, additionalProperties: true }
 
   /documents/{id}/versions:
     get:

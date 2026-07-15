@@ -21,6 +21,7 @@ You must be signed in to open this documentation. The **Documentation** item in 
 | Know what your role can change | [Roles and permissions](rbac.md) |
 | Enroll a probe or collector | [Devices](devices.md), [Collectors](collectors.md) |
 | Add or tune network gear | [Appliances](appliances.md), [Site discovery](site-discovery.md) |
+| Add ICMP/HTTP/DNS/TLS checks | [Checks](checks.md) |
 | Configure SMTP, webhooks | [Settings](settings.md) |
 | Understand hot/trend storage and roll-off | [Data storage and retention](data-retention.md) |
 

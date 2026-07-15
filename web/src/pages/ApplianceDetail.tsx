@@ -124,6 +124,14 @@ export default function ApplianceDetailPage() {
             )}{" "}
             · <span className="font-mono">{a.mgmtIp}</span>
           </p>
+          <p className="mt-1 text-xs">
+            <Link
+              className="text-sonar-400 hover:underline"
+              to={`/checks?siteId=${encodeURIComponent(a.siteId)}&applianceId=${encodeURIComponent(a.id)}&host=${encodeURIComponent(a.mgmtIp)}&typeId=icmp`}
+            >
+              Add check
+            </Link>
+          </p>
         </div>
         <div className="text-right text-xs">
           <div>

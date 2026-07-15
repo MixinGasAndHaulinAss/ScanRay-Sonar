@@ -36,6 +36,10 @@ Thumbs.db
 # internal/snmp/oidpack/data via scripts/build-oidpacks.py — do not commit.
 /oid_bundle/
 
+# Local full-sensor product catalog (reference only). Transform into
+# internal/checks/catalog via scripts/build-checkpacks.py — do not commit.
+/prtg_full_sensor_catalog/
+
 # Environment / secrets — never commit
 .env
 .env.local

@@ -153,6 +153,8 @@ func (s *Server) Routes() http.Handler {
 		// because the install one-liner runs before any JWT exists.
 		r.Post("/agents/enroll", s.handleAgentEnroll)
 		r.Post("/collectors/enroll", s.handleCollectorEnroll)
+		r.Get("/agent/checks", s.handleAgentListChecks)
+		r.Post("/agent/checks/results", s.handleAgentCheckResults)
 
 		r.With(s.collectorAuthRequired).Get("/collectors/me", s.handleCollectorMe)
 		r.With(s.collectorAuthRequired).Get("/collectors/me/jobs", s.handleCollectorJobs)
@@ -253,6 +255,13 @@ func (s *Server) Routes() http.Handler {
 			r.With(requireRole(auth.RoleSiteAdmin)).Post("/alarm-rules", s.handleCreateAlarmRule)
 			r.With(requireRole(auth.RoleSiteAdmin)).Patch("/alarm-rules/{id}", s.handlePatchAlarmRule)
 			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/alarm-rules/{id}", s.handleDeleteAlarmRule)
+
+			r.Get("/check-types", s.handleListCheckTypes)
+			r.Get("/checks", s.handleListChecks)
+			r.With(requireRole(auth.RoleSiteAdmin)).Post("/checks", s.handleCreateCheck)
+			r.With(requireRole(auth.RoleSiteAdmin)).Patch("/checks/{id}", s.handlePatchCheck)
+			r.With(requireRole(auth.RoleSiteAdmin)).Delete("/checks/{id}", s.handleDeleteCheck)
+			r.Get("/checks/{id}/samples", s.handleCheckSamples)
 
 			r.Get("/notification-channels", s.handleListNotificationChannels)
 			r.With(requireRole(auth.RoleSiteAdmin)).Post("/notification-channels", s.handleCreateNotificationChannel)
