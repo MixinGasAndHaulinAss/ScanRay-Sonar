@@ -26,6 +26,7 @@ On a device page you typically see:
 - Neighbors (LLDP/CDP or Meraki topology discovery)
 - **OID metrics** from the embedded SNMP OID pack catalog (vendor-selected packs; see below)
 - Meraki-only blocks: uplinks, VPN, wireless loss, sensors, firmware, alerts
+- **Add check** — jump to [Checks](checks.md) with site and management IP pre-filled (ICMP/HTTP/TLS against the appliance, separate from SNMP)
 
 ### Meraki switch ports
 

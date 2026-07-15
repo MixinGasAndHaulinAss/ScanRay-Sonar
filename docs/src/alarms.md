@@ -22,5 +22,6 @@ Siteadmins create and edit rules and channels. Techs and above can work alarms a
 ## Tips
 
 - Start with a few high-signal rules (device offline, critical interface down) before fine thresholds.
+- Synthetic [checks](checks.md) ship with default rules (HTTP/TCP/DNS down, TLS expiry, ICMP loss). Tune thresholds under alarm rules (`target_kind` = check).
 - Pair with [Settings](settings.md) SMTP/webhooks so notifications leave Sonar.
 - Use the audit log (superadmin) if you need to see who changed rules.

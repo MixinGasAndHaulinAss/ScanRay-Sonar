@@ -17,6 +17,7 @@ Sessions use short-lived access tokens plus a longer-lived refresh token stored 
 | Top of sidebar | Product name and live version from the API. |
 | User footer | Your display name, role, theme toggle, and **Sign out**. |
 | Main pane | The page for the selected area. |
+| **Checks** | Synthetic ICMP/TCP/HTTP/DNS/TLS monitors — see [Checks](checks.md). |
 
 On a phone or narrow window, use the menu button to open the sidebar.
 
@@ -31,3 +32,4 @@ Almost everything is scoped to a **site** (a building, campus, or logical locati
 3. Configure [site discovery](site-discovery.md) credentials (SNMP and/or Meraki).
 4. Enroll [devices](devices.md) (probes) where you need endpoint visibility.
 5. Confirm inventory on **Appliances** and **Devices**, then set [alarms](alarms.md).
+6. Add [checks](checks.md) for services you care about (website up, DNS, TLS expiry, LAN ping from a site probe).

@@ -14,6 +14,7 @@ Open a device for:
 - Metric history
 - Network / path views
 - Per-device reports where available
+- **Add check (agent runner)** — create a [synthetic check](checks.md) that prefers this probe (useful for LAN ping/HTTP from the site)
 
 ## Enroll a new device
 

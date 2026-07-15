@@ -9,6 +9,7 @@ ScanRay Sonar is the central console for:
 - **Devices (agents)** — endpoints running the Sonar probe that report health, network path, and experience metrics
 - **Appliances** — network gear polled by SNMP or enriched from Meraki Dashboard
 - **Collectors** — site-side daemons that reach gear Sonar cannot poll directly
+- **Checks** — synthetic ICMP/TCP/HTTP/DNS/TLS monitors (agent-first or central)
 - **Alarms, reports, topology, and traffic** — operational views over that inventory
 
 You must be signed in to open this documentation. The **Documentation** item in the sidebar issues a short session and opens this guide.
