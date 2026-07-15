@@ -1,0 +1,23 @@
+{
+  "id": "sql_query",
+  "title": "SQL query",
+  "mechanism": "sql",
+  "runner": "central",
+  "params": [
+    {"name": "host", "type": "string", "required": true, "label": "Database host"},
+    {"name": "port", "type": "number", "required": false, "default": 5432, "label": "Port"},
+    {"name": "driver", "type": "string", "required": false, "default": "postgres", "label": "Driver (postgres|sqlserver|mysql)"},
+    {"name": "query", "type": "string", "required": false, "default": "SELECT 1", "label": "Read-only SELECT"},
+    {"name": "expectMinRows", "type": "number", "required": false, "default": 1, "label": "Minimum rows"},
+    {"name": "timeoutSec", "type": "number", "required": false, "default": 15, "label": "Timeout (s)"},
+    {"name": "credentialId", "type": "string", "required": true, "label": "Vault credential (sql)"}
+  ],
+  "channels": [
+    {"key": "response_time_ms", "label": "Response Time", "valueKind": "gauge",
+     "defaultAlarm": {"op": ">", "value": 5000, "severity": "warning", "name": "SQL query latency high", "flatField": "sql_response_time_ms"}},
+    {"key": "row_count", "label": "Row Count", "valueKind": "gauge"},
+    {"key": "up", "label": "Up", "valueKind": "gauge",
+     "defaultAlarm": {"op": "!=", "value": 1, "severity": "critical", "name": "SQL check failed", "flatField": "sql_up"}}
+  ],
+  "sourceIds": ["postgresql", "mysql_v2", "microsoft_sql_v2", "ado_sql_v2"]
+}

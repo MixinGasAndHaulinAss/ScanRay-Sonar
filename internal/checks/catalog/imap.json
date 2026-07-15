@@ -1,0 +1,20 @@
+{
+  "id": "imap",
+  "title": "IMAP",
+  "mechanism": "mail",
+  "runner": "central",
+  "params": [
+    {"name": "host", "type": "string", "required": true, "label": "IMAP host"},
+    {"name": "port", "type": "number", "required": false, "default": 993, "label": "Port"},
+    {"name": "tlsMode", "type": "string", "required": false, "default": "tls", "label": "TLS mode (tls|starttls|plain)"},
+    {"name": "timeoutSec", "type": "number", "required": false, "default": 15, "label": "Timeout (s)"},
+    {"name": "credentialId", "type": "string", "required": true, "label": "Vault credential (imap)"}
+  ],
+  "channels": [
+    {"key": "response_time_ms", "label": "Response Time", "valueKind": "gauge"},
+    {"key": "mailbox_count", "label": "Mailbox Count", "valueKind": "gauge"},
+    {"key": "up", "label": "Up", "valueKind": "gauge",
+     "defaultAlarm": {"op": "!=", "value": 1, "severity": "critical", "name": "IMAP check failed", "flatField": "imap_up"}}
+  ],
+  "sourceIds": ["imap"]
+}

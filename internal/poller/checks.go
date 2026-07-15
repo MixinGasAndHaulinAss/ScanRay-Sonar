@@ -3,6 +3,7 @@ package poller
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -36,7 +37,7 @@ func (s *Scheduler) tickChecks(ctx context.Context) {
 	agents := listOnlineAgents(ctx, s.pool)
 	rows, err := s.pool.Query(ctx, `
 		SELECT id, site_id, name, type_id, params, interval_seconds, preferred_runner,
-		       assigned_agent_id, assigned_collector_id, appliance_id,
+		       assigned_agent_id, assigned_collector_id, appliance_id, credential_id,
 		       COALESCE(last_run_at, TIMESTAMPTZ 'epoch')
 		  FROM checks
 		 WHERE enabled = TRUE`)
@@ -55,14 +56,16 @@ func (s *Scheduler) tickChecks(ctx context.Context) {
 			agentID     *uuid.UUID
 			collectorID *uuid.UUID
 			applianceID *uuid.UUID
+			credID      *uuid.UUID
 		)
 		if err := rows.Scan(&c.ID, &c.SiteID, &c.Name, &c.TypeID, &paramsRaw, &c.IntervalSeconds,
-			&c.PreferredRunner, &agentID, &collectorID, &applianceID, &lastRun); err != nil {
+			&c.PreferredRunner, &agentID, &collectorID, &applianceID, &credID, &lastRun); err != nil {
 			continue
 		}
 		c.AssignedAgentID = agentID
 		c.AssignedCollectorID = collectorID
 		c.ApplianceID = applianceID
+		c.CredentialID = credID
 		_ = json.Unmarshal(paramsRaw, &c.Params)
 		if c.Params == nil {
 			c.Params = map[string]any{}
@@ -74,7 +77,8 @@ func (s *Scheduler) tickChecks(ctx context.Context) {
 		if now.Sub(lastRun) < interval {
 			continue
 		}
-		if checks.SelectRunner(c, agents, now) == "agent" {
+		// Central-only (vault) types always run here. Agent-assigned synthetics are skipped.
+		if !checks.IsCentralOnly(c.TypeID) && checks.SelectRunner(c, agents, now) == "agent" {
 			continue
 		}
 		s.executeCheck(ctx, c, "central")
@@ -108,9 +112,73 @@ func (s *Scheduler) executeCheck(ctx context.Context, c checks.CheckRow, runner 
 	}
 	rctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	res := checks.Run(rctx, c.TypeID, c.Params)
+
+	var cred *checks.ResolvedCred
+	if checks.RequiresCredential(c.TypeID) {
+		var err error
+		cred, err = s.resolveCheckCred(rctx, c)
+		if err != nil {
+			res := checks.Result{OK: false, Error: err.Error(), Samples: []checks.Sample{
+				{Key: "up", Value: 0, HasNum: true},
+			}}
+			if perr := PersistCheckResult(ctx, s.pool, s.nc, c, res, runner); perr != nil {
+				s.log.Warn("check persist failed", "check_id", c.ID, "err", perr)
+			}
+			return
+		}
+	}
+
+	res := checks.Run(rctx, c.TypeID, c.Params, cred)
 	if err := PersistCheckResult(ctx, s.pool, s.nc, c, res, runner); err != nil {
 		s.log.Warn("check persist failed", "check_id", c.ID, "err", err)
+	}
+}
+
+func (s *Scheduler) resolveCheckCred(ctx context.Context, c checks.CheckRow) (*checks.ResolvedCred, error) {
+	wantKind, ok := checks.ExpectedCredKind(c.TypeID)
+	if !ok {
+		return nil, nil
+	}
+	credID := c.CredentialID
+	if credID == nil {
+		if id, ok := checks.CredentialIDFromParams(c.Params); ok {
+			credID = &id
+		}
+	}
+	if credID == nil {
+		return nil, fmt.Errorf("credentialId required for %s", c.TypeID)
+	}
+	if s.sealer == nil {
+		return nil, fmt.Errorf("credential sealer unavailable")
+	}
+	var (
+		siteID  uuid.UUID
+		kind    string
+		enc     []byte
+	)
+	err := s.pool.QueryRow(ctx, `
+		SELECT site_id, kind, enc_secret FROM site_credentials WHERE id = $1`, *credID).
+		Scan(&siteID, &kind, &enc)
+	if err != nil {
+		return nil, fmt.Errorf("credential not found")
+	}
+	if siteID != c.SiteID {
+		return nil, fmt.Errorf("credential site mismatch")
+	}
+	if kind != wantKind {
+		return nil, fmt.Errorf("credential kind %q does not match check type (want %s)", kind, wantKind)
+	}
+	plain, err := s.sealer.Open(enc, []byte("credential:"+credID.String()))
+	if err != nil {
+		return nil, fmt.Errorf("credential unseal failed")
+	}
+	defer clearBytes(plain)
+	return checks.ParseResolvedCred(kind, plain)
+}
+
+func clearBytes(b []byte) {
+	for i := range b {
+		b[i] = 0
 	}
 }
 

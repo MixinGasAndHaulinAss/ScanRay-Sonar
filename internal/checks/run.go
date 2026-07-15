@@ -20,7 +20,8 @@ import (
 )
 
 // Run executes a check of the given type_id with JSON-like params.
-func Run(ctx context.Context, typeID string, params map[string]any) Result {
+// cred is required for vault-backed types (sql_query, smtp, imap, ldap_bind); nil for phase-1 synthetics.
+func Run(ctx context.Context, typeID string, params map[string]any, cred *ResolvedCred) Result {
 	switch strings.ToLower(strings.TrimSpace(typeID)) {
 	case "icmp":
 		return runICMP(ctx, params)
@@ -32,6 +33,14 @@ func Run(ctx context.Context, typeID string, params map[string]any) Result {
 		return runDNS(ctx, params)
 	case "tls":
 		return runTLS(ctx, params)
+	case "sql_query":
+		return runSQL(ctx, params, cred)
+	case "smtp":
+		return runSMTP(ctx, params, cred)
+	case "imap":
+		return runIMAP(ctx, params, cred)
+	case "ldap_bind":
+		return runLDAPBind(ctx, params, cred)
 	default:
 		return Result{OK: false, Error: "unknown check type: " + typeID}
 	}

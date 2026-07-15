@@ -1,0 +1,21 @@
+{
+  "id": "smtp",
+  "title": "SMTP",
+  "mechanism": "mail",
+  "runner": "central",
+  "params": [
+    {"name": "host", "type": "string", "required": true, "label": "SMTP host"},
+    {"name": "port", "type": "number", "required": false, "default": 587, "label": "Port"},
+    {"name": "tlsMode", "type": "string", "required": false, "default": "starttls", "label": "TLS mode (starttls|tls|plain)"},
+    {"name": "from", "type": "string", "required": false, "label": "MAIL FROM (optional)"},
+    {"name": "to", "type": "string", "required": false, "label": "RCPT TO probe (optional)"},
+    {"name": "timeoutSec", "type": "number", "required": false, "default": 15, "label": "Timeout (s)"},
+    {"name": "credentialId", "type": "string", "required": true, "label": "Vault credential (smtp)"}
+  ],
+  "channels": [
+    {"key": "response_time_ms", "label": "Response Time", "valueKind": "gauge"},
+    {"key": "up", "label": "Up", "valueKind": "gauge",
+     "defaultAlarm": {"op": "!=", "value": 1, "severity": "critical", "name": "SMTP check failed", "flatField": "smtp_up"}}
+  ],
+  "sourceIds": ["smtp"]
+}

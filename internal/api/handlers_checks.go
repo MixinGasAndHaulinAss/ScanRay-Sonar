@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -35,7 +36,7 @@ func (s *Server) handleListChecks(w http.ResponseWriter, r *http.Request) {
 	siteFilter := r.URL.Query().Get("siteId")
 	q := `
 		SELECT id, site_id, name, type_id, params, interval_seconds, enabled, preferred_runner,
-		       assigned_agent_id, assigned_collector_id, appliance_id,
+		       assigned_agent_id, assigned_collector_id, appliance_id, credential_id,
 		       last_run_at, last_ok, last_error, created_at
 		  FROM checks`
 	args := []any{}
@@ -58,19 +59,19 @@ func (s *Server) handleListChecks(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for rows.Next() {
 		var (
-			id, siteID                        uuid.UUID
-			name, typeID, pref                string
-			params                            []byte
-			interval                          int
-			enabled                           bool
-			agentID, collectorID, applianceID *uuid.UUID
-			lastRun                           *time.Time
-			lastOK                            *bool
-			lastErr                           *string
-			created                           time.Time
+			id, siteID                                    uuid.UUID
+			name, typeID, pref                            string
+			params                                        []byte
+			interval                                      int
+			enabled                                       bool
+			agentID, collectorID, applianceID, credID     *uuid.UUID
+			lastRun                                       *time.Time
+			lastOK                                        *bool
+			lastErr                                       *string
+			created                                       time.Time
 		)
 		if rows.Scan(&id, &siteID, &name, &typeID, &params, &interval, &enabled, &pref,
-			&agentID, &collectorID, &applianceID, &lastRun, &lastOK, &lastErr, &created) != nil {
+			&agentID, &collectorID, &applianceID, &credID, &lastRun, &lastOK, &lastErr, &created) != nil {
 			continue
 		}
 		var paramsObj any
@@ -88,6 +89,9 @@ func (s *Server) handleListChecks(w http.ResponseWriter, r *http.Request) {
 		}
 		if applianceID != nil {
 			row["applianceId"] = applianceID.String()
+		}
+		if credID != nil {
+			row["credentialId"] = credID.String()
 		}
 		if lastRun != nil {
 			row["lastRunAt"] = lastRun.UTC().Format(time.RFC3339)
@@ -114,6 +118,7 @@ func (s *Server) handleCreateCheck(w http.ResponseWriter, r *http.Request) {
 		AssignedAgentID     *string        `json:"assignedAgentId"`
 		AssignedCollectorID *string        `json:"assignedCollectorId"`
 		ApplianceID         *string        `json:"applianceId"`
+		CredentialID        *string        `json:"credentialId"`
 		Enabled             *bool          `json:"enabled"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.SiteID == "" || req.Name == "" || req.TypeID == "" {
@@ -133,6 +138,9 @@ func (s *Server) handleCreateCheck(w http.ResponseWriter, r *http.Request) {
 	if pref == "" {
 		pref = "auto"
 	}
+	if checks.IsCentralOnly(req.TypeID) {
+		pref = "central"
+	}
 	if pref != "auto" && pref != "agent" && pref != "collector" && pref != "central" {
 		writeErr(w, http.StatusBadRequest, "bad_request", "preferredRunner must be auto|agent|collector|central")
 		return
@@ -148,17 +156,33 @@ func (s *Server) handleCreateCheck(w http.ResponseWriter, r *http.Request) {
 	if req.Params == nil {
 		req.Params = map[string]any{}
 	}
+	if err := checks.RejectSecretParams(req.Params); err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
+	if req.CredentialID != nil && *req.CredentialID != "" {
+		req.Params["credentialId"] = *req.CredentialID
+	}
+	credID, err := s.validateCheckCredential(r.Context(), siteID, req.TypeID, req.Params)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
 	paramsJSON, _ := json.Marshal(req.Params)
 	agentID := parseOptionalUUID(req.AssignedAgentID)
 	collectorID := parseOptionalUUID(req.AssignedCollectorID)
 	applianceID := parseOptionalUUID(req.ApplianceID)
+	if checks.IsCentralOnly(req.TypeID) {
+		agentID = nil
+		collectorID = nil
+	}
 
 	var id uuid.UUID
 	err = s.pool.QueryRow(r.Context(), `
 		INSERT INTO checks (site_id, name, type_id, params, interval_seconds, enabled, preferred_runner,
-		                    assigned_agent_id, assigned_collector_id, appliance_id)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-		siteID, req.Name, req.TypeID, paramsJSON, interval, enabled, pref, agentID, collectorID, applianceID,
+		                    assigned_agent_id, assigned_collector_id, appliance_id, credential_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+		siteID, req.Name, req.TypeID, paramsJSON, interval, enabled, pref, agentID, collectorID, applianceID, credID,
 	).Scan(&id)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "bad_request", "insert failed")
@@ -168,6 +192,40 @@ func (s *Server) handleCreateCheck(w http.ResponseWriter, r *http.Request) {
 	s.store.Audit(r.Context(), "user", "check.create", &uid, clientIP(r), map[string]any{"check_id": id.String()})
 	writeJSON(w, http.StatusCreated, map[string]any{"id": id.String()})
 }
+
+func (s *Server) validateCheckCredential(ctx context.Context, siteID uuid.UUID, typeID string, params map[string]any) (*uuid.UUID, error) {
+	wantKind, needs := checks.ExpectedCredKind(typeID)
+	id, ok := checks.CredentialIDFromParams(params)
+	if !needs {
+		if ok {
+			// Allow unused credentialId on phase-1 but clear it from column.
+			return nil, nil
+		}
+		return nil, nil
+	}
+	if !ok {
+		return nil, errString("credentialId required for " + typeID)
+	}
+	var gotSite uuid.UUID
+	var kind string
+	err := s.pool.QueryRow(ctx, `SELECT site_id, kind FROM site_credentials WHERE id=$1`, id).Scan(&gotSite, &kind)
+	if err != nil {
+		return nil, errString("credentialId not found")
+	}
+	if gotSite != siteID {
+		return nil, errString("credentialId must belong to the same site")
+	}
+	if kind != wantKind {
+		return nil, errString("credential kind must be " + wantKind + " for " + typeID)
+	}
+	return &id, nil
+}
+
+type simpleErr string
+
+func (e simpleErr) Error() string { return string(e) }
+
+func errString(s string) error { return simpleErr(s) }
 
 func parseOptionalUUID(p *string) *uuid.UUID {
 	if p == nil || *p == "" {
@@ -191,6 +249,14 @@ func (s *Server) handlePatchCheck(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "bad_request", "invalid json")
 		return
 	}
+
+	var siteID uuid.UUID
+	var typeID string
+	if err := s.pool.QueryRow(r.Context(), `SELECT site_id, type_id FROM checks WHERE id=$1`, id).Scan(&siteID, &typeID); err != nil {
+		writeErr(w, http.StatusNotFound, "not_found", "check not found")
+		return
+	}
+
 	if v, ok := req["name"].(string); ok && v != "" {
 		_, _ = s.pool.Exec(r.Context(), `UPDATE checks SET name=$2, updated_at=NOW() WHERE id=$1`, id, v)
 	}
@@ -198,14 +264,46 @@ func (s *Server) handlePatchCheck(w http.ResponseWriter, r *http.Request) {
 		_, _ = s.pool.Exec(r.Context(), `UPDATE checks SET enabled=$2, updated_at=NOW() WHERE id=$1`, id, v)
 	}
 	if v, ok := req["preferredRunner"].(string); ok && v != "" {
+		if checks.IsCentralOnly(typeID) {
+			v = "central"
+		}
 		_, _ = s.pool.Exec(r.Context(), `UPDATE checks SET preferred_runner=$2, updated_at=NOW() WHERE id=$1`, id, v)
 	}
 	if v, ok := req["intervalSeconds"].(float64); ok && v >= 15 {
 		_, _ = s.pool.Exec(r.Context(), `UPDATE checks SET interval_seconds=$2, updated_at=NOW() WHERE id=$1`, id, int(v))
 	}
 	if params, ok := req["params"].(map[string]any); ok {
+		if err := checks.RejectSecretParams(params); err != nil {
+			writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+			return
+		}
+		if cid, ok := req["credentialId"].(string); ok && cid != "" {
+			params["credentialId"] = cid
+		}
+		credID, err := s.validateCheckCredential(r.Context(), siteID, typeID, params)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+			return
+		}
 		b, _ := json.Marshal(params)
-		_, _ = s.pool.Exec(r.Context(), `UPDATE checks SET params=$2, updated_at=NOW() WHERE id=$1`, id, b)
+		_, _ = s.pool.Exec(r.Context(), `UPDATE checks SET params=$2, credential_id=$3, updated_at=NOW() WHERE id=$1`, id, b, credID)
+	} else if cid, ok := req["credentialId"].(string); ok {
+		// Merge credentialId into existing params
+		var existing []byte
+		_ = s.pool.QueryRow(r.Context(), `SELECT params FROM checks WHERE id=$1`, id).Scan(&existing)
+		var m map[string]any
+		_ = json.Unmarshal(existing, &m)
+		if m == nil {
+			m = map[string]any{}
+		}
+		m["credentialId"] = cid
+		credID, err := s.validateCheckCredential(r.Context(), siteID, typeID, m)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "bad_request", err.Error())
+			return
+		}
+		b, _ := json.Marshal(m)
+		_, _ = s.pool.Exec(r.Context(), `UPDATE checks SET params=$2, credential_id=$3, updated_at=NOW() WHERE id=$1`, id, b, credID)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": id.String()})
 }
@@ -275,7 +373,7 @@ func (s *Server) handleAgentListChecks(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := s.pool.Query(r.Context(), `
 		SELECT id, site_id, name, type_id, params, interval_seconds, preferred_runner,
-		       assigned_agent_id, assigned_collector_id, appliance_id,
+		       assigned_agent_id, assigned_collector_id, appliance_id, credential_id,
 		       COALESCE(last_run_at, TIMESTAMPTZ 'epoch')
 		  FROM checks
 		 WHERE enabled = TRUE AND site_id = $1
@@ -292,18 +390,22 @@ func (s *Server) handleAgentListChecks(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for rows.Next() {
 		var (
-			c              checks.CheckRow
-			paramsRaw      []byte
-			lastRun        time.Time
-			aID, cID, apID *uuid.UUID
+			c                    checks.CheckRow
+			paramsRaw            []byte
+			lastRun              time.Time
+			aID, cID, apID, crID *uuid.UUID
 		)
 		if rows.Scan(&c.ID, &c.SiteID, &c.Name, &c.TypeID, &paramsRaw, &c.IntervalSeconds,
-			&c.PreferredRunner, &aID, &cID, &apID, &lastRun) != nil {
+			&c.PreferredRunner, &aID, &cID, &apID, &crID, &lastRun) != nil {
+			continue
+		}
+		if checks.IsCentralOnly(c.TypeID) {
 			continue
 		}
 		c.AssignedAgentID = aID
 		c.AssignedCollectorID = cID
 		c.ApplianceID = apID
+		c.CredentialID = crID
 		_ = json.Unmarshal(paramsRaw, &c.Params)
 		interval := time.Duration(c.IntervalSeconds) * time.Second
 		if interval < 15*time.Second {
@@ -354,6 +456,9 @@ func (s *Server) handleAgentCheckResults(w http.ResponseWriter, r *http.Request)
 			SELECT id, site_id, name, type_id, params FROM checks WHERE id=$1 AND (assigned_agent_id IS NULL OR assigned_agent_id=$2)`,
 			cid, agentID).Scan(&c.ID, &c.SiteID, &c.Name, &c.TypeID, &paramsRaw)
 		if err != nil {
+			continue
+		}
+		if checks.IsCentralOnly(c.TypeID) {
 			continue
 		}
 		_ = json.Unmarshal(paramsRaw, &c.Params)

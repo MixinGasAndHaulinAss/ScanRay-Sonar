@@ -1,0 +1,20 @@
+{
+  "id": "ldap_bind",
+  "title": "LDAP bind",
+  "mechanism": "ldap",
+  "runner": "central",
+  "params": [
+    {"name": "host", "type": "string", "required": true, "label": "LDAP host"},
+    {"name": "port", "type": "number", "required": false, "default": 389, "label": "Port"},
+    {"name": "useTLS", "type": "boolean", "required": false, "default": false, "label": "Use LDAPS"},
+    {"name": "bindDN", "type": "string", "required": false, "label": "Bind DN override (optional)"},
+    {"name": "timeoutSec", "type": "number", "required": false, "default": 15, "label": "Timeout (s)"},
+    {"name": "credentialId", "type": "string", "required": true, "label": "Vault credential (ldap)"}
+  ],
+  "channels": [
+    {"key": "response_time_ms", "label": "Response Time", "valueKind": "gauge"},
+    {"key": "up", "label": "Up", "valueKind": "gauge",
+     "defaultAlarm": {"op": "!=", "value": 1, "severity": "critical", "name": "LDAP bind failed", "flatField": "ldap_up"}}
+  ],
+  "sourceIds": ["ldap"]
+}

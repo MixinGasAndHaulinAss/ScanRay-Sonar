@@ -74,8 +74,11 @@ func pullAndRunChecks(ctx context.Context, cfg *Config) error {
 	}
 	var results []resultOut
 	for _, j := range jobs {
+		if checks.IsCentralOnly(j.TypeID) {
+			continue
+		}
 		rctx, cancel := context.WithTimeout(ctx, 25*time.Second)
-		res := checks.Run(rctx, j.TypeID, j.Params)
+		res := checks.Run(rctx, j.TypeID, j.Params, nil)
 		cancel()
 		out := resultOut{CheckID: j.ID, OK: res.OK, Error: res.Error}
 		for _, sm := range res.Samples {

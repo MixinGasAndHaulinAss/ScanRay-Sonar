@@ -1,4 +1,4 @@
-// SiteDiscoveryAdmin — per-site discovery configuration. Three top-level
+﻿// SiteDiscoveryAdmin â€” per-site discovery configuration. Three top-level
 // tabs:
 //
 //   Manage Credentials  Manage SNMP / SSH / Telnet / WMI / WinAgent /
@@ -9,7 +9,7 @@
 //                       parseCredSecret).
 //
 //   Discovery Settings  CIDR list, scan cadence, retention and filter
-//                       rules — same form that lived here before. Now
+//                       rules â€” same form that lived here before. Now
 //                       extracted into a tab.
 //
 //   Meraki sync         Dashboard API key + inventory sync into Appliances.
@@ -57,7 +57,7 @@ export default function SiteDiscoveryAdmin() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Discovery</h1>
           <p className="mt-0.5 text-xs text-slate-500">
-            {site?.name ?? siteId} · per-site credential vault and scan configuration. Anything
+            {site?.name ?? siteId} Â· per-site credential vault and scan configuration. Anything
             you save here is delivered to the collector(s) bound to this site over an
             authenticated WebSocket.
           </p>
@@ -131,7 +131,18 @@ function TabButton({
 // Manage Credentials
 // --------------------------------------------------------------------
 
-type CredKind = "snmp" | "ssh" | "telnet" | "wmi" | "winagent" | "vmware" | "generic";
+type CredKind =
+  | "snmp"
+  | "ssh"
+  | "telnet"
+  | "wmi"
+  | "winagent"
+  | "vmware"
+  | "generic"
+  | "sql"
+  | "ldap"
+  | "smtp"
+  | "imap";
 
 interface KindMeta {
   id: CredKind;
@@ -182,6 +193,30 @@ const KINDS: KindMeta[] = [
     label: "Device API",
     protocol: "Custom",
     desc: "Free-form JSON for vendor APIs the built-in protocols don't cover yet.",
+  },
+  {
+    id: "sql",
+    label: "SQL",
+    protocol: "Postgres / MSSQL / MySQL",
+    desc: "Database username/password for SQL query checks. Host and query live on the check; secrets stay here.",
+  },
+  {
+    id: "ldap",
+    label: "LDAP",
+    protocol: "LDAP / LDAPS",
+    desc: "Bind username (or DN) and password for LDAP bind checks.",
+  },
+  {
+    id: "smtp",
+    label: "SMTP",
+    protocol: "SMTP",
+    desc: "Mailbox credentials for SMTP health checks (AUTH).",
+  },
+  {
+    id: "imap",
+    label: "IMAP",
+    protocol: "IMAP",
+    desc: "Mailbox credentials for IMAP login checks.",
   },
 ];
 
@@ -265,7 +300,7 @@ function SiteCredentialsAdmin({ siteId }: { siteId: string }) {
         </div>
 
         <input
-          placeholder={`Search ${meta.label} credentials…`}
+          placeholder={`Search ${meta.label} credentialsâ€¦`}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm"
@@ -429,7 +464,7 @@ function CredentialModal({
             disabled={save.isPending}
             className="rounded-md bg-sonar-600 px-3 py-1.5 text-sm font-medium hover:bg-sonar-500 disabled:opacity-50"
           >
-            {save.isPending ? "Saving…" : editing ? "Save" : "Create"}
+            {save.isPending ? "Savingâ€¦" : editing ? "Save" : "Create"}
           </button>
         </div>
       </form>
@@ -559,43 +594,57 @@ function CredentialFields({
 
   if (kind === "vmware") {
     return (
-      <>
+      <div className="space-y-3">
+        <Field label="vCenter / ESXi host" k="host" fields={fields} set={set} placeholder="vcenter.example.com" />
+        <Field label="Username" k="username" fields={fields} set={set} />
+        <Field label="Password" k="password" fields={fields} set={set} type="password" />
+      </div>
+    );
+  }
+  if (kind === "sql") {
+    return (
+      <div className="space-y-3">
+        <label className="block text-xs text-slate-400">
+          Driver
+          <select
+            className="mt-1 w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 text-sm"
+            value={fields.driver || "postgres"}
+            onChange={(e) => set("driver", e.target.value)}
+          >
+            <option value="postgres">postgres</option>
+            <option value="sqlserver">sqlserver</option>
+            <option value="mysql">mysql</option>
+          </select>
+        </label>
+        <Field label="Username" k="username" fields={fields} set={set} />
+        <Field label="Password" k="password" fields={fields} set={set} type="password" />
+        <Field label="Database (optional)" k="database" fields={fields} set={set} placeholder="postgres" />
+        <Field label="SSL mode (optional)" k="sslmode" fields={fields} set={set} placeholder="disable" />
+      </div>
+    );
+  }
+  if (kind === "ldap" || kind === "smtp" || kind === "imap") {
+    return (
+      <div className="space-y-3">
         <Field
-          label="vCenter / ESXi host"
-          k="host"
-          fields={fields}
-          set={set}
-          placeholder="vcenter.example.com"
-        />
-        <Field
-          label="Username"
+          label={kind === "ldap" ? "Bind DN / username" : "Username"}
           k="username"
           fields={fields}
           set={set}
-          placeholder="user@vsphere.local"
         />
         <Field label="Password" k="password" fields={fields} set={set} type="password" />
-        <p className="text-[11px] text-amber-400">
-          Credentials are used during discovery scans. vCenter REST inventory lists VMs and hosts
-          when the collector can reach the management URL.
-          to the collector but discovery via vCenter is queued behind Phase 2.
-        </p>
-      </>
+      </div>
     );
   }
-
-  // generic
   return (
     <label className="block text-xs text-slate-400">
-      Secret (free-form JSON or string)
+      Raw secret
       <textarea
-        rows={5}
+        className="mt-1 w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 font-mono text-sm"
+        rows={4}
         value={fields.raw ?? ""}
         onChange={(e) => set("raw", e.target.value)}
-        className="mt-1 w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 font-mono text-[11px]"
-        placeholder='{"apiKey":"…"}'
       />
-      <span className="mt-1 block text-[11px] text-slate-500">{help}</span>
     </label>
   );
 }
@@ -668,6 +717,21 @@ function serializeSecret(kind: CredKind, fields: Record<string, string>): string
       const obj: Record<string, string> = {};
       for (const k of ["host", "username", "password"]) if (trim(k)) obj[k] = trim(k);
       return Object.keys(obj).length ? JSON.stringify(obj) : "";
+    }
+    case "sql": {
+      const obj: Record<string, string> = {};
+      for (const k of ["driver", "username", "password", "database", "sslmode"]) {
+        if (trim(k)) obj[k] = trim(k);
+      }
+      if (!obj.driver) obj.driver = "postgres";
+      return obj.username && obj.password ? JSON.stringify(obj) : "";
+    }
+    case "ldap":
+    case "smtp":
+    case "imap": {
+      const obj: Record<string, string> = {};
+      for (const k of ["username", "password"]) if (trim(k)) obj[k] = trim(k);
+      return Object.keys(obj).length === 2 ? JSON.stringify(obj) : "";
     }
     case "generic":
       return trim("raw");
@@ -830,7 +894,7 @@ function DiscoverySettingsForm({ siteId }: { siteId: string }) {
           disabled={save.isPending}
           className="rounded-md bg-sonar-500 px-3 py-1.5 text-sm font-medium text-ink-950 hover:bg-sonar-400 disabled:opacity-50"
         >
-          {save.isPending ? "Saving…" : "Save settings"}
+          {save.isPending ? "Savingâ€¦" : "Save settings"}
         </button>
       </div>
     </div>
@@ -986,11 +1050,11 @@ function MerakiSyncPanel({ siteId }: { siteId: string }) {
           </Link>{" "}
           as vendor <code className="font-mono">meraki</code> with auto role tags (
           <code className="font-mono">firewall</code>, <code className="font-mono">wap</code>,{" "}
-          <code className="font-mono">switch</code>, …). Saving polls immediately; use{" "}
+          <code className="font-mono">switch</code>, â€¦). Saving polls immediately; use{" "}
           <strong>Poll now</strong> anytime after. MX management IPs come from Addressing &amp; VLANs
           (appliance LAN), not WAN. Live health (online status, WAN uplinks, switch ports, AP
-          clients) comes from the Dashboard API on the same interval — not SNMP. Create a key in
-          Meraki Dashboard → Organization → Settings → Dashboard API access.
+          clients) comes from the Dashboard API on the same interval â€” not SNMP. Create a key in
+          Meraki Dashboard â†’ Organization â†’ Settings â†’ Dashboard API access.
         </p>
 
         <label className="flex items-center gap-2 text-sm text-slate-300">
@@ -1005,13 +1069,13 @@ function MerakiSyncPanel({ siteId }: { siteId: string }) {
 
         <div className="space-y-1">
           <div className="text-xs text-slate-400">
-            Dashboard API key {apiKeySet ? "(saved — leave blank to keep)" : ""}
+            Dashboard API key {apiKeySet ? "(saved â€” leave blank to keep)" : ""}
           </div>
           <input
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
-            placeholder={apiKeySet ? "••••••••••••" : "Paste Meraki API key"}
+            placeholder={apiKeySet ? "â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" : "Paste Meraki API key"}
             autoComplete="new-password"
             className="block w-full rounded-md border border-ink-700 bg-ink-950 px-3 py-2 font-mono text-sm"
           />
@@ -1026,7 +1090,7 @@ function MerakiSyncPanel({ siteId }: { siteId: string }) {
 
         <div className="space-y-1">
           <div className="text-xs text-slate-400">
-            Organization IDs (optional — one per line; empty = all orgs on this key)
+            Organization IDs (optional â€” one per line; empty = all orgs on this key)
           </div>
           <textarea
             value={orgText}
@@ -1043,7 +1107,7 @@ function MerakiSyncPanel({ siteId }: { siteId: string }) {
             disabled={save.isPending || syncNow.isPending}
             className="rounded-md bg-sonar-500 px-3 py-1.5 text-sm font-medium text-ink-950 hover:bg-sonar-400 disabled:opacity-50"
           >
-            {save.isPending ? "Saving…" : "Save & poll"}
+            {save.isPending ? "Savingâ€¦" : "Save & poll"}
           </button>
           <button
             type="button"
@@ -1051,7 +1115,7 @@ function MerakiSyncPanel({ siteId }: { siteId: string }) {
             disabled={syncNow.isPending || save.isPending || (!apiKeySet && !apiKey.trim())}
             className="rounded-md border border-ink-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-ink-800 disabled:opacity-50"
           >
-            {syncNow.isPending ? "Polling…" : "Poll now"}
+            {syncNow.isPending ? "Pollingâ€¦" : "Poll now"}
           </button>
           <Link
             to="/appliances"

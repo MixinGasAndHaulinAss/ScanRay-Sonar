@@ -9,7 +9,7 @@ info:
     All non-auth endpoints require `Authorization: Bearer <jwt>`.
     Mutating endpoints additionally require RBAC role >= the level
     documented per-operation.
-  version: "2026.7.14.13"
+  version: "2026.7.14.14"
   license:
     name: MIT
 servers:
@@ -1821,12 +1821,13 @@ paths:
               properties:
                 siteId: { type: string, format: uuid }
                 name: { type: string }
-                typeId: { type: string, enum: [icmp, tcp, http, dns, tls] }
-                params: { type: object, additionalProperties: true }
+                typeId: { type: string, enum: [icmp, tcp, http, dns, tls, sql_query, smtp, imap, ldap_bind] }
+                params: { type: object, additionalProperties: true, description: "Non-secret params; use credentialId for vault refs" }
                 intervalSeconds: { type: integer, minimum: 15 }
                 preferredRunner: { type: string, enum: [auto, agent, collector, central] }
                 assignedAgentId: { type: string, format: uuid, nullable: true }
                 applianceId: { type: string, format: uuid, nullable: true }
+                credentialId: { type: string, format: uuid, nullable: true, description: "site_credentials id (required for sql_query/smtp/imap/ldap_bind)" }
                 enabled: { type: boolean }
       responses:
         "201":

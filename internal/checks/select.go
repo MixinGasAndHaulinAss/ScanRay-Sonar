@@ -19,6 +19,7 @@ type CheckRow struct {
 	AssignedAgentID     *uuid.UUID
 	AssignedCollectorID *uuid.UUID
 	ApplianceID         *uuid.UUID
+	CredentialID        *uuid.UUID
 }
 
 // OnlineAgent is a minimal agent presence signal for runner selection.
@@ -30,7 +31,11 @@ type OnlineAgent struct {
 
 // SelectRunner picks who should execute the check.
 // auto → online assigned agent, else any online agent at site, else central.
+// Vault-backed types are always central.
 func SelectRunner(c CheckRow, agents []OnlineAgent, now time.Time) string {
+	if IsCentralOnly(c.TypeID) {
+		return "central"
+	}
 	pref := strings.ToLower(strings.TrimSpace(c.PreferredRunner))
 	if pref == "" {
 		pref = "auto"

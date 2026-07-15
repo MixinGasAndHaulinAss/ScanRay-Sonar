@@ -19,6 +19,30 @@
       "channelCount": 3
     },
     {
+      "id": "imap",
+      "title": "IMAP",
+      "file": "imap.json",
+      "channelCount": 3
+    },
+    {
+      "id": "ldap_bind",
+      "title": "LDAP bind",
+      "file": "ldap_bind.json",
+      "channelCount": 2
+    },
+    {
+      "id": "smtp",
+      "title": "SMTP",
+      "file": "smtp.json",
+      "channelCount": 2
+    },
+    {
+      "id": "sql_query",
+      "title": "SQL query",
+      "file": "sql_query.json",
+      "channelCount": 3
+    },
+    {
       "id": "tcp",
       "title": "TCP port",
       "file": "tcp.json",

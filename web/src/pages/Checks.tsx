@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import type { Site } from "../api/types";
@@ -22,11 +22,27 @@ interface CheckRow {
   enabled: boolean;
   preferredRunner: string;
   assignedAgentId?: string;
+  credentialId?: string;
   applianceId?: string;
   lastRunAt?: string;
   lastOk?: boolean;
   lastError?: string;
 }
+
+interface CredRow {
+  id: string;
+  kind: string;
+  name: string;
+}
+
+const CENTRAL_TYPES = new Set(["sql_query", "smtp", "imap", "ldap_bind"]);
+
+const CRED_KIND: Record<string, string> = {
+  sql_query: "sql",
+  smtp: "smtp",
+  imap: "imap",
+  ldap_bind: "ldap",
+};
 
 export default function Checks() {
   const qc = useQueryClient();
@@ -41,14 +57,37 @@ export default function Checks() {
   const [host, setHost] = useState(sp.get("host") || "");
   const [url, setUrl] = useState(sp.get("url") || "");
   const [port, setPort] = useState(sp.get("port") || "443");
+  const [query, setQuery] = useState("SELECT 1");
+  const [driver, setDriver] = useState("postgres");
+  const [tlsMode, setTlsMode] = useState("starttls");
+  const [useTLS, setUseTLS] = useState(false);
+  const [credentialId, setCredentialId] = useState("");
   const [runner, setRunner] = useState(sp.get("runner") || "auto");
   const [agentId, setAgentId] = useState(sp.get("agentId") || "");
   const [applianceId] = useState(sp.get("applianceId") || "");
   const [err, setErr] = useState<string | null>(null);
 
+  const centralOnly = CENTRAL_TYPES.has(typeId);
+  const credKind = CRED_KIND[typeId];
+
+  useEffect(() => {
+    if (centralOnly) setRunner("central");
+  }, [centralOnly]);
+
+  const creds = useQuery({
+    queryKey: ["site-credentials", siteId],
+    queryFn: () => api.get<CredRow[]>(`/sites/${siteId}/credentials`),
+    enabled: !!siteId && !!credKind,
+  });
+
   const selectedType = useMemo(
     () => types.data?.find((t) => t.id === typeId),
     [types.data, typeId],
+  );
+
+  const filteredCreds = useMemo(
+    () => (creds.data || []).filter((c) => c.kind === credKind),
+    [creds.data, credKind],
   );
 
   const create = useMutation({
@@ -63,14 +102,36 @@ export default function Checks() {
         params.port = Number(port) || (typeId === "tls" ? 443 : 0);
       }
       if (typeId === "tls" && host) params.sni = host;
+      if (typeId === "sql_query") {
+        params.port = Number(port) || 5432;
+        params.driver = driver;
+        params.query = query;
+        params.credentialId = credentialId;
+      }
+      if (typeId === "smtp") {
+        params.port = Number(port) || 587;
+        params.tlsMode = tlsMode;
+        params.credentialId = credentialId;
+      }
+      if (typeId === "imap") {
+        params.port = Number(port) || 993;
+        params.tlsMode = tlsMode === "starttls" ? "tls" : tlsMode;
+        params.credentialId = credentialId;
+      }
+      if (typeId === "ldap_bind") {
+        params.port = Number(port) || (useTLS ? 636 : 389);
+        params.useTLS = useTLS;
+        params.credentialId = credentialId;
+      }
       return api.post<{ id: string }>("/checks", {
         siteId,
         name: name || `${typeId} ${host || url}`,
         typeId,
         params,
-        preferredRunner: runner,
-        assignedAgentId: agentId || undefined,
+        preferredRunner: centralOnly ? "central" : runner,
+        assignedAgentId: centralOnly ? undefined : agentId || undefined,
         applianceId: applianceId || undefined,
+        credentialId: credentialId || undefined,
         intervalSeconds: 60,
       });
     },
@@ -98,8 +159,9 @@ export default function Checks() {
       <div>
         <h2 className="text-2xl font-semibold tracking-tight">Checks</h2>
         <p className="mt-0.5 text-xs text-slate-500">
-          Synthetic ICMP / TCP / HTTP / DNS / TLS monitors. Agent-first when a probe is online; otherwise the
-          central poller runs them. Does not replace SNMP, Meraki, or device DEX.
+          Synthetic monitors (ICMP/TCP/HTTP/DNS/TLS) plus vault-backed SQL / SMTP / IMAP / LDAP. Phase-1 types are
+          agent-first; credentialed types always run on the central poller. Secrets live in the site credential vault —
+          never in check params.
         </p>
       </div>
 
@@ -108,6 +170,10 @@ export default function Checks() {
         onSubmit={(e) => {
           e.preventDefault();
           if (!siteId || !typeId) return;
+          if (centralOnly && !credentialId) {
+            setErr("Select a vault credential for this check type");
+            return;
+          }
           create.mutate();
         }}
       >
@@ -117,7 +183,10 @@ export default function Checks() {
             <select
               className="mt-1 block rounded-md border border-ink-700 bg-ink-950 px-2 py-1.5 text-sm text-slate-100"
               value={siteId}
-              onChange={(e) => setSiteId(e.target.value)}
+              onChange={(e) => {
+                setSiteId(e.target.value);
+                setCredentialId("");
+              }}
               required
             >
               <option value="">Select…</option>
@@ -133,7 +202,20 @@ export default function Checks() {
             <select
               className="mt-1 block rounded-md border border-ink-700 bg-ink-950 px-2 py-1.5 text-sm text-slate-100"
               value={typeId}
-              onChange={(e) => setTypeId(e.target.value)}
+              onChange={(e) => {
+                setTypeId(e.target.value);
+                setCredentialId("");
+                const t = e.target.value;
+                if (t === "sql_query") setPort("5432");
+                else if (t === "smtp") {
+                  setPort("587");
+                  setTlsMode("starttls");
+                } else if (t === "imap") {
+                  setPort("993");
+                  setTlsMode("tls");
+                } else if (t === "ldap_bind") setPort("389");
+                else if (t === "tls") setPort("443");
+              }}
             >
               {(types.data || []).map((t) => (
                 <option key={t.id} value={t.id}>
@@ -146,7 +228,8 @@ export default function Checks() {
             Runner
             <select
               className="mt-1 block rounded-md border border-ink-700 bg-ink-950 px-2 py-1.5 text-sm text-slate-100"
-              value={runner}
+              value={centralOnly ? "central" : runner}
+              disabled={centralOnly}
               onChange={(e) => setRunner(e.target.value)}
             >
               <option value="auto">auto (agent first)</option>
@@ -187,7 +270,12 @@ export default function Checks() {
               />
             </label>
           )}
-          {(typeId === "tcp" || typeId === "tls") && (
+          {(typeId === "tcp" ||
+            typeId === "tls" ||
+            typeId === "sql_query" ||
+            typeId === "smtp" ||
+            typeId === "imap" ||
+            typeId === "ldap_bind") && (
             <label className="text-xs text-slate-400">
               Port
               <input
@@ -197,7 +285,76 @@ export default function Checks() {
               />
             </label>
           )}
-          {runner === "agent" && (
+          {typeId === "sql_query" && (
+            <>
+              <label className="text-xs text-slate-400">
+                Driver
+                <select
+                  className="mt-1 block rounded-md border border-ink-700 bg-ink-950 px-2 py-1.5 text-sm text-slate-100"
+                  value={driver}
+                  onChange={(e) => setDriver(e.target.value)}
+                >
+                  <option value="postgres">postgres</option>
+                  <option value="sqlserver">sqlserver</option>
+                  <option value="mysql">mysql</option>
+                </select>
+              </label>
+              <label className="text-xs text-slate-400">
+                Query
+                <input
+                  className="mt-1 block w-72 rounded-md border border-ink-700 bg-ink-950 px-2 py-1.5 font-mono text-sm text-slate-100"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </label>
+            </>
+          )}
+          {(typeId === "smtp" || typeId === "imap") && (
+            <label className="text-xs text-slate-400">
+              TLS mode
+              <select
+                className="mt-1 block rounded-md border border-ink-700 bg-ink-950 px-2 py-1.5 text-sm text-slate-100"
+                value={tlsMode}
+                onChange={(e) => setTlsMode(e.target.value)}
+              >
+                <option value="starttls">starttls</option>
+                <option value="tls">tls</option>
+                <option value="plain">plain</option>
+              </select>
+            </label>
+          )}
+          {typeId === "ldap_bind" && (
+            <label className="flex items-end gap-2 text-xs text-slate-400">
+              <input type="checkbox" checked={useTLS} onChange={(e) => setUseTLS(e.target.checked)} />
+              Use LDAPS
+            </label>
+          )}
+          {centralOnly && (
+            <label className="text-xs text-slate-400">
+              Vault credential ({credKind})
+              <select
+                className="mt-1 block w-64 rounded-md border border-ink-700 bg-ink-950 px-2 py-1.5 text-sm text-slate-100"
+                value={credentialId}
+                onChange={(e) => setCredentialId(e.target.value)}
+                required
+              >
+                <option value="">Select…</option>
+                {filteredCreds.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-[10px] text-slate-500">
+                Manage under Sites → Discovery → credentials (
+                <Link className="text-sonar-400 hover:underline" to={siteId ? `/sites/${siteId}` : "/sites"}>
+                  open site
+                </Link>
+                ).
+              </span>
+            </label>
+          )}
+          {!centralOnly && runner === "agent" && (
             <label className="text-xs text-slate-400">
               Agent ID
               <input
@@ -211,7 +368,8 @@ export default function Checks() {
         </div>
         {selectedType && (
           <p className="text-[11px] text-slate-500">
-            {selectedType.title} — runner preference {selectedType.runner}
+            {selectedType.title} — pack runner {selectedType.runner}
+            {centralOnly ? " (forced central; secrets never sent to probes)" : ""}
           </p>
         )}
         {err && <p className="text-xs text-rose-400">{err}</p>}
