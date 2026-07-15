@@ -1257,6 +1257,9 @@ function PatchesTab({ snap }: { snap: Snapshot }) {
       p.title.toLowerCase().includes(q.toLowerCase()) ||
       (p.kb ?? "").toLowerCase().includes(q.toLowerCase()),
   );
+  const slowFail = (snap.collectionWarnings ?? []).some(
+    (w) => w.startsWith("dex:") || w.startsWith("health:"),
+  );
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
@@ -1297,7 +1300,9 @@ function PatchesTab({ snap }: { snap: Snapshot }) {
               <tr>
                 <td colSpan={4} className="px-3 py-6 text-center text-slate-500">
                   {patches.length === 0
-                    ? "No missing patches reported (or inventory not collected yet — waits for 5-min health cycle)."
+                    ? slowFail
+                      ? "Patch inventory failed or timed out — see collection warnings on Performance."
+                      : "No missing patches reported (or inventory not collected yet — waits for 5-min health cycle)."
                     : "No patches match the filter."}
                 </td>
               </tr>
@@ -1328,6 +1333,9 @@ function InstalledAppsTab({ snap }: { snap: Snapshot }) {
       a.name.toLowerCase().includes(q.toLowerCase()) ||
       (a.publisher ?? "").toLowerCase().includes(q.toLowerCase()),
   );
+  const slowFail = (snap.collectionWarnings ?? []).some(
+    (w) => w.startsWith("dex:") || w.startsWith("health:"),
+  );
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
@@ -1354,7 +1362,9 @@ function InstalledAppsTab({ snap }: { snap: Snapshot }) {
               <tr>
                 <td colSpan={4} className="px-3 py-6 text-center text-slate-500">
                   {apps.length === 0
-                    ? "No installed-app inventory yet (Windows probe, 5-min inventory cycle)."
+                    ? slowFail
+                      ? "App inventory failed or timed out — see collection warnings on Performance."
+                      : "No installed-app inventory yet (Windows probe, 5-min inventory cycle)."
                     : "No applications match."}
                 </td>
               </tr>
@@ -1485,6 +1495,9 @@ function EventLogTab({ snap }: { snap: Snapshot }) {
       (r.provider ?? "").toLowerCase().includes(q.toLowerCase()) ||
       String(r.eventId ?? "").includes(q),
   );
+  const slowFail = (snap.collectionWarnings ?? []).some(
+    (w) => w.startsWith("dex:") || w.startsWith("health:"),
+  );
   return (
     <div className="space-y-3">
       <div className="grid gap-2 sm:grid-cols-4">
@@ -1515,7 +1528,9 @@ function EventLogTab({ snap }: { snap: Snapshot }) {
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
-                  No event-log rows yet (Windows inventory cycle).
+                  {slowFail
+                    ? "Event-log inventory failed or timed out — see collection warnings on Performance."
+                    : "No event-log rows yet (Windows inventory cycle)."}
                 </td>
               </tr>
             )}

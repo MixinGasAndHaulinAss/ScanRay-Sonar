@@ -13,9 +13,11 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// winDEXScript collects installed apps, missing patch titles, Win11
-// readiness, recent event-log rows, and power events in one PowerShell
-// pass (same cadence as health — ~5 min).
+// winDEXScript collects installed apps, Win11 readiness, recent
+// event-log rows, power events, and extensions first (fast path), then
+// missing patch titles via Windows Update COM last — with a job
+// timeout so a hung Search cannot drop the fast inventory (JSON is
+// only emitted at the end of the script).
 const winDEXScript = `
 $out = [ordered]@{
   installedApps = @()
@@ -24,6 +26,7 @@ $out = [ordered]@{
   eventLog = @()
   powerEvents = @()
 }
+$warnings = @()
 
 # Installed applications from Uninstall registry keys (x64 + WOW6432).
 try {
@@ -49,33 +52,6 @@ try {
       installLocation = [string]$a.InstallLocation
     }
     if ($out.installedApps.Count -ge 200) { break }
-  }
-} catch {}
-
-# Missing patches with titles (cap 50).
-try {
-  $session = New-Object -ComObject Microsoft.Update.Session
-  $searcher = $session.CreateUpdateSearcher()
-  $r = $searcher.Search("IsInstalled=0 and Type='Software' and IsHidden=0")
-  if ($r -and $r.Updates) {
-    $i = 0
-    foreach ($u in $r.Updates) {
-      $kb = ''
-      try {
-        if ($u.KBArticleIDs -and $u.KBArticleIDs.Count -gt 0) {
-          $kb = 'KB' + $u.KBArticleIDs.Item(0)
-        }
-      } catch {}
-      $sev = ''
-      try { $sev = [string]$u.MsrcSeverity } catch {}
-      $sz = $null
-      try { if ($u.MaxDownloadSize) { $sz = [math]::Round($u.MaxDownloadSize / 1MB, 1) } } catch {}
-      $row = [ordered]@{ title = [string]$u.Title; kb = $kb; severity = $sev }
-      if ($null -ne $sz) { $row.sizeMb = $sz }
-      $out.missingPatches += $row
-      $i++
-      if ($i -ge 50) { break }
-    }
   }
 } catch {}
 
@@ -211,6 +187,57 @@ try {
   }
 } catch {}
 
+# Missing patches with titles (cap 50) — last, job-timeout so COM hang
+# cannot prevent ConvertTo-Json of the fast inventory above.
+try {
+  $job = Start-Job -ScriptBlock {
+    $rows = @()
+    $session = New-Object -ComObject Microsoft.Update.Session
+    $searcher = $session.CreateUpdateSearcher()
+    $r = $searcher.Search("IsInstalled=0 and Type='Software' and IsHidden=0")
+    if ($r -and $r.Updates) {
+      $i = 0
+      foreach ($u in $r.Updates) {
+        $kb = ''
+        try {
+          if ($u.KBArticleIDs -and $u.KBArticleIDs.Count -gt 0) {
+            $kb = 'KB' + $u.KBArticleIDs.Item(0)
+          }
+        } catch {}
+        $sev = ''
+        try { $sev = [string]$u.MsrcSeverity } catch {}
+        $sz = $null
+        try { if ($u.MaxDownloadSize) { $sz = [math]::Round($u.MaxDownloadSize / 1MB, 1) } } catch {}
+        $row = @{ title = [string]$u.Title; kb = $kb; severity = $sev }
+        if ($null -ne $sz) { $row.sizeMb = $sz }
+        $rows += $row
+        $i++
+        if ($i -ge 50) { break }
+      }
+    }
+    return $rows
+  }
+  if (Wait-Job $job -Timeout 25) {
+    $rows = Receive-Job $job -ErrorAction SilentlyContinue
+    foreach ($row in @($rows)) {
+      if (-not $row) { continue }
+      $item = [ordered]@{
+        title = [string]$row.title
+        kb = [string]$row.kb
+        severity = [string]$row.severity
+      }
+      if ($null -ne $row.sizeMb) { $item.sizeMb = $row.sizeMb }
+      $out.missingPatches += $item
+    }
+  } else {
+    $warnings += 'dex: Windows Update search timed out'
+    Stop-Job $job -Force -ErrorAction SilentlyContinue
+  }
+  Remove-Job $job -Force -ErrorAction SilentlyContinue
+} catch {}
+
+if ($warnings.Count -gt 0) { $out.warnings = $warnings }
+
 $out | ConvertTo-Json -Compress -Depth 6
 `
 
@@ -221,6 +248,7 @@ type winDEXResult struct {
 	Win11Readiness      *Win11Readiness    `json:"win11Readiness"`
 	EventLog            []EventLogRow      `json:"eventLog"`
 	PowerEvents         []PowerEvent       `json:"powerEvents"`
+	Warnings            []string           `json:"warnings"`
 }
 
 func collectDEXInventoryOS(ctx context.Context) *DexInventory {
@@ -233,12 +261,22 @@ func collectDEXInventoryOS(ctx context.Context) *DexInventory {
 	)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	out, err := cmd.Output()
+	now := time.Now().UTC().Format(time.RFC3339)
 	if err != nil || len(out) == 0 {
-		return &DexInventory{CollectedAt: time.Now().UTC().Format(time.RFC3339)}
+		inv := &DexInventory{CollectedAt: now}
+		if ctx.Err() != nil {
+			inv.Warnings = []string{"dex: inventory PowerShell timed out"}
+		} else if err != nil {
+			inv.Warnings = []string{"dex: inventory PowerShell failed"}
+		}
+		return inv
 	}
 	var r winDEXResult
 	if err := json.Unmarshal(out, &r); err != nil {
-		return &DexInventory{CollectedAt: time.Now().UTC().Format(time.RFC3339)}
+		return &DexInventory{
+			CollectedAt: now,
+			Warnings:    []string{"dex: inventory JSON parse failed"},
+		}
 	}
 	return &DexInventory{
 		InstalledApps:       r.InstalledApps,
@@ -247,7 +285,8 @@ func collectDEXInventoryOS(ctx context.Context) *DexInventory {
 		Win11Readiness:      r.Win11Readiness,
 		EventLog:            r.EventLog,
 		PowerEvents:         r.PowerEvents,
-		CollectedAt:         time.Now().UTC().Format(time.RFC3339),
+		Warnings:            r.Warnings,
+		CollectedAt:         now,
 	}
 }
 

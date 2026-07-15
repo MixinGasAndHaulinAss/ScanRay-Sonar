@@ -35,6 +35,11 @@ type extrasState struct {
 	latency []LatencyRow
 	health  *HealthSignals
 
+	// slowWarnings are non-fatal health/DEX collection issues from the
+	// 5-minute loop (e.g. Windows Update COM timeout). Merged into
+	// Snapshot.CollectionWarnings on each CollectSnapshot.
+	slowWarnings []string
+
 	// icmpBroken is set on the first ICMP listen failure so the
 	// "ICMP unavailable" warning lands in CollectionWarnings exactly
 	// once instead of every minute.
@@ -89,6 +94,27 @@ func (e *extrasState) setHealth(h *HealthSignals) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.health = h
+}
+
+// setSlowWarnings replaces the cached health/DEX collection warnings.
+func (e *extrasState) setSlowWarnings(w []string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if len(w) == 0 {
+		e.slowWarnings = nil
+		return
+	}
+	e.slowWarnings = append([]string(nil), w...)
+}
+
+// LatestSlowWarnings returns a copy of health/DEX collection warnings.
+func (e *extrasState) LatestSlowWarnings() []string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if len(e.slowWarnings) == 0 {
+		return nil
+	}
+	return append([]string(nil), e.slowWarnings...)
 }
 
 // LatencyTargets resolves the targets we want to probe right now.
@@ -149,30 +175,56 @@ func runLatencyLoop(ctx context.Context, log *slog.Logger, target string) {
 // health_{windows,linux,other}.go. After collecting the per-OS signals
 // we also do one TTL-ramp traceroute to the primary latency target so
 // the Network · Latency dashboard can rank hosts by path length.
+//
+// Health, traceroute, and DEX each get their own timeout budget so a
+// hung Windows Update COM search (common on AVD/WSUS-broken hosts)
+// cannot starve installed-apps / event-log inventory.
 func runHealthLoop(ctx context.Context, log *slog.Logger) {
 	tick := func() {
-		hCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
-		defer cancel()
+		var warns []string
+
+		hCtx, hCancel := context.WithTimeout(ctx, 45*time.Second)
 		h := CollectHealthSignals(hCtx)
+		hErr := hCtx.Err()
+		hCancel()
 		if h == nil {
 			h = &HealthSignals{}
 		}
+		warns = append(warns, h.SlowCollectionWarnings...)
+		h.SlowCollectionWarnings = nil
+		if hErr == context.DeadlineExceeded {
+			warns = append(warns, "health: collection timed out")
+		}
+
 		// Traceroute is comparatively expensive (~10-30 s for a path
-		// of typical length). We share the 5-minute cadence with the
-		// rest of HealthSignals because per-minute traces add no
-		// value on stable corporate networks.
-		if hops, err := TraceHopCount(hCtx, "8.8.8.8", 30); err == nil && hops > 0 {
+		// of typical length). Independent budget so it never blocks DEX.
+		tCtx, tCancel := context.WithTimeout(ctx, 25*time.Second)
+		if hops, err := TraceHopCount(tCtx, "8.8.8.8", 30); err == nil && hops > 0 {
 			h.TracerouteHops = &hops
 		} else if err != nil {
 			log.Debug("traceroute failed", "err", err)
 		}
+		tCancel()
 		extras.setHealth(h)
+
 		// DEX inventory shares the health cadence — COM Update +
 		// registry Uninstall + WinEvent are too heavy for the 30s loop.
-		inv := CollectDEXInventory(hCtx)
+		dCtx, dCancel := context.WithTimeout(ctx, 60*time.Second)
+		inv := CollectDEXInventory(dCtx)
+		dErr := dCtx.Err()
+		dCancel()
 		if inv != nil {
+			warns = append(warns, inv.Warnings...)
+			inv.Warnings = nil
 			dex.setInventory(inv)
+			if dErr == context.DeadlineExceeded &&
+				len(inv.InstalledApps) == 0 && len(inv.EventLog) == 0 {
+				warns = append(warns, "dex: inventory timed out")
+			}
+		} else if dErr == context.DeadlineExceeded {
+			warns = append(warns, "dex: inventory timed out")
 		}
+		extras.setSlowWarnings(warns)
 	}
 	tick()
 	t := time.NewTicker(5 * time.Minute)

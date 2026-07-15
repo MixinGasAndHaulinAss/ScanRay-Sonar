@@ -57,13 +57,26 @@ try {
 } catch {}
 
 # Missing patches — count of "is not installed and not hidden" updates.
-# COM Microsoft.Update.Session is the canonical source; works on any
-# Windows that has Windows Update.
+# COM Microsoft.Update.Session Search can hang for minutes on AVD /
+# WSUS-broken hosts; run it in a job with a hard timeout so the rest
+# of the batch (event-log rollups, etc.) still completes.
+$warnings = @()
 try {
-  $session = New-Object -ComObject Microsoft.Update.Session
-  $searcher = $session.CreateUpdateSearcher()
-  $r = $searcher.Search("IsInstalled=0 and Type='Software' and IsHidden=0")
-  if ($r -and $r.Updates) { $out.missingPatchCount = $r.Updates.Count }
+  $job = Start-Job -ScriptBlock {
+    $session = New-Object -ComObject Microsoft.Update.Session
+    $searcher = $session.CreateUpdateSearcher()
+    $r = $searcher.Search("IsInstalled=0 and Type='Software' and IsHidden=0")
+    if ($r -and $r.Updates) { return [int]$r.Updates.Count }
+    return 0
+  }
+  if (Wait-Job $job -Timeout 20) {
+    $c = Receive-Job $job -ErrorAction SilentlyContinue
+    if ($null -ne $c) { $out.missingPatchCount = [int]$c }
+  } else {
+    $warnings += 'health: Windows Update search timed out'
+    Stop-Job $job -Force -ErrorAction SilentlyContinue
+  }
+  Remove-Job $job -Force -ErrorAction SilentlyContinue
 } catch {}
 
 # Event log roll-ups, last 24h.
@@ -71,7 +84,7 @@ $since = (Get-Date).AddDays(-1)
 function safeCount {
   param($filter)
   try {
-    $r = Get-WinEvent -FilterHashtable $filter -ErrorAction Stop
+    $r = Get-WinEvent -FilterHashtable $filter -MaxEvents 5000 -ErrorAction Stop
     if ($null -eq $r) { return 0 }
     return @($r).Count
   } catch { return 0 }
@@ -203,6 +216,8 @@ try {
   }
 } catch {}
 
+if ($warnings.Count -gt 0) { $out.warnings = $warnings }
+
 $out | ConvertTo-Json -Compress
 `
 
@@ -228,11 +243,12 @@ type winPSResult struct {
 	AppLaunchMaxMs          *float64            `json:"appLaunchMaxMs,omitempty"`
 	InputDelayAvgMs         *float64            `json:"inputDelayAvgMs,omitempty"`
 	AppCrashesByName        []AppCrashNameCount `json:"appCrashesByName,omitempty"`
+	Warnings                []string            `json:"warnings,omitempty"`
 }
 
 // winRunPSBatch runs winPSScript once and copies the parsed result
-// into h. Any error (PowerShell missing, JSON malformed, timeout) is
-// swallowed — the dashboard already handles "no signals" gracefully.
+// into h. Timeouts and malformed JSON leave whatever partial fields
+// we have; warnings are attached for CollectionWarnings.
 func winRunPSBatch(ctx context.Context, h *HealthSignals) {
 	cmd := exec.CommandContext(ctx,
 		"powershell.exe",
@@ -244,11 +260,20 @@ func winRunPSBatch(ctx context.Context, h *HealthSignals) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	out, err := cmd.Output()
 	if err != nil || len(out) == 0 {
+		if ctx.Err() != nil {
+			h.SlowCollectionWarnings = append(h.SlowCollectionWarnings, "health: PowerShell timed out")
+		} else if err != nil {
+			h.SlowCollectionWarnings = append(h.SlowCollectionWarnings, "health: PowerShell failed")
+		}
 		return
 	}
 	var r winPSResult
 	if err := json.Unmarshal(out, &r); err != nil {
+		h.SlowCollectionWarnings = append(h.SlowCollectionWarnings, "health: PowerShell JSON parse failed")
 		return
+	}
+	if len(r.Warnings) > 0 {
+		h.SlowCollectionWarnings = append(h.SlowCollectionWarnings, r.Warnings...)
 	}
 	if r.BatteryHealthPct != nil {
 		h.BatteryHealthPct = r.BatteryHealthPct

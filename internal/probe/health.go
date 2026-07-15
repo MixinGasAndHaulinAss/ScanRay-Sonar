@@ -60,6 +60,12 @@ type HealthSignals struct {
 	EDRProducts []string `json:"edrProducts,omitempty"`
 	// SysmonRunning is true when Sysmon service/process is present.
 	SysmonRunning *bool `json:"sysmonRunning,omitempty"`
+
+	// SlowCollectionWarnings are probe-local notes from the health
+	// PowerShell batch (e.g. Windows Update search timed out). Not
+	// serialized on the wire — CollectSnapshot merges them into
+	// Snapshot.CollectionWarnings.
+	SlowCollectionWarnings []string `json:"-"`
 }
 
 // AppCrashNameCount is one row of per-app crash tallies.

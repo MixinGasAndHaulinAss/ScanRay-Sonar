@@ -110,6 +110,9 @@ type DexInventory struct {
 	EventLog            []EventLogRow      `json:"eventLog,omitempty"`
 	PowerEvents         []PowerEvent       `json:"powerEvents,omitempty"`
 	CollectedAt         string             `json:"collectedAt,omitempty"`
+	// Warnings from the Windows inventory script (e.g. WUA timeout).
+	// Merged into Snapshot.CollectionWarnings; not shown as its own tab.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 type dexState struct {
@@ -156,6 +159,7 @@ func (d *dexState) latestInventory() *DexInventory {
 	cp.MissingPatches = append([]MissingPatch(nil), d.inventory.MissingPatches...)
 	cp.EventLog = append([]EventLogRow(nil), d.inventory.EventLog...)
 	cp.PowerEvents = append([]PowerEvent(nil), d.inventory.PowerEvents...)
+	cp.Warnings = append([]string(nil), d.inventory.Warnings...)
 	if d.inventory.Win11Readiness != nil {
 		w := *d.inventory.Win11Readiness
 		cp.Win11Readiness = &w

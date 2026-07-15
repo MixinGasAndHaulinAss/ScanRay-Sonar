@@ -325,6 +325,9 @@ func CollectSnapshot(ctx context.Context, hostname string) Snapshot {
 		s.warn("latency: ICMP probe unavailable on this host (no raw-socket privilege)")
 	}
 	s.Health = extras.LatestHealth()
+	for _, w := range extras.LatestSlowWarnings() {
+		s.warn(w)
+	}
 
 	// DEX inventory + live rings.
 	if inv := dex.latestInventory(); inv != nil {
