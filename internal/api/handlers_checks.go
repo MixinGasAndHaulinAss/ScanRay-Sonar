@@ -20,12 +20,12 @@ func (s *Server) handleListCheckTypes(w http.ResponseWriter, r *http.Request) {
 	out := make([]map[string]any, 0, len(packs))
 	for _, p := range packs {
 		out = append(out, map[string]any{
-			"id":       p.ID,
-			"title":    p.Title,
+			"id":        p.ID,
+			"title":     p.Title,
 			"mechanism": p.Mechanism,
-			"runner":   p.Runner,
-			"params":   p.Params,
-			"channels": p.Channels,
+			"runner":    p.Runner,
+			"params":    p.Params,
+			"channels":  p.Channels,
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -58,16 +58,16 @@ func (s *Server) handleListChecks(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for rows.Next() {
 		var (
-			id, siteID                         uuid.UUID
-			name, typeID, pref                 string
-			params                             []byte
-			interval                           int
-			enabled                            bool
-			agentID, collectorID, applianceID  *uuid.UUID
-			lastRun                            *time.Time
-			lastOK                             *bool
-			lastErr                            *string
-			created                            time.Time
+			id, siteID                        uuid.UUID
+			name, typeID, pref                string
+			params                            []byte
+			interval                          int
+			enabled                           bool
+			agentID, collectorID, applianceID *uuid.UUID
+			lastRun                           *time.Time
+			lastOK                            *bool
+			lastErr                           *string
+			created                           time.Time
 		)
 		if rows.Scan(&id, &siteID, &name, &typeID, &params, &interval, &enabled, &pref,
 			&agentID, &collectorID, &applianceID, &lastRun, &lastOK, &lastErr, &created) != nil {
@@ -292,9 +292,9 @@ func (s *Server) handleAgentListChecks(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for rows.Next() {
 		var (
-			c           checks.CheckRow
-			paramsRaw   []byte
-			lastRun     time.Time
+			c              checks.CheckRow
+			paramsRaw      []byte
+			lastRun        time.Time
 			aID, cID, apID *uuid.UUID
 		)
 		if rows.Scan(&c.ID, &c.SiteID, &c.Name, &c.TypeID, &paramsRaw, &c.IntervalSeconds,
@@ -329,9 +329,9 @@ func (s *Server) handleAgentCheckResults(w http.ResponseWriter, r *http.Request)
 	}
 	var req struct {
 		Results []struct {
-			CheckID string         `json:"checkId"`
-			OK      bool           `json:"ok"`
-			Error   string         `json:"error"`
+			CheckID string           `json:"checkId"`
+			OK      bool             `json:"ok"`
+			Error   string           `json:"error"`
 			Samples []map[string]any `json:"samples"`
 		} `json:"results"`
 	}

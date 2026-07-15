@@ -148,12 +148,12 @@ func PersistCheckResult(ctx context.Context, pool *pgxpool.Pool, nc *nats.Conn, 
 		return nil
 	}
 	payload := map[string]any{
-		"checkId":   c.ID.String(),
-		"siteId":    c.SiteID.String(),
-		"typeId":    c.TypeID,
-		"name":      c.Name,
-		"runner":    runner,
-		"ok":        res.OK,
+		"checkId": c.ID.String(),
+		"siteId":  c.SiteID.String(),
+		"typeId":  c.TypeID,
+		"name":    c.Name,
+		"runner":  runner,
+		"ok":      res.OK,
 	}
 	for k, v := range checks.FlatFields(c.TypeID, res) {
 		payload[k] = v

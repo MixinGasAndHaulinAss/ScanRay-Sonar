@@ -4,8 +4,8 @@
 package checks
 
 import (
-	"encoding/json"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"path"
 	"strings"
@@ -17,11 +17,11 @@ var catalogFS embed.FS
 
 // ParamSpec describes one configurable parameter on a check type.
 type ParamSpec struct {
-	Name     string  `json:"name"`
-	Type     string  `json:"type"`
-	Required bool    `json:"required"`
-	Default  any     `json:"default,omitempty"`
-	Label    string  `json:"label"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Required bool   `json:"required"`
+	Default  any    `json:"default,omitempty"`
+	Label    string `json:"label"`
 }
 
 // DefaultAlarm is an optional seeded threshold for a channel.
@@ -43,13 +43,13 @@ type Channel struct {
 
 // Pack is one check type definition.
 type Pack struct {
-	ID         string      `json:"id"`
-	Title      string      `json:"title"`
-	Mechanism  string      `json:"mechanism"`
-	Runner     string      `json:"runner"` // agent | central | either
-	Params     []ParamSpec `json:"params"`
-	Channels   []Channel   `json:"channels"`
-	SourceIDs  []string    `json:"sourceIds,omitempty"`
+	ID        string      `json:"id"`
+	Title     string      `json:"title"`
+	Mechanism string      `json:"mechanism"`
+	Runner    string      `json:"runner"` // agent | central | either
+	Params    []ParamSpec `json:"params"`
+	Channels  []Channel   `json:"channels"`
+	SourceIDs []string    `json:"sourceIds,omitempty"`
 }
 
 var (
