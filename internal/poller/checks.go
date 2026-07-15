@@ -152,9 +152,9 @@ func (s *Scheduler) resolveCheckCred(ctx context.Context, c checks.CheckRow) (*c
 		return nil, fmt.Errorf("credential sealer unavailable")
 	}
 	var (
-		siteID  uuid.UUID
-		kind    string
-		enc     []byte
+		siteID uuid.UUID
+		kind   string
+		enc    []byte
 	)
 	err := s.pool.QueryRow(ctx, `
 		SELECT site_id, kind, enc_secret FROM site_credentials WHERE id = $1`, *credID).

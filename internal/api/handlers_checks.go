@@ -59,16 +59,16 @@ func (s *Server) handleListChecks(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for rows.Next() {
 		var (
-			id, siteID                                    uuid.UUID
-			name, typeID, pref                            string
-			params                                        []byte
-			interval                                      int
-			enabled                                       bool
-			agentID, collectorID, applianceID, credID     *uuid.UUID
-			lastRun                                       *time.Time
-			lastOK                                        *bool
-			lastErr                                       *string
-			created                                       time.Time
+			id, siteID                                uuid.UUID
+			name, typeID, pref                        string
+			params                                    []byte
+			interval                                  int
+			enabled                                   bool
+			agentID, collectorID, applianceID, credID *uuid.UUID
+			lastRun                                   *time.Time
+			lastOK                                    *bool
+			lastErr                                   *string
+			created                                   time.Time
 		)
 		if rows.Scan(&id, &siteID, &name, &typeID, &params, &interval, &enabled, &pref,
 			&agentID, &collectorID, &applianceID, &credID, &lastRun, &lastOK, &lastErr, &created) != nil {
