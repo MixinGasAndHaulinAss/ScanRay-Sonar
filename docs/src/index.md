@@ -18,6 +18,7 @@ You must be signed in to open this documentation. The **Documentation** item in 
 
 | If you want to… | Start here |
 |-----------------|------------|
+| Install central Sonar, probes, or collectors | [Installation](installation.md) |
 | Sign in, understand roles, find your way around | [Getting started](getting-started.md) |
 | Know what your role can change | [Roles and permissions](rbac.md) |
 | Enroll a probe or collector | [Devices](devices.md), [Collectors](collectors.md) |

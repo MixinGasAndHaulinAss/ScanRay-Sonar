@@ -1,27 +1,27 @@
 # =============================================================================
-# docker-compose.registry.yml — Phase 2 pull-only deploy overlay.
+# docker-compose.registry.yml — active GLCR pull-only deploy overlay.
 #
-# This file replaces the `build:` keys on sonar-api and sonar-poller
-# with `image:` references that point at the GLCR-published images
-# from the GitLab CI pipeline. Once the first pipeline goes green and
-# images exist at:
+# Replaces the `build:` keys on sonar-api and sonar-poller with `image:`
+# references to StrikeTeam GLCR images:
 #
 #   glcr.nclgisa.org:443/striketeam/scanray-sonar/api:<tag>
 #   glcr.nclgisa.org:443/striketeam/scanray-sonar/poller:<tag>
 #
-# the dev host can be cut over from `git pull && docker compose up
-# --build` to the much faster, more secure pull-only flow:
+# Canonical deploy on lab hosts:
 #
-#   docker compose -f docker-compose.yml -f docker-compose.registry.yml pull
-#   docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d
+#   ./scripts/deploy-registry.sh
 #
-# IMAGE_TAG selects the GLCR tag for BOTH sonar-api and sonar-poller (keep them uniform).
-# `scripts/deploy-registry.sh` exports IMAGE_TAG from the repo VERSION file after git pull
-# unless IMAGE_TAG is already set (e.g. in the shell or `.env`). Manual compose without
-# that script still defaults IMAGE_TAG to `latest` here only if unset everywhere else.
+# Manual equivalent:
 #
-# In Phase 1 (current) this file is committed but unused. dev still
-# runs the build-on-host scripts/deploy.sh.
+#   docker compose -f docker-compose.yml -f docker-compose.registry.yml \
+#     [-f docker-compose.dev-collector.yml] pull
+#   docker compose -f docker-compose.yml -f docker-compose.registry.yml \
+#     [-f docker-compose.dev-collector.yml] up -d --pull always --force-recreate
+#
+# IMAGE_TAG selects the GLCR tag for api + poller (and collector when the
+# dev-collector overlay is included). Keep them uniform.
+# `scripts/deploy-registry.sh` defaults IMAGE_TAG to `latest` unless already
+# set in the shell or `.env`. Pin with IMAGE_TAG=<CalVer|SHA> for rollback.
 # =============================================================================
 
 services:

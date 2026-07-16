@@ -18,19 +18,22 @@ Open a device for:
 
 ## Enroll a new device
 
-Requires **siteadmin** (to mint enrollment tokens).
+Requires **siteadmin** (to mint enrollment tokens). Central Sonar must already be running — see [Installation](installation.md).
 
-1. Open **Devices** → enrollment / tokens section (or the enrollment UI under Devices).
+1. Open **Devices** → Enrollment.
 2. Create an enrollment token for the target **site**.
-3. Copy the install command for the OS (shell or PowerShell).
+3. Copy the install command for the OS tab (**Linux** or **Windows**).
 4. Run it on the endpoint. The probe enrolls once, then uses its own long-lived agent JWT.
 
 Enrollment tokens are single-use (or short-lived) secrets. Revoke unused tokens.
 
 ## Install notes
 
-- The endpoint needs outbound HTTPS to Sonar (and websocket if used for live updates).
+- The endpoint needs outbound HTTPS (and WSS) to Sonar / `SONAR_INGEST_URL`.
 - Prefer the official install scripts from Sonar (`/api/v1/probe/install.sh` / `.ps1`) so the correct probe binary is fetched.
+- **Linux** installs as a systemd unit (commands typically need `sudo`).
+- **Windows** installs as the `SonarProbe` Windows service.
+- Cross-compiled **macOS** binaries are built into the API image (`make probe-all` / probe download API), but the Enrollment UI currently surfaces Linux and Windows one-liners only.
 - After enroll, confirm the device appears online on **Devices**.
 
 ## Rename, update, delete

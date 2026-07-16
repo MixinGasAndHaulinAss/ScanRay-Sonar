@@ -74,13 +74,17 @@ flowchart LR
 
 ### Components
 
-| Service          | Image                                                  | Purpose                                                    |
+| Service          | Image / build                                          | Purpose                                                    |
 | ---------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
-| `sonar-api`      | `ghcr.io/nclgisa/scanray-sonar-api` (distroless)       | HTTP/WS API + embedded React UI; serves agent ingest, GeoIP-enriches conversations from a read-only volume mount |
-| `sonar-poller`   | `ghcr.io/nclgisa/scanray-sonar-poller`                 | Network appliance polling (SNMP v1/v2c/v3, LLDP/CDP)       |
-| `sonar-postgres` | `timescale/timescaledb:2.17-pg16`                      | Relational + time-series storage                           |
+| `sonar-api`      | **Build:** `docker/api.Dockerfile` (distroless). **Lab pull:** `glcr.nclgisa.org:443/striketeam/scanray-sonar/api` | HTTP/WS API + embedded React UI; agent ingest; GeoIP from read-only volume |
+| `sonar-poller`   | **Build:** `docker/poller.Dockerfile`. **Lab pull:** `glcr.nclgisa.org:443/striketeam/scanray-sonar/poller` | Network appliance polling (SNMP v1/v2c/v3, LLDP/CDP)       |
+| `sonar-collector`| **Lab pull:** `glcr.nclgisa.org:443/striketeam/scanray-sonar/collector` | Site-side SNMP/discovery daemon (remote hosts + optional co-resident on lab) |
+| `sonar-postgres` | `timescale/timescaledb:2.17.2-pg16`                    | Relational + time-series storage                           |
 | `sonar-nats`     | `nats:2.10-alpine`                                     | JetStream message bus for fan-out                          |
+| `sonar-minio`    | `minio/minio`                                          | Optional object store for site Documents                   |
 | `sonar-probe`    | bare binary (Win/Linux/Mac, amd64+arm64), no container | Endpoint telemetry agent (built by `make probe-all`)       |
+
+Greenfield installs **build from source** via compose. StrikeTeam lab hosts **pull** GLCR images with [`scripts/deploy-registry.sh`](scripts/deploy-registry.sh). Step-by-step: [`docs/src/installation.md`](docs/src/installation.md) (also served in-app under **Documentation**).
 
 Named volumes:
 
@@ -89,6 +93,7 @@ Named volumes:
 | `sonar-pgdata`  | `sonar-postgres` | Postgres data dir                                                                          |
 | `sonar-natsdata` | `sonar-nats`    | JetStream stream storage                                                                   |
 | `sonar-geoip`   | `sonar-api`  | MaxMind `GeoLite2-City.mmdb` + `GeoLite2-ASN.mmdb` (read-only mount). Populated by `make refresh-geoip`. |
+| `sonar-minio-data` | `sonar-minio` | Object store for site Documents (when `SONAR_MINIO_*` is configured on the API) |
 
 The web UI is **built once** with Vite and **embedded into `sonar-api`** via `go:embed` — no separate web container, no nginx. The API container is `gcr.io/distroless/static-debian12:nonroot` (no shell, no curl); use the `/api/v1/healthz` endpoint for upstream probes.
 
@@ -225,6 +230,8 @@ Hourly **continuous aggregates** retain chart history past the hot window (defau
 
 ## Quick Start (Local Development)
 
+Operator install (greenfield + lab + edges): **[`docs/src/installation.md`](docs/src/installation.md)**.
+
 Prerequisites: Go 1.23+, Node 20+, Docker (for Postgres + NATS), `openssl` for the bootstrap script.
 
 ### 1. Generate `.env` and start dependencies
@@ -286,47 +293,34 @@ go test ./... -race -count=1
 
 ---
 
-## Production Deployment (`dev` host via Tendril)
+## Production / lab deployment
 
-The deployment target is the `dev` host VM, managed via the **currituck-tendril** root. Cloudflared runs **on the host**, not in this stack.
+Full checklist (greenfield compose **and** StrikeTeam GLCR pull-only, plus probe/collector enroll): **[`docs/src/installation.md`](docs/src/installation.md)**.
 
-### One-time host setup
+### StrikeTeam lab (`dev` via Tendril) — pull-only (preferred)
 
-1. Clone the repo to `/opt/scanraysonar/`.
-2. Run `bash scripts/dev-bootstrap.sh` (or copy `.env.example` → `.env` and fill in real secrets). Make sure `MAXMIND_ACCOUNT_ID` and `MAXMIND_LICENSE_KEY` are populated if you want GeoIP-enriched agent topology / world map.
-3. **If the host is behind a TLS-inspecting corporate proxy** (e.g. Currituck's Tripwire SASE), run `bash scripts/inject-host-ca.sh` once. This bakes the host's trusted CA bundle into `docker/local-ca.crt` so `npm ci` and `go mod download` can validate TLS inside the build containers. The script also marks the file `--skip-worktree`, so populated CA content can never accidentally be committed upstream.
-4. Populate the GeoIP volume (skip if you don't have a MaxMind license):
-   ```bash
-   make refresh-geoip
-   ```
-5. Add two ingress entries to the host's existing `cloudflared` config:
-   ```yaml
-   ingress:
-     - hostname: sonar.<domain>
-       service: http://127.0.0.1:6969
-     - hostname: ingest.<domain>
-       service: http://127.0.0.1:6969
-       originRequest:
-         noTLSVerify: true
-     # ...existing catch-all 404
-   ```
-6. In Cloudflare Zero Trust, add an **Access policy** for `sonar.<domain>` (e.g. `email-domain in {currituckcountync.gov}`). Leave `ingest.<domain>` open — agents authenticate via signed JWT, not via Access.
-7. (Recommended) Add a weekly cron entry to keep the MaxMind databases current:
-   ```cron
-   17 4 * * 2 cd /opt/scanraysonar && /usr/bin/make refresh-geoip && /usr/bin/docker compose restart sonar-api
-   ```
+Canonical path after GitLab CI publishes images:
 
-### Recurring deploy
-
-From your workstation, via Tendril:
-
-```
-agent: dev
-script: cd /opt/scanraysonar && ./scripts/deploy.sh
-timeout: 600
+```bash
+cd /opt/scanraysonar
+./scripts/deploy-registry.sh
+curl -fsS http://127.0.0.1:6969/api/v1/version
 ```
 
-`deploy.sh` runs `git pull`, then `docker compose pull && up -d --build`.
+One-time: clone to `/opt/scanraysonar`, `bash scripts/dev-bootstrap.sh` (set `SONAR_PUBLIC_URL` / `SONAR_INGEST_URL`), `docker login` to GLCR with `sonar-read`, optional `make refresh-geoip`, optional Cloudflare Tunnel on port **6969** (Access on UI hostname only). Details and collector caveats are in the install guide.
+
+`IMAGE_TAG` defaults to **`latest`**. Pin with `IMAGE_TAG=2026.7.16.1` (or a SHA) for rollback. Set `SKIP_DEV_COLLECTOR=1` on hosts that must not run the co-resident test collector.
+
+### Build-on-host fallback
+
+When GLCR is unavailable or you are iterating from source:
+
+```bash
+cd /opt/scanraysonar
+./scripts/deploy.sh    # git pull + docker compose up -d --build
+```
+
+Corporate TLS-inspecting proxies: run `bash scripts/inject-host-ca.sh` once before building.
 
 ---
 
@@ -381,12 +375,13 @@ To force every per-component job to fire regardless of changed paths (e.g. after
 
 ### Image registry (GLCR)
 
-Two repositories are published per pipeline:
+Three repositories are published per pipeline:
 
 | Repository | Purpose |
 |---|---|
 | `glcr.nclgisa.org:443/striketeam/scanray-sonar/api` | sonar-api + embedded UI + cross-compiled probe binaries |
 | `glcr.nclgisa.org:443/striketeam/scanray-sonar/poller` | sonar-poller |
+| `glcr.nclgisa.org:443/striketeam/scanray-sonar/collector` | sonar-collector (remote sites + optional lab co-resident) |
 
 Tag flavors on each:
 
@@ -410,31 +405,35 @@ When CI flags a finding, fix the underlying cause — never silently allowlist a
 - **govulncheck "no vulnerabilities found"** is the win condition; if it flags reachable code, fix the call site or bump the dep.
 - **hadolint warning for a documented exception** — add the rule code to [`.hadolint.yaml`](.hadolint.yaml) `ignored:` with a comment explaining the call site.
 
-### Phase 2: pull-only deploy on dev
+### Pull-only deploy on lab hosts (GLCR)
 
-Today the dev host runs `git pull && docker compose up --build` (build-on-host). After the first GitLab pipeline goes green end-to-end, dev cuts over to pull-only via the [`docker-compose.registry.yml`](docker-compose.registry.yml) overlay:
+Lab hosts cut over from build-on-host to pull-only via [`docker-compose.registry.yml`](docker-compose.registry.yml):
 
 ```bash
 echo "$DEPLOY_TOKEN" | docker login glcr.nclgisa.org:443 -u sonar-read --password-stdin
 git remote set-url origin "https://sonar-read:$DEPLOY_TOKEN@gitlab.nclgisa.org/StrikeTeam/Scanray-Sonar.git"
-# Optional explicit IMAGE_TAG (omit when using scripts/deploy-registry.sh — it pins to VERSION CalVer).
-# echo "IMAGE_TAG=latest" >> /opt/scanraysonar/.env
 
-# Replace deploy.sh contents with:
-git pull origin main
-docker compose -f docker-compose.yml -f docker-compose.registry.yml pull
-docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d
+# Preferred — wraps pull + force-recreate for api + poller + optional dev-collector:
+./scripts/deploy-registry.sh
 ```
 
-This shrinks deploys from ~3 min to ~10 seconds and removes the build toolchain from the deploy host. **[`scripts/deploy-registry.sh`](scripts/deploy-registry.sh)** pulls **`:latest`** from GLCR for `sonar-api`, `sonar-poller`, and `sonar-collector` by default, exports **`SCANRAY_STACK_VERSION`** (read from the repo `VERSION` file) so every stack container gets label **`com.scanraysonar.release`**, and runs **`docker compose up -d --pull always --force-recreate`**. CI publishes `:latest`, `:$VERSION`, and `:$CI_COMMIT_SHORT_SHA` for every green main pipeline, so `:latest` always points at the most recent packaged digest. Override with **`IMAGE_TAG=2026.5.6.20`** (or any CalVer / SHA) when you want a deliberate, reproducible pin — typically for rollback or external customer hand-off. `/api/v1/version` stays honest regardless: each binary embeds its build-time CalVer.
+Manual equivalent:
+
+```bash
+git pull origin main
+docker compose -f docker-compose.yml -f docker-compose.registry.yml pull
+docker compose -f docker-compose.yml -f docker-compose.registry.yml up -d --pull always --force-recreate
+```
+
+This shrinks deploys from ~3 min to ~10 seconds and removes the build toolchain from the deploy host. **[`scripts/deploy-registry.sh`](scripts/deploy-registry.sh)** pulls **`:latest`** from GLCR for `sonar-api`, `sonar-poller`, and `sonar-collector` by default, exports **`SCANRAY_STACK_VERSION`** (read from the repo `VERSION` file) so every stack container gets label **`com.scanraysonar.release`**, and runs **`docker compose up -d --pull always --force-recreate`**. CI publishes `:latest`, `:$VERSION`, and `:$CI_COMMIT_SHORT_SHA` for every green main pipeline, so `:latest` always points at the most recent packaged digest. Override with **`IMAGE_TAG=2026.7.16.1`** (or any CalVer / SHA) when you want a deliberate, reproducible pin — typically for rollback or external customer hand-off. `/api/v1/version` stays honest regardless: each binary embeds its build-time CalVer.
 
 #### After each change on `main` (operators + automation)
 
 1. Wait for the GitLab pipeline on `main` to finish **green** (images published to GLCR — `:latest`, `:short-sha`, and **`:$VERSION`** CalVer).
-2. On dev: `cd /opt/scanraysonar` and `git pull` so the checkout matches `main`. If you mirror only to GitHub, wait until `mirror:github` completes or pull from GitLab directly — a stale mirror leaves old `VERSION` and old compose refs even after CI publishes new images.
-3. Run **`./scripts/deploy-registry.sh`** — pulls matching **`sonar-api`** / **`sonar-poller`** tags from GLCR and recreates containers (uniform binaries + uniform **`com.scanraysonar.release`** label across Postgres/NATS/MinIO/API/poller).
+2. On lab: `cd /opt/scanraysonar` and `git pull` so the checkout matches `main`. If you mirror only to GitHub, wait until `mirror:github` completes or pull from GitLab directly — a stale mirror leaves old `VERSION` and old compose refs even after CI publishes new images.
+3. Run **`./scripts/deploy-registry.sh`** — pulls matching images from GLCR and recreates containers (uniform binaries + uniform **`com.scanraysonar.release`** label across Postgres/NATS/MinIO/API/poller).
 
-Skipping step 3 after a code change means dev can keep running an older GLCR digest even when `git pull` advanced.
+Skipping step 3 after a code change means the host can keep running an older GLCR digest even when `git pull` advanced.
 
 ### Deploy token rotation (`sonar-read`)
 
@@ -491,7 +490,13 @@ All settings come from environment variables prefixed `SONAR_`. See [`.env.examp
 | `SONAR_API_BIND` / `SONAR_API_PORT`          | Host interface + port for the published UI (defaults `0.0.0.0:6969`; set bind to `127.0.0.1` for cloudflared-only) |
 | `SONAR_BOOTSTRAP_ADMIN_EMAIL` / `_PASSWORD`  | First-run admin (only used if no users exist)                          |
 | `SONAR_JWT_ACCESS_TTL` / `_REFRESH_TTL`      | Token lifetimes (default 15 m / 30 d)                                  |
-| `SONAR_SMTP_*`                               | Outbound email for alerts (Phase 4 alerting will consume these)        |
+| `SONAR_SMTP_*`                               | Outbound email for alerts                                              |
+| `SONAR_COLLECTOR_IMAGE`                      | Image ref shown in Collectors UI install commands (default GLCR collector `:latest`) |
+| `SONAR_MINIO_ENDPOINT` / `_USER` / `_PASSWORD` / `_BUCKET` / `_SSL` | Documents object store (compose service `sonar-minio`; unset = Postgres fallback) |
+| `SONAR_SNMP_TRAP_LISTEN`                     | Poller SNMP trap listen addr (e.g. `:162`)                             |
+| `SONAR_FLOW_LISTEN`                          | Poller NetFlow/IPFIX listen addr (e.g. `:2055`)                        |
+| `SONAR_MERAKI_API_KEY`                       | Optional env fallback for Meraki sync (prefer sealed key in site discovery UI) |
+| `SONAR_OIDC_*`                               | OIDC login stubs (`ISSUER`, `CLIENT_ID`, `CLIENT_SECRET`, `REDIRECT`)  |
 
 ### MaxMind / GeoIP
 

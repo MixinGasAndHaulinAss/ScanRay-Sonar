@@ -1,5 +1,7 @@
 # Getting started
 
+If Sonar is not running yet, start with [Installation](installation.md) (central stack, then probe/collector enroll). This page assumes you already have a URL and an account.
+
 ## Sign in
 
 1. Open your Sonar URL (for example `https://sonar.example.com`).
@@ -27,9 +29,10 @@ Almost everything is scoped to a **site** (a building, campus, or logical locati
 
 ## Recommended first-week path
 
-1. Create at least one [site](sites.md).
-2. Enroll a [collector](collectors.md) at that site if Sonar cannot SNMP-poll gear itself.
-3. Configure [site discovery](site-discovery.md) credentials (SNMP and/or Meraki).
-4. Enroll [devices](devices.md) (probes) where you need endpoint visibility.
-5. Confirm inventory on **Appliances** and **Devices**, then set [alarms](alarms.md).
-6. Add [checks](checks.md) for services you care about (website up, DNS, TLS expiry, LAN ping from a site probe).
+1. Finish [Installation](installation.md) if this is a new deployment.
+2. Create at least one [site](sites.md).
+3. Enroll a [collector](collectors.md) at that site if Sonar cannot SNMP-poll gear itself.
+4. Configure [site discovery](site-discovery.md) credentials (SNMP and/or Meraki).
+5. Enroll [devices](devices.md) (probes) where you need endpoint visibility.
+6. Confirm inventory on **Appliances** and **Devices**, then set [alarms](alarms.md).
+7. Add [checks](checks.md) for services you care about (website up, DNS, TLS expiry, LAN ping from a site probe).
