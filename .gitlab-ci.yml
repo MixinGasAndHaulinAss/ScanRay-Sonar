@@ -535,14 +535,20 @@ sign-windows:
   needs: ["build:windows"]
   rules: !reference [.rules-windows, rules]
   variables:
-    SIGNTOOL_PATH: 'C:\Tools\SDKBuildTools\Microsoft.Windows.SDK.BuildTools\bin\10.0.26100.0\x64\signtool.exe'
-    DLIB_PATH: 'C:\Tools\ArtifactSigning\Microsoft.ArtifactSigning.Client\bin\x64\Azure.CodeSigning.Dlib.dll'
+    # Paths must match StrikeTeam/tendril sign-windows on WindowsRunner
+    # (SDKBuildTools26100 + Microsoft.ArtifactSigning.Client — not the
+    # older SDKBuildTools / ArtifactSigning layout).
+    SIGNTOOL_PATH: 'C:\Tools\SDKBuildTools26100\Microsoft.Windows.SDK.BuildTools.10.0.26100.1\bin\10.0.26100.0\x64\signtool.exe'
+    DLIB_PATH: 'C:\Tools\Microsoft.ArtifactSigning.Client\bin\x64\Azure.CodeSigning.Dlib.dll'
     METADATA_PATH: 'C:\Tools\metadata.json'
   script:
     - |
+      Write-Host "SIGNTOOL=$env:SIGNTOOL_PATH exists=$([bool](Test-Path $env:SIGNTOOL_PATH))"
+      Write-Host "DLIB=$env:DLIB_PATH exists=$([bool](Test-Path $env:DLIB_PATH))"
+      Write-Host "AZURE_CLIENT_ID set=$([bool]$env:AZURE_CLIENT_ID) TENANT set=$([bool]$env:AZURE_TENANT_ID) SECRET set=$([bool]$env:AZURE_CLIENT_SECRET)"
       Get-ChildItem unsigned\*.exe | ForEach-Object {
         Write-Host "Signing $($_.Name)..."
-        & $env:SIGNTOOL_PATH sign /v /fd SHA256 `
+        & $env:SIGNTOOL_PATH sign /v /debug /fd SHA256 `
           /tr "http://timestamp.acs.microsoft.com" /td SHA256 `
           /dlib $env:DLIB_PATH `
           /dmdf $env:METADATA_PATH `
