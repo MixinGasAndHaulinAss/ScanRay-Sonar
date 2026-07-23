@@ -118,13 +118,16 @@ func checkAndMaybeUpdate(ctx context.Context, log *slog.Logger, cfg *Config) err
 	if err := os.WriteFile(staging, bin, 0o755); err != nil {
 		return fmt.Errorf("write staging: %w", err)
 	}
-	log.Info("applying probe update — process will exit for supervisor restart",
+	log.Info("applying probe update — process will exit; Windows updater helper restarts the service",
 		"version", man.Version, "path", exe)
 	if err := applyUpdate(exe, staging); err != nil {
 		_ = os.Remove(staging)
 		return err
 	}
-	// Exit so SCM/systemd restarts us on the new binary.
+	// Exit cleanly. On Linux, systemd Restart= brings us back on the
+	// new binary. On Windows, SCM failure actions do NOT fire on exit
+	// code 0 — applyUpdate's breakaway helper (or schtasks fallback)
+	// must Start-Service after swapping the binary.
 	os.Exit(0)
 	return nil
 }

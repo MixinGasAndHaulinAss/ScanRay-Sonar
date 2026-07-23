@@ -368,8 +368,16 @@ if (-not (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue)) {
 # Auto-restart on crash: 5s, 5s, 5s; reset failure counter after 60s
 # of healthy uptime. sc.exe failure only takes the service name +
 # scalar flags so the PowerShell call-operator quoting trap doesn't
-# apply here.
+# apply here. Note: these actions do NOT fire on a clean exit (code 0),
+# which is what self-update uses — the probe also registers a 5-minute
+# scheduled-task watchdog for that case.
 & sc.exe failure $ServiceName reset= 60 actions= restart/5000/restart/5000/restart/5000 | Out-Null
+
+# Periodic recovery if the service is left Stopped without a crash
+# (e.g. self-update helper killed with the service job). The running
+# probe refreshes this task on each start as well.
+$WatchdogTr = 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "if ((Get-Service -Name SonarProbe -ErrorAction SilentlyContinue).Status -ne ''Running'') { Start-Service -Name SonarProbe -ErrorAction SilentlyContinue }"'
+& schtasks.exe /Create /TN 'SonarProbeWatchdog' /SC MINUTE /MO 5 /RU SYSTEM /RL HIGHEST /F /TR $WatchdogTr | Out-Null
 
 Start-Service -Name $ServiceName
 

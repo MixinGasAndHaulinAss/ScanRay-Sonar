@@ -53,6 +53,11 @@ func (h *svcHandler) Execute(_ []string, requests <-chan svc.ChangeRequest, stat
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Register (or refresh) the periodic Start-Service watchdog before
+	// we mark Running so a later clean self-update stop cannot leave
+	// the endpoint silent until reboot.
+	probe.EnsureServiceWatchdog(h.logger)
+
 	done := make(chan error, 1)
 	go func() { done <- probe.Run(ctx, h.logger, h.cfg) }()
 
