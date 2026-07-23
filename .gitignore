@@ -2,6 +2,9 @@
 /bin/
 /dist/
 /build/
+/unsigned/
+pre-signed/*
+!pre-signed/.gitkeep
 *.exe
 *.test
 *.out

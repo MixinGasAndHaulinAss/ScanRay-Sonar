@@ -4,7 +4,12 @@
 # Pipeline shape (modeled on StrikeTeam/The-ScanRay-Console and
 # StrikeTeam/ResponseRay sibling projects):
 #
-#   validate -> test -> build -> scan -> package -> sync
+#   validate -> test -> build -> sign -> image -> scan -> package -> sync
+#
+# Windows Authenticode (Azure Trusted Signing) mirrors Tendril's
+# sign-windows job on a Shell executor tagged [windows, signing].
+# Signed sonar-probe.exe is injected into the API image; signed
+# sonar-collector-winagent.exe is published as a pipeline artifact.
 #
 # Hard-gated: no allow_failure: true anywhere. Any stage failure halts
 # the pipeline. HIGH/CRITICAL fixed CVEs (trivy fs + image, govulncheck)
@@ -25,6 +30,8 @@ stages:
   - validate
   - test
   - build
+  - sign
+  - image
   - scan
   - package
   - sync
@@ -213,6 +220,60 @@ variables:
         - docker/collector.Dockerfile
         - go.mod
         - go.sum
+        - .gitlab-ci.yml
+        - ci/smart_build.sh
+
+# Windows Authenticode path filter: fires whenever the API image (which
+# embeds the probe) would rebuild, or whenever the collector winagent
+# changes. Keeps sign-windows in lockstep with build:api / package:winagent.
+.rules-windows:
+  rules:
+    - if: '$FORCE_RUN_ALL == "true"'
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - cmd/sonar-api/**/*
+        - cmd/sonar-probe/**/*
+        - cmd/sonar-collector-winagent/**/*
+        - internal/api/**/*
+        - internal/auth/**/*
+        - internal/crypto/**/*
+        - internal/db/**/*
+        - internal/geoip/**/*
+        - internal/logging/**/*
+        - internal/probe/**/*
+        - internal/probebins/**/*
+        - internal/version/**/*
+        - docs/**/*
+        - mkdocs.yml
+        - web/**/*
+        - docker/api.Dockerfile
+        - go.mod
+        - go.sum
+        - VERSION
+        - .gitlab-ci.yml
+        - ci/smart_build.sh
+    - if: '$CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes:
+        - cmd/sonar-api/**/*
+        - cmd/sonar-probe/**/*
+        - cmd/sonar-collector-winagent/**/*
+        - internal/api/**/*
+        - internal/auth/**/*
+        - internal/crypto/**/*
+        - internal/db/**/*
+        - internal/geoip/**/*
+        - internal/logging/**/*
+        - internal/probe/**/*
+        - internal/probebins/**/*
+        - internal/version/**/*
+        - docs/**/*
+        - mkdocs.yml
+        - web/**/*
+        - docker/api.Dockerfile
+        - go.mod
+        - go.sum
+        - VERSION
         - .gitlab-ci.yml
         - ci/smart_build.sh
 
@@ -430,6 +491,81 @@ vuln-scan:govulncheck:
 # ===========================================================================
 # Stage 3: build
 #
+# Cross-compile Windows binaries for Authenticode (build:windows). Docker
+# image builds moved to the `image` stage so they can consume signed
+# artifacts from `sign-windows`.
+# ===========================================================================
+
+build:windows:
+  stage: build
+  image: $GO_IMAGE
+  needs: ["test:go", "test:probe-windows"]
+  rules: !reference [.rules-windows, rules]
+  script:
+    - mkdir -p unsigned
+    - |
+      VERSION="$(tr -d '[:space:]' < VERSION)"
+      BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      LDFLAGS="-s -w \
+        -X github.com/NCLGISA/ScanRay-Sonar/internal/version.Version=${VERSION} \
+        -X github.com/NCLGISA/ScanRay-Sonar/internal/version.Commit=${CI_COMMIT_SHA} \
+        -X github.com/NCLGISA/ScanRay-Sonar/internal/version.BuildTime=${BUILD_TIME}"
+      GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" \
+        -o unsigned/sonar-probe-windows-amd64.exe ./cmd/sonar-probe
+      GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" \
+        -o unsigned/sonar-collector-winagent.exe ./cmd/sonar-collector-winagent
+      ls -la unsigned/
+  artifacts:
+    paths:
+      - unsigned/
+    expire_in: 1 day
+
+# ===========================================================================
+# Stage 4: sign — Azure Trusted Signing (Tendril-compatible runner layout)
+# Runs on: Windows Shell executor tagged [windows, signing]
+# Tools (preinstalled on the runner, same as Tendril):
+#   C:\Tools\SDKBuildTools\...\signtool.exe
+#   C:\Tools\ArtifactSigning\...\Azure.CodeSigning.Dlib.dll
+#   C:\Tools\metadata.json
+# ===========================================================================
+
+sign-windows:
+  stage: sign
+  tags: [windows, signing]
+  needs: ["build:windows"]
+  rules: !reference [.rules-windows, rules]
+  variables:
+    SIGNTOOL_PATH: 'C:\Tools\SDKBuildTools\Microsoft.Windows.SDK.BuildTools\bin\10.0.26100.0\x64\signtool.exe'
+    DLIB_PATH: 'C:\Tools\ArtifactSigning\Microsoft.ArtifactSigning.Client\bin\x64\Azure.CodeSigning.Dlib.dll'
+    METADATA_PATH: 'C:\Tools\metadata.json'
+  script:
+    - |
+      Get-ChildItem unsigned\*.exe | ForEach-Object {
+        Write-Host "Signing $($_.Name)..."
+        & $env:SIGNTOOL_PATH sign /v /fd SHA256 `
+          /tr "http://timestamp.acs.microsoft.com" /td SHA256 `
+          /dlib $env:DLIB_PATH `
+          /dmdf $env:METADATA_PATH `
+          $_.FullName
+        if ($LASTEXITCODE -ne 0) { throw "Signing failed for $($_.Name)" }
+      }
+    - |
+      Get-ChildItem unsigned\*.exe | ForEach-Object {
+        $sig = Get-AuthenticodeSignature -FilePath $_.FullName
+        Write-Host "$($_.Name): $($sig.Status) - $($sig.SignerCertificate.Subject)"
+        if ($sig.Status -ne "Valid") {
+          Write-Error "Signature verification failed for $($_.Name)"
+          exit 1
+        }
+      }
+  artifacts:
+    paths:
+      - unsigned/
+    expire_in: 1 day
+
+# ===========================================================================
+# Stage 5: image
+#
 # smart_build.sh decides per-service whether to do a real `docker build`
 # or just retag the previous SHA's image as the new SHA. Both produce
 # the same `:$CI_COMMIT_SHORT_SHA` tag in GLCR so downstream stages
@@ -437,18 +573,38 @@ vuln-scan:govulncheck:
 # ===========================================================================
 
 build:api:
-  stage: build
+  stage: image
   extends: .docker-job
-  needs: ["test:go", "test:web", "vuln-scan-fs", "secrets-scan", "lint:dockerfiles", "vuln-scan:govulncheck"]
+  needs:
+    - job: test:go
+    - job: test:web
+    - job: vuln-scan-fs
+    - job: secrets-scan
+    - job: lint:dockerfiles
+    - job: vuln-scan:govulncheck
+    - job: sign-windows
+      artifacts: true
   rules: !reference [.rules-api, rules]
+  before_script:
+    - !reference [.docker-job, before_script]
+    - |
+      if [ -d unsigned ] && ls unsigned/*.exe 1>/dev/null 2>&1; then
+        mkdir -p pre-signed
+        cp unsigned/*.exe pre-signed/
+        echo "Signed Windows binaries staged for API embed:"
+        ls -la pre-signed/
+      else
+        echo "ERROR: signed Windows binaries required to build sonar-api (Defender/Authenticode)"
+        exit 1
+      fi
   script:
     - chmod +x ci/smart_build.sh
     - >
       ./ci/smart_build.sh api docker/api.Dockerfile
-      "VERSION cmd/sonar-api/ cmd/sonar-probe/ docs/ mkdocs.yml internal/api/ internal/auth/ internal/crypto/ internal/db/ internal/geoip/ internal/logging/ internal/probe/ internal/probebins/ internal/version/ web/ docker/api.Dockerfile go.mod go.sum"
+      "VERSION cmd/sonar-api/ cmd/sonar-probe/ docs/ mkdocs.yml internal/api/ internal/auth/ internal/crypto/ internal/db/ internal/geoip/ internal/logging/ internal/probe/ internal/probebins/ internal/version/ web/ docker/api.Dockerfile go.mod go.sum .gitlab-ci.yml"
 
 build:poller:
-  stage: build
+  stage: image
   extends: .docker-job
   needs: ["test:go", "vuln-scan-fs", "secrets-scan", "lint:dockerfiles", "vuln-scan:govulncheck"]
   rules: !reference [.rules-poller, rules]
@@ -459,7 +615,7 @@ build:poller:
       "VERSION cmd/sonar-poller/ internal/poller/ internal/snmp/ internal/auth/ internal/config/ internal/crypto/ internal/db/ internal/logging/ internal/version/ docker/poller.Dockerfile go.mod go.sum"
 
 build:collector:
-  stage: build
+  stage: image
   extends: .docker-job
   needs: ["test:go", "vuln-scan-fs", "secrets-scan", "lint:dockerfiles", "vuln-scan:govulncheck"]
   rules: !reference [.rules-collector, rules]
@@ -469,20 +625,26 @@ build:collector:
       ./ci/smart_build.sh collector docker/collector.Dockerfile
       "VERSION cmd/sonar-collector/ cmd/sonar-collector-winagent/ internal/collector/ internal/poller/ internal/snmp/ internal/auth/ internal/config/ internal/crypto/ internal/db/ internal/logging/ internal/version/ docker/collector.Dockerfile go.mod go.sum"
 
-build:winagent:
-  stage: build
-  image: $GO_IMAGE
-  needs: ["test:go"]
-  rules: !reference [.rules-collector, rules]
+# Publish the Authenticode-signed winagent as a downloadable CI artifact
+# (replaces the previous unsigned build:winagent job).
+package:winagent:
+  stage: image
+  image: $ALPINE_IMAGE
+  needs:
+    - job: sign-windows
+      artifacts: true
+  rules: !reference [.rules-windows, rules]
   script:
     - mkdir -p artifacts
-    - GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o artifacts/sonar-collector-winagent.exe ./cmd/sonar-collector-winagent
+    - cp unsigned/sonar-collector-winagent.exe artifacts/sonar-collector-winagent.exe
+    - ls -la artifacts/
   artifacts:
     paths:
       - artifacts/sonar-collector-winagent.exe
+    expire_in: 1 week
 
 # ===========================================================================
-# Stage 4: scan (re-scan the actually-pushed images)
+# Stage 6: scan (re-scan the actually-pushed images)
 # ===========================================================================
 
 # Trivy scan is split per-service so it inherits the same per-component

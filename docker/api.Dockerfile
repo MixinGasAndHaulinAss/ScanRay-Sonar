@@ -79,6 +79,17 @@ COPY --from=docs /src/docs/site ./docs/site
 # Drop the cross-compiled probe binaries into the embed directory so the
 # API binary serves them via /api/v1/probe/download/{os}/{arch}.
 COPY --from=probebuild /probe ./internal/probebins/bin
+# Prefer CI Authenticode-signed Windows probe (Azure Trusted Signing via
+# sign-windows) when present in the build context. Local/compose builds
+# without pre-signed/ keep the unsigned probebuild output.
+RUN if [ -f pre-signed/sonar-probe-windows-amd64.exe ]; then \
+      mkdir -p internal/probebins/bin/windows/amd64; \
+      cp pre-signed/sonar-probe-windows-amd64.exe \
+        internal/probebins/bin/windows/amd64/sonar-probe.exe; \
+      echo "Using pre-signed Windows probe ($(wc -c < internal/probebins/bin/windows/amd64/sonar-probe.exe) bytes)"; \
+    else \
+      echo "No pre-signed Windows probe — embedding unsigned probebuild binary"; \
+    fi
 ARG VERSION=
 ARG COMMIT=unknown
 ARG BUILD_TIME=unknown
